@@ -27,7 +27,7 @@ class ApplicationSettings(BaseModel):
     database_password: str
 
 
-application_settings = SettingsManager().get_model(Settings)
+application_settings = SettingsManager().get_model(ApplicationSettings)
 ```
 
 ## Source priority

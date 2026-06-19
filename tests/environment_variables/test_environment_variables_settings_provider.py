@@ -7,7 +7,7 @@ from wirio_settings.environment_variables.environment_variables_settings_provide
 
 
 class TestEnvironmentVariablesSettingsProvider:
-    async def test_replace_double_underscore_with_colon_in_environment_variable_name(
+    async def test_replace_double_underscore_with_dot_in_environment_variable_name(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         expected_value = "WARNING"

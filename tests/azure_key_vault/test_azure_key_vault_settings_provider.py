@@ -255,7 +255,7 @@ class TestAzureKeyVaultSettingsProvider:
 
         assert pipeline_request_mock.mock_calls == []
 
-    async def test_replace_double_dash_with_colon_in_secret_name(
+    async def test_replace_double_dash_with_dot_in_secret_name(
         self, mocker: MockerFixture
     ) -> None:
         default_azure_credential_mock = mocker.create_autospec(

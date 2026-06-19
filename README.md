@@ -24,7 +24,7 @@ from wirio_settings import SettingsManager
 
 
 class ApplicationSettings(BaseModel):
-	database_password: str
+    database_password: str
 
 
 application_settings = SettingsManager().get_model(Settings)
@@ -156,7 +156,7 @@ Nested keys use `.`:
 ### Azure Key Vault
 
 ```bash
-uv add "wirio[azure-key-vault]"
+uv add wirio-settings[azure-key-vault]
 ```
 
 1. Add Key Vault as a source:
@@ -173,7 +173,7 @@ We can also pass a custom async Azure credential with the `credential` parameter
 ## AWS Secrets Manager
 
 ```bash
-uv add "wirio[aws-secrets-manager]"
+uv add wirio-settings[aws-secrets-manager]
 ```
 
 ```python

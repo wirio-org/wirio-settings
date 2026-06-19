@@ -16,14 +16,8 @@ keywords = [
 dynamic = ["version"]
 requires-python = ">=3.13"
 dependencies = [
-    "coverage>=7.14.1",
     "pydantic>=2.13.4",
-    "pytest>=9.1.0",
-    "pytest-asyncio>=1.4.0",
-    "pytest-cov>=7.1.0",
-    "pytest-mock>=3.15.1",
     "pyyaml>=6.0.3",
-    "testcontainers>=4.14.2",
 ]
 
 [project.optional-dependencies]
@@ -35,7 +29,17 @@ azure-key-vault = [
 aws-secrets-manager = ["boto3[crt]>=1.42.71"]
 
 [dependency-groups]
-dev = ["maturin>=1.13.3", "ruff>=0.15.17", "ty>=0.0.50"]
+dev = [
+    "coverage>=7.14.1",
+    "maturin>=1.13.3",
+    "pytest>=9.1.0",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "pytest-mock>=3.15.1",
+    "ruff>=0.15.18",
+    "testcontainers>=4.14.2",
+    "ty>=0.0.51",
+]
 
 [build-system]
 requires = ["maturin>=1.12,<2.0"]

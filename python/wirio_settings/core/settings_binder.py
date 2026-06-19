@@ -11,6 +11,7 @@ from pydantic import BaseModel, TypeAdapter
 from pydantic.fields import FieldInfo
 
 from wirio_settings.core._typed_type import TypedType
+from wirio_settings.core.settings_path import SettingsPath
 from wirio_settings.core.wirio_undefined import WirioUndefined
 
 if TYPE_CHECKING:
@@ -263,7 +264,7 @@ class SettingsBinder:
         if len(child) == 0:
             return parent
 
-        return f"{parent}:{child}"
+        return f"{parent}{SettingsPath.KEY_DELIMITER}{child}"
 
     @classmethod
     def _extract_field_annotation(

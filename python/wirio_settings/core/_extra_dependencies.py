@@ -3,17 +3,11 @@ from typing import ClassVar, final
 
 @final
 class ExtraDependencies:
-    FASTAPI_NOT_INSTALLED_ERROR_MESSAGE: ClassVar[str] = (
-        "'fastapi' is not installed. Please, run 'uv add wirio[fastapi]' to install the required dependencies"
-    )
-    SQLMODEL_NOT_INSTALLED_ERROR_MESSAGE: ClassVar[str] = (
-        "'sqlmodel' or 'greenlet' are not installed. Please, run 'uv add wirio[sqlmodel]' to install the required dependencies"
-    )
     AZURE_KEY_VAULT_NOT_INSTALLED_ERROR_MESSAGE: ClassVar[str] = (
-        "'azure-keyvault-secrets', 'azure-identity' or 'aiohttp' are not installed. Please, run 'uv add wirio[azure-key-vault]' to install the required dependencies"
+        "'azure-keyvault-secrets', 'azure-identity' or 'aiohttp' are not installed. Please, run 'uv add wirio-settings[azure-key-vault]' to install the required dependencies"
     )
     AWS_SECRETS_MANAGER_NOT_INSTALLED_ERROR_MESSAGE: ClassVar[str] = (
-        "'boto3' is not installed. Please, run 'uv add wirio[aws-secrets-manager]' to install the required dependencies"
+        "'boto3' is not installed. Please, run 'uv add wirio-settings[aws-secrets-manager]' to install the required dependencies"
     )
 
     @staticmethod

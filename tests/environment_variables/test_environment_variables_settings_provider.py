@@ -20,4 +20,4 @@ class TestEnvironmentVariablesSettingProvider:
 
         await provider.load()
 
-        assert provider.data == {"logging:log_level:default": expected_value}
+        assert provider.data == {"logging.log_level.default": expected_value}

@@ -267,7 +267,7 @@ class TestAzureKeyVaultSettingsProvider:
         default_azure_credential_mock.__aexit__.return_value = None
 
         secret_name = "Logging--LogLevel--Default"  # noqa: S105
-        expected_secret_name = "logging:log_level:default"  # noqa: S105
+        expected_secret_name = "logging.log_level.default"  # noqa: S105
         secret_value = "WARNING"  # noqa: S105
 
         secret_properties_mock = mocker.create_autospec(

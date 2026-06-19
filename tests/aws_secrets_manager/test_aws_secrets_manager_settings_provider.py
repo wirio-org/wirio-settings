@@ -44,7 +44,7 @@ class TestAwsSecretsManagerSettingsProvider:
 
     async def test_load_values_from_secret_name(self, mocker: MockerFixture) -> None:
         expected_region = "eu-west-1"
-        expected_url = "http://localhost:4566"
+        expected_url = "http://localhost.4566"
         expected_secret_name = "dev/TestApp"  # noqa: S105
         secret_value = json.dumps(
             {
@@ -77,7 +77,7 @@ class TestAwsSecretsManagerSettingsProvider:
         await provider.load()
 
         assert provider.data == {
-            "logging:log_level:default": "WARNING",
+            "logging.log_level.default": "WARNING",
             "port": "8080",
             "enabled": "True",
             "notes": None,
@@ -118,10 +118,10 @@ class TestAwsSecretsManagerSettingsProvider:
         ).with_services("secretsmanager")
 
         with local_stack_container:
-            secrets_manager_client = cast(
+            secrets_manager_client = cast(  # ty:ignore[redundant-cast]
                 "Any",
                 local_stack_container.get_client("secretsmanager"),  # type: ignore  # noqa: PGH003
-            )  # ty:ignore[redundant-cast]
+            )
             secrets_manager_client.create_secret(
                 Name=expected_secret_name,
                 SecretString='{"ServiceApiKey": "12345", "Database": {"User": "user1", "Password": "pass1"}}',
@@ -136,6 +136,6 @@ class TestAwsSecretsManagerSettingsProvider:
 
         assert provider.data == {
             "service_api_key": expected_api_key,
-            "database:user": expected_database_user,
-            "database:password": expected_database_password,
+            "database.user": expected_database_user,
+            "database.password": expected_database_password,
         }

@@ -53,7 +53,7 @@ class TestSettingsBinder:
         settings_manager = SettingsManager(
             content_root_path="", add_default_providers=False
         )
-        settings_manager.add(_DictionarySettingsSource({"servers:0:name": "api"}))
+        settings_manager.add(_DictionarySettingsSource({"servers.0.name": "api"}))
 
         settings = settings_manager.get_model(Settings)
 
@@ -100,7 +100,7 @@ class TestSettingsBinder:
                 {
                     "required_field_1": "value",
                     "required_field_2": "1",
-                    "subsettings:required_subfield_1": "value",
+                    "subsettings.required_subfield_1": "value",
                 }
             )
         )
@@ -133,8 +133,8 @@ class TestSettingsBinder:
     @pytest.mark.parametrize(
         argnames=("field_type", "settings_values", "expected_values"),
         argvalues=[
-            (int, {"ports:0": "8080", "ports:1": "8081"}, [8080, 8081]),
-            (str, {"ports:0": "8080", "ports:1": "8081"}, ["8080", "8081"]),
+            (int, {"ports.0": "8080", "ports.1": "8081"}, [8080, 8081]),
+            (str, {"ports.0": "8080", "ports.1": "8081"}, ["8080", "8081"]),
         ],
     )
     def test_get_sequence[TField](
@@ -156,8 +156,8 @@ class TestSettingsBinder:
         settings_manager.add(_DictionarySettingsSource(settings_values))
 
         settings = settings_manager.get_model(model_class)
-        first_value = settings_manager.get_required_value("ports:0", field_type)
-        missing_value = settings_manager.get_value("ports:2", field_type)
+        first_value = settings_manager.get_required_value("ports.0", field_type)
+        missing_value = settings_manager.get_value("ports.2", field_type)
 
         assert settings.ports == expected_values
         assert isinstance(first_value, field_type)
@@ -205,17 +205,17 @@ class TestSettingsBinder:
         settings_manager.add(
             _DictionarySettingsSource(
                 {
-                    "servers:0:name": "api",
-                    "servers:0:retries": str(expected_api_retries),
-                    "servers:1:name": "worker",
-                    "servers:1:retries": str(expected_worker_retries),
+                    "servers.0.name": "api",
+                    "servers.0.retries": str(expected_api_retries),
+                    "servers.1.name": "worker",
+                    "servers.1.retries": str(expected_worker_retries),
                 }
             )
         )
 
         settings = settings_manager.get_model(Settings)
-        first_server_name = settings_manager.get_required_value("servers:0:name")
-        second_server_retries = settings_manager.get_value("servers:1:retries", int)
+        first_server_name = settings_manager.get_required_value("servers.0.name")
+        second_server_retries = settings_manager.get_value("servers.1.retries", int)
 
         assert len(settings.servers) == expected_server_settings
         assert settings.servers[0].name == "api"
@@ -230,12 +230,12 @@ class TestSettingsBinder:
         argvalues=[
             (
                 int,
-                {"ports:http": "8080", "ports:https": "8443"},
+                {"ports.http": "8080", "ports.https": "8443"},
                 {"http": 8080, "https": 8443},
             ),
             (
                 str,
-                {"ports:http": "8080", "ports:https": "8443"},
+                {"ports.http": "8080", "ports.https": "8443"},
                 {"http": "8080", "https": "8443"},
             ),
         ],
@@ -259,8 +259,8 @@ class TestSettingsBinder:
         settings_manager.add(_DictionarySettingsSource(settings_values))
 
         settings = settings_manager.get_model(model_class)
-        http_value = settings_manager.get_required_value("ports:http", field_type)
-        missing_value = settings_manager.get_value("ports:ftp", field_type)
+        http_value = settings_manager.get_required_value("ports.http", field_type)
+        missing_value = settings_manager.get_value("ports.ftp", field_type)
 
         assert isinstance(settings, BaseModel)
         assert isinstance(settings.ports, dict)
@@ -286,17 +286,17 @@ class TestSettingsBinder:
         settings_manager.add(
             _DictionarySettingsSource(
                 {
-                    "services:api:url": "https://api.example.com",
-                    "services:api:retries": str(expected_api_retries),
-                    "services:worker:url": "https://worker.example.com",
-                    "services:worker:retries": str(expected_worker_retries),
+                    "services.api.url": "https://api.example.com",
+                    "services.api.retries": str(expected_api_retries),
+                    "services.worker.url": "https://worker.example.com",
+                    "services.worker.retries": str(expected_worker_retries),
                 }
             )
         )
 
         settings = settings_manager.get_model(Settings)
-        api_url = settings_manager.get_required_value("services:api:url")
-        worker_retries = settings_manager.get_value("services:worker:retries", int)
+        api_url = settings_manager.get_required_value("services.api.url")
+        worker_retries = settings_manager.get_value("services.worker.retries", int)
 
         assert len(settings.services) == expected_service_settings
         assert settings.services["api"].url == "https://api.example.com"
@@ -317,8 +317,8 @@ class TestSettingsBinder:
         settings_manager.add(
             _DictionarySettingsSource(
                 {
-                    "ports:http:metadata": "ignored",
-                    "ports:https": "8443",
+                    "ports.http.metadata": "ignored",
+                    "ports.https": "8443",
                 }
             )
         )
@@ -337,9 +337,9 @@ class TestSettingsBinder:
         settings_manager.add(
             _DictionarySettingsSource(
                 {
-                    "ports:http:metadata": "ignored",
-                    "ports:https:metadata": "ignored",
-                    "ports:ftp:0": "ignored",
+                    "ports.http.metadata": "ignored",
+                    "ports.https.metadata": "ignored",
+                    "ports.ftp.0": "ignored",
                 }
             )
         )

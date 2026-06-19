@@ -39,9 +39,9 @@ class TestJsonSettingsFileParser:
         )
 
         assert result == {
-            "Logging:LogLevel:Default": "Information",
-            "AllowedHosts:0": "localhost",
-            "AllowedHosts:1": "example.com",
+            "Logging.LogLevel.Default": "Information",
+            "AllowedHosts.0": "localhost",
+            "AllowedHosts.1": "example.com",
         }
 
     def test_set_null_and_empty_for_empty_structures(self) -> None:
@@ -58,9 +58,9 @@ class TestJsonSettingsFileParser:
 
         assert result == {
             "Section": None,
-            "Nested:Child": None,
+            "Nested.Child": None,
             "Items": "",
-            "NestedItems:Items": "",
+            "NestedItems.Items": "",
         }
 
     def test_fail_when_duplicate_key_is_found_ignoring_case(self) -> None:

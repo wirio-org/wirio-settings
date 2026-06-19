@@ -442,7 +442,7 @@ class TestSettingsManager:
     @pytest.mark.parametrize(
         argnames=("section_key", "expected_path"),
         argvalues=[
-            ("logging:log_level", "logging:log_level"),
+            ("logging.log_level", "logging.log_level"),
             ("logging", "logging"),
         ],
     )
@@ -453,7 +453,7 @@ class TestSettingsManager:
         )
         settings_manager.add(
             _DictionarySettingsSource(
-                {"logging:log_level:default": expected_database_host}
+                {"logging.log_level.default": expected_database_host}
             )
         )
 
@@ -466,21 +466,21 @@ class TestSettingsManager:
             content_root_path="", add_default_providers=False
         )
         settings_manager.add(
-            _DictionarySettingsSource({"logging:log_level:default": "INFO"})
+            _DictionarySettingsSource({"logging.log_level.default": "INFO"})
         )
 
         with pytest.raises(
             KeyError,
-            match=re.escape("Setting key 'logging:log_level:default' is not a section"),
+            match=re.escape("Setting key 'logging.log_level.default' is not a section"),
         ):
-            settings_manager.get_section("logging:log_level:default")
+            settings_manager.get_section("logging.log_level.default")
 
     def test_fail_when_getting_sequence_as_section(self) -> None:
         settings_manager = SettingsManager(
             content_root_path="", add_default_providers=False
         )
         settings_manager.add(
-            _DictionarySettingsSource({"node:0": "first", "node:1": "second"})
+            _DictionarySettingsSource({"node.0": "first", "node.1": "second"})
         )
 
         with pytest.raises(
@@ -495,9 +495,9 @@ class TestSettingsManager:
         settings_manager.add(
             _DictionarySettingsSource(
                 {
-                    "node:0": "first",
-                    "node:1": "second",
-                    "node:description": "a node",
+                    "node.0": "first",
+                    "node.1": "second",
+                    "node.description": "a node",
                 }
             )
         )
@@ -557,16 +557,16 @@ class TestSettingsManager:
                     "port": str(expected_port),
                     "found_port": str(expected_found_port),
                     "found_port_with_none_value": None,
-                    "service:name": expected_service_name_1,
-                    "service:port": str(expected_service_port_1),
-                    "logging:log_level:default": expected_log_level_default,
-                    "int_list:0": str(expected_int_list[0]),
-                    "int_list:1": str(expected_int_list[1]),
-                    "int_list:2": str(expected_int_list[2]),
-                    "found_service_list:0:name": expected_service_name_1,
-                    "found_service_list:0:port": str(expected_service_port_1),
-                    "found_service_list:1:name": expected_service_name_2,
-                    "found_service_list:1:port": str(expected_service_port_2),
+                    "service.name": expected_service_name_1,
+                    "service.port": str(expected_service_port_1),
+                    "logging.log_level.default": expected_log_level_default,
+                    "int_list.0": str(expected_int_list[0]),
+                    "int_list.1": str(expected_int_list[1]),
+                    "int_list.2": str(expected_int_list[2]),
+                    "found_service_list.0.name": expected_service_name_1,
+                    "found_service_list.0.port": str(expected_service_port_1),
+                    "found_service_list.1.name": expected_service_name_2,
+                    "found_service_list.1.port": str(expected_service_port_2),
                 }
             )
         )
@@ -612,11 +612,11 @@ class TestSettingsManager:
             content_root_path="", add_default_providers=False
         )
         settings_manager.add(
-            _DictionarySettingsSource({"service:port": str(expected_setting_value)})
+            _DictionarySettingsSource({"service.port": str(expected_setting_value)})
         )
 
         setting_value = settings_manager._bind_value(  # noqa: SLF001
-            "service:port", int
+            "service.port", int
         )
 
         assert setting_value == expected_setting_value
@@ -627,11 +627,11 @@ class TestSettingsManager:
             content_root_path="", add_default_providers=False
         )
         settings_manager.add(
-            _DictionarySettingsSource({"service:port": str(expected_setting_value)})
+            _DictionarySettingsSource({"service.port": str(expected_setting_value)})
         )
 
         setting_value = settings_manager._bind_required_value(  # noqa: SLF001
-            "service:port", int
+            "service.port", int
         )
 
         assert setting_value == expected_setting_value
@@ -644,12 +644,12 @@ class TestSettingsManager:
 
         with pytest.raises(KeyError) as exception_info:
             settings_manager._bind_required_value(  # noqa: SLF001
-                "service:port", int
+                "service.port", int
             )
 
         assert (
             exception_info.value.args[0]
-            == "Missing setting value for key 'service:port'"
+            == "Missing setting value for key 'service.port'"
         )
 
     def test_get_model_from_section(self) -> None:
@@ -665,8 +665,8 @@ class TestSettingsManager:
         settings_manager.add(
             _DictionarySettingsSource(
                 {
-                    "service:port": str(expected_port),
-                    "service:host": expected_host,
+                    "service.port": str(expected_port),
+                    "service.host": expected_host,
                 }
             )
         )
@@ -694,16 +694,16 @@ class TestSettingsManager:
         settings_manager.add(
             _DictionarySettingsSource(
                 {
-                    "int_list:0": str(expected_int_list[0]),
-                    "int_list:1": str(expected_int_list[1]),
-                    "int_list:2": str(expected_int_list[2]),
+                    "int_list.0": str(expected_int_list[0]),
+                    "int_list.1": str(expected_int_list[1]),
+                    "int_list.2": str(expected_int_list[2]),
                 }
             )
         )
         settings_manager.add(
             _DictionarySettingsSource(
                 {
-                    "int_list:description": expected_description,
+                    "int_list.description": expected_description,
                 }
             )
         )
@@ -731,9 +731,9 @@ class TestSettingsManager:
         settings_manager.add(
             _DictionarySettingsSource(
                 {
-                    "values:0": str(expected_int_list[0]),
-                    "values:1": str(expected_int_list[1]),
-                    "values:2": str(expected_int_list[2]),
+                    "values.0": str(expected_int_list[0]),
+                    "values.1": str(expected_int_list[1]),
+                    "values.2": str(expected_int_list[2]),
                 }
             )
         )
@@ -755,10 +755,10 @@ class TestSettingsManager:
         settings_manager.add(
             _DictionarySettingsSource(
                 {
-                    "section_1:key": "value1",
-                    "section_2:key": "value2",
+                    "section_1.key": "value1",
+                    "section_2.key": "value2",
                     "section_2": "value2",
-                    "section_3:subsection:key": "value3",
+                    "section_3.subsection.key": "value3",
                     "not_section": "value4",
                 }
             )
@@ -780,11 +780,11 @@ class TestSettingsManager:
         settings_manager.add(
             _DictionarySettingsSource(
                 {
-                    "parent_section:section_1:key": "value1",
-                    "parent_section:section_2:key": "value2",
-                    "parent_section:section_2": "value2",
-                    "parent_section:section_3:subsection:key": "value3",
-                    "parent_section:not_section": "value4",
+                    "parent_section.section_1.key": "value1",
+                    "parent_section.section_2.key": "value2",
+                    "parent_section.section_2": "value2",
+                    "parent_section.section_3.subsection.key": "value3",
+                    "parent_section.not_section": "value4",
                 }
             )
         )
@@ -810,7 +810,7 @@ class TestSettingsManager:
         settings_manager = SettingsManager(
             content_root_path="", add_default_providers=False
         )
-        settings_manager.add(_DictionarySettingsSource({"servers:0:name": "api"}))
+        settings_manager.add(_DictionarySettingsSource({"servers.0.name": "api"}))
 
         settings = settings_manager.get_model(Settings)
 
@@ -857,7 +857,7 @@ class TestSettingsManager:
                 {
                     "required_field_1": "value",
                     "required_field_2": "1",
-                    "subsettings:required_subfield_1": "value",
+                    "subsettings.required_subfield_1": "value",
                 }
             )
         )
@@ -890,8 +890,8 @@ class TestSettingsManager:
     @pytest.mark.parametrize(
         argnames=("field_type", "setting_values", "expected_values"),
         argvalues=[
-            (int, {"ports:0": "8080", "ports:1": "8081"}, [8080, 8081]),
-            (str, {"ports:0": "8080", "ports:1": "8081"}, ["8080", "8081"]),
+            (int, {"ports.0": "8080", "ports.1": "8081"}, [8080, 8081]),
+            (str, {"ports.0": "8080", "ports.1": "8081"}, ["8080", "8081"]),
         ],
     )
     def test_get_sequence[TField](
@@ -913,8 +913,8 @@ class TestSettingsManager:
         settings_manager.add(_DictionarySettingsSource(setting_values))
 
         settings = settings_manager.get_model(model_class)
-        first_value = settings_manager.get_required_value("ports:0", field_type)
-        missing_value = settings_manager.get_value("ports:2", field_type)
+        first_value = settings_manager.get_required_value("ports.0", field_type)
+        missing_value = settings_manager.get_value("ports.2", field_type)
 
         assert settings.ports == expected_values
         assert isinstance(first_value, field_type)
@@ -962,17 +962,17 @@ class TestSettingsManager:
         settings_manager.add(
             _DictionarySettingsSource(
                 {
-                    "servers:0:name": "api",
-                    "servers:0:retries": str(expected_api_retries),
-                    "servers:1:name": "worker",
-                    "servers:1:retries": str(expected_worker_retries),
+                    "servers.0.name": "api",
+                    "servers.0.retries": str(expected_api_retries),
+                    "servers.1.name": "worker",
+                    "servers.1.retries": str(expected_worker_retries),
                 }
             )
         )
 
         settings = settings_manager.get_model(Settings)
-        first_server_name = settings_manager.get_required_value("servers:0:name")
-        second_server_retries = settings_manager.get_value("servers:1:retries", int)
+        first_server_name = settings_manager.get_required_value("servers.0.name")
+        second_server_retries = settings_manager.get_value("servers.1.retries", int)
 
         assert len(settings.servers) == expected_server_settings
         assert settings.servers[0].name == "api"
@@ -987,12 +987,12 @@ class TestSettingsManager:
         argvalues=[
             (
                 int,
-                {"ports:http": "8080", "ports:https": "8443"},
+                {"ports.http": "8080", "ports.https": "8443"},
                 {"http": 8080, "https": 8443},
             ),
             (
                 str,
-                {"ports:http": "8080", "ports:https": "8443"},
+                {"ports.http": "8080", "ports.https": "8443"},
                 {"http": "8080", "https": "8443"},
             ),
         ],
@@ -1016,8 +1016,8 @@ class TestSettingsManager:
         settings_manager.add(_DictionarySettingsSource(setting_values))
 
         settings = settings_manager.get_model(model_class)
-        http_value = settings_manager.get_required_value("ports:http", field_type)
-        missing_value = settings_manager.get_value("ports:ftp", field_type)
+        http_value = settings_manager.get_required_value("ports.http", field_type)
+        missing_value = settings_manager.get_value("ports.ftp", field_type)
 
         assert isinstance(settings, BaseModel)
         assert isinstance(settings.ports, dict)
@@ -1043,17 +1043,17 @@ class TestSettingsManager:
         settings_manager.add(
             _DictionarySettingsSource(
                 {
-                    "services:api:url": "https://api.example.com",
-                    "services:api:retries": str(expected_api_retries),
-                    "services:worker:url": "https://worker.example.com",
-                    "services:worker:retries": str(expected_worker_retries),
+                    "services.api.url": "https://api.example.com",
+                    "services.api.retries": str(expected_api_retries),
+                    "services.worker.url": "https://worker.example.com",
+                    "services.worker.retries": str(expected_worker_retries),
                 }
             )
         )
 
         settings = settings_manager.get_model(Settings)
-        api_url = settings_manager.get_required_value("services:api:url")
-        worker_retries = settings_manager.get_value("services:worker:retries", int)
+        api_url = settings_manager.get_required_value("services.api.url")
+        worker_retries = settings_manager.get_value("services.worker.retries", int)
 
         assert len(settings.services) == expected_service_settings
         assert settings.services["api"].url == "https://api.example.com"
@@ -1072,8 +1072,8 @@ class TestSettingsManager:
             _DictionarySettingsSource(
                 {
                     "parent_section:": "value1",
-                    "parent_section:section_1": "value2",
-                    "parent_section:section_2:key": "value3",
+                    "parent_section.section_1": "value2",
+                    "parent_section.section_2.key": "value3",
                 }
             )
         )
@@ -1092,9 +1092,9 @@ class TestSettingsManager:
         settings_manager.add(
             _DictionarySettingsSource(
                 {
-                    "parent_section::orphan": "ignored",
-                    "parent_section:section_1": "value1",
-                    "parent_section:section_2:key": "value2",
+                    "parent_section..orphan": "ignored",
+                    "parent_section.section_1": "value1",
+                    "parent_section.section_2.key": "value2",
                 }
             )
         )
@@ -1112,8 +1112,8 @@ class TestSettingsManager:
         settings_manager.add(
             _DictionarySettingsSource(
                 {
-                    "node:0:name": "first",
-                    "node:1": "second",
+                    "node.0.name": "first",
+                    "node.1": "second",
                 }
             )
         )

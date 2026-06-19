@@ -8,8 +8,8 @@ class TestSettingsSection:
     @pytest.mark.parametrize(
         argnames=("expected_path"),
         argvalues=[
-            "logging:log_level:default",
-            "logging:log_level",
+            "logging.log_level.default",
+            "logging.log_level",
             "logging",
         ],
     )
@@ -24,8 +24,8 @@ class TestSettingsSection:
     @pytest.mark.parametrize(
         argnames=("section_key", "expected_key"),
         argvalues=[
-            ("logging:log_level:default", "default"),
-            ("logging:log_level", "log_level"),
+            ("logging.log_level.default", "default"),
+            ("logging.log_level", "log_level"),
             ("logging", "logging"),
         ],
     )
@@ -40,11 +40,11 @@ class TestSettingsSection:
         assert setting_key == expected_key
 
     def test_get_value_not_specifying_type(self, mocker: MockerFixture) -> None:
-        expected_path = "logging:log_level:default"
+        expected_path = "logging.log_level.default"
         expected_value = "WARNING"
         settings_root_mock = mocker.create_autospec(SettingsRoot, instance=True)
         settings_root_mock.get_value.return_value = expected_value
-        section = SettingsSection(root=settings_root_mock, path="logging:log_level")
+        section = SettingsSection(root=settings_root_mock, path="logging.log_level")
 
         setting_value = section.get_value("default")
 
@@ -54,9 +54,9 @@ class TestSettingsSection:
     @pytest.mark.parametrize(
         argnames=("expected_path", "expected_value", "value_type"),
         argvalues=[
-            ("logging:log_level:default", 1, int),
-            ("logging:log_level:default", "WARNING", str),
-            ("logging:log_level:default", [1, 2, 3], list[int]),
+            ("logging.log_level.default", 1, int),
+            ("logging.log_level.default", "WARNING", str),
+            ("logging.log_level.default", [1, 2, 3], list[int]),
         ],
     )
     def test_get_value_specifying_type[TField](
@@ -68,7 +68,7 @@ class TestSettingsSection:
     ) -> None:
         settings_root_mock = mocker.create_autospec(SettingsRoot, instance=True)
         settings_root_mock.get_value.return_value = expected_value
-        section = SettingsSection(root=settings_root_mock, path="logging:log_level")
+        section = SettingsSection(root=settings_root_mock, path="logging.log_level")
 
         setting_value = section.get_value("default", value_type)
 
@@ -83,11 +83,11 @@ class TestSettingsSection:
         settings_root_mock.get_value.return_value = expected_value
         section = SettingsSection(root=settings_root_mock, path="logging")
 
-        setting_value = section.get_value("log_level:default")
+        setting_value = section.get_value("log_level.default")
 
         assert setting_value == expected_value
         settings_root_mock.get_value.assert_called_once_with(
-            "logging:log_level:default", str
+            "logging.log_level.default", str
         )
 
     def test_get_value_for_child_key_specifying_type(
@@ -98,11 +98,11 @@ class TestSettingsSection:
         settings_root_mock.get_value.return_value = expected_value
         section = SettingsSection(root=settings_root_mock, path="logging")
 
-        setting_value = section.get_value("log_level:default", int)
+        setting_value = section.get_value("log_level.default", int)
 
         assert setting_value == expected_value
         settings_root_mock.get_value.assert_called_once_with(
-            "logging:log_level:default", int
+            "logging.log_level.default", int
         )
 
     def test_get_children_from_child_key(self, mocker: MockerFixture) -> None:
@@ -114,16 +114,16 @@ class TestSettingsSection:
         children = section.get_children("log_level")
 
         assert children == expected_children
-        settings_root_mock.get_children.assert_called_once_with("logging:log_level")
+        settings_root_mock.get_children.assert_called_once_with("logging.log_level")
 
     def test_get_required_value_not_specifying_type(
         self, mocker: MockerFixture
     ) -> None:
-        expected_path = "logging:log_level:default"
+        expected_path = "logging.log_level.default"
         expected_value = "WARNING"
         settings_root_mock = mocker.create_autospec(SettingsRoot, instance=True)
         settings_root_mock.get_required_value.return_value = expected_value
-        section = SettingsSection(root=settings_root_mock, path="logging:log_level")
+        section = SettingsSection(root=settings_root_mock, path="logging.log_level")
 
         setting_value = section.get_required_value("default")
 
@@ -135,9 +135,9 @@ class TestSettingsSection:
     @pytest.mark.parametrize(
         argnames=("expected_path", "value_type", "expected_value"),
         argvalues=[
-            ("logging:log_level:default", int, 1),
-            ("logging:log_level:default", str, "WARNING"),
-            ("logging:log_level:default", list[int], [1, 2, 3]),
+            ("logging.log_level.default", int, 1),
+            ("logging.log_level.default", str, "WARNING"),
+            ("logging.log_level.default", list[int], [1, 2, 3]),
         ],
     )
     def test_get_required_value_specifying_type[TField](
@@ -149,7 +149,7 @@ class TestSettingsSection:
     ) -> None:
         settings_root_mock = mocker.create_autospec(SettingsRoot, instance=True)
         settings_root_mock.get_required_value.return_value = expected_value
-        section = SettingsSection(root=settings_root_mock, path="logging:log_level")
+        section = SettingsSection(root=settings_root_mock, path="logging.log_level")
 
         setting_value = section.get_required_value("default", value_type)
 

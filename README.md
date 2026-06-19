@@ -78,7 +78,7 @@ settings_manager.add_azure_key_vault(
 )
 ```
 
-After that, we have all settings to construct our Pydatic model:
+After that, we have all settings to construct our Pydantic model:
 
 ```python
 application_settings = settings_manager.get_model(ApplicationSettings)

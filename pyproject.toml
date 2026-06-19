@@ -1,0 +1,81 @@
+[project]
+name = "wirio-settings"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.13",
+    "Intended Audience :: Developers",
+]
+keywords = [
+    "settings",
+    "azure",
+    "Azure Key Vault",
+    "aws",
+    "AWS Secrets Manager",
+]
+dynamic = ["version"]
+requires-python = ">=3.13"
+dependencies = [
+    "coverage>=7.14.1",
+    "pydantic>=2.13.4",
+    "pytest>=9.1.0",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "pytest-mock>=3.15.1",
+    "pyyaml>=6.0.3",
+    "testcontainers>=4.14.2",
+]
+
+[project.optional-dependencies]
+azure-key-vault = [
+    "aiohttp>=3.13.3",
+    "azure-identity>=1.25.2",
+    "azure-keyvault-secrets>=4.10.0",
+]
+aws-secrets-manager = ["boto3[crt]>=1.42.71"]
+
+[dependency-groups]
+dev = ["maturin>=1.13.3", "ruff>=0.15.17", "ty>=0.0.50"]
+
+[build-system]
+requires = ["maturin>=1.12,<2.0"]
+build-backend = "maturin"
+
+[tool.uv]
+required-version = ">=0.11.0,<0.12.0"
+
+[tool.maturin]
+python-source = "python"
+module-name = "wirio_settings._wirio_settings"
+
+[tool.maturin.generate-ci.github]
+trusted-publishing = true
+
+[tool.ty.terminal]
+error-on-warning = true
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "COM812", # missing-trailing-comma
+    "D100",   # undocumented-public-module
+    "D101",   # undocumented-public-class
+    "D102",   # undocumented-public-method
+    "D103",   # undocumented-public-function
+    "D104",   # undocumented-public-package
+    "D105",   # undocumented-magic-method
+    "D106",   # undocumented-public-nested-class
+    "D107",   # undocumented-public-init
+    "E501",   # line-too-long
+    "ICN",    # flake8-import-conventions
+    "S101",   # assert
+    "TRY003", # raise-vanilla-args
+    "FBT001", # boolean-type-hint-positional-argument
+    "FBT002", # boolean-default-value-positional-argument
+    "PT013",  #	pytest-incorrect-pytest-import
+]
+
+[tool.pytest]
+strict = true
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

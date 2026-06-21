@@ -4,11 +4,11 @@ Lightning-fast, strongly typed, and zero boilerplate settings library for Python
 
 - **Great defaults from day one:** It automatically looks for settings files and environment variables, with recommended configurations and zero boilerplate.
 - **Rust-powered core:** Built with Rust under the hood for speed, reliability, and low runtime overhead.
-- **Cloud secrets when we need them:** Azure Key Vault and AWS Secrets Manager integrations are available with one line of code, with safe authentication.
+- **Cloud secrets when we need them:** Azure Key Vault, AWS Secrets Manager and GCP Secret Manager integrations are available with one line of code, with safe authentication.
 - **Works naturally with Pydantic models:** Load your app settings directly into models.
 - **Async-ready by design:** Built to work smoothly with modern async Python apps and cloud SDKs.
 - **A practical replacement:** Replace `pydantic-settings` and `python-dotenv` with one unified settings library.
-- **Roadmap:** Planned capabilities include automatic reload on settings changes (events, time, sentinel, async), pluggable configuration stores, feature flags and lifetimes.
+- **Roadmap:** Planned capabilities include automatic reload on settings changes (events, sentinels, time, async), pluggable configuration stores, feature flags, lifetimes, prefixes, custom delimiters and aliases.
 
 ## 📦 Installation
 
@@ -159,8 +159,6 @@ Nested keys use `.`:
 uv add wirio-settings[azure-key-vault]
 ```
 
-1. Add Key Vault as a source:
-
 ```python
 settings_manager.add_azure_key_vault(
     "https://example.vault.azure.net",
@@ -183,3 +181,15 @@ settings_manager.add_aws_secrets_manager(
 ```
 
 The secret value must be a JSON object. `wirio-settings` reads and flattens that JSON into settings keys.
+
+### GCP Secret Manager
+
+```bash
+uv add wirio-settings[gcp-secret-manager]
+```
+
+```python
+settings_manager.add_gcp_secret_manager(
+    "project-id"
+)
+```

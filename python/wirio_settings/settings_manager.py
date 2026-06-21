@@ -23,6 +23,7 @@ from wirio_settings.yaml.yaml_settings_source import YamlSettingsSource
 
 if TYPE_CHECKING:
     from azure.core.credentials_async import AsyncTokenCredential
+    from google.auth.credentials import Credentials
 
     from wirio_settings.aws_secrets_manager.aws_secrets_manager_settings_source import (
         AwsSecretsManagerSettingsSource,
@@ -30,10 +31,15 @@ if TYPE_CHECKING:
     from wirio_settings.azure_key_vault.azure_key_vault_settings_source import (
         AzureKeyVaultSettingsSource,
     )
+    from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_source import (
+        GcpSecretManagerSettingsSource,
+    )
 else:
     AsyncTokenCredential = Any
+    Credentials = Any
     AwsSecretsManagerSettingsSource = Any
     AzureKeyVaultSettingsSource = Any
+    GcpSecretManagerSettingsSource = Any
 
 
 @final
@@ -126,6 +132,26 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
 
         self.add(
             AwsSecretsManagerSettingsSource(secret_id=secret_id, region=region, url=url)
+        )
+        return self
+
+    def add_gcp_secret_manager(
+        self,
+        project_id: str,
+        credentials: Credentials | None = None,
+    ) -> Self:
+        """Add a settings provider that reads settings values from GCP Secret Manager."""
+        ExtraDependencies.ensure_gcp_secret_manager_is_installed()
+        global GcpSecretManagerSettingsSource  # noqa: PLW0603
+        from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_source import (  # noqa: PLC0415
+            GcpSecretManagerSettingsSource,
+        )
+
+        self.add(
+            GcpSecretManagerSettingsSource(
+                project_id=project_id,
+                credentials=credentials,
+            )
         )
         return self
 

@@ -44,7 +44,7 @@ except ImportError:
 class TestAzureKeyVaultSettingsProvider:
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
-        self.vault_url = "https://example.vault.azure.net"
+        self.key_vault_url = "https://example.vault.azure.net"
 
     async def test_load_enabled_secrets(self, mocker: MockerFixture) -> None:
         default_azure_credential_mock = mocker.create_autospec(
@@ -97,7 +97,7 @@ class TestAzureKeyVaultSettingsProvider:
             return_value=secret_client_mock,
         )
         provider = AzureKeyVaultSettingsProvider(
-            url=self.vault_url,
+            url=self.key_vault_url,
             credential=default_azure_credential_mock,
         )
 
@@ -108,7 +108,7 @@ class TestAzureKeyVaultSettingsProvider:
         }
         secret_client_mock.get_secret.assert_called_once_with(enabled_secret_name)
         secret_client_patch.assert_called_once_with(
-            vault_url=self.vault_url,
+            vault_url=self.key_vault_url,
             credential=default_azure_credential_mock,
             user_agent_policy=mocker.ANY,
         )
@@ -145,13 +145,13 @@ class TestAzureKeyVaultSettingsProvider:
             autospec=True,
             return_value=secret_client_mock,
         )
-        provider = AzureKeyVaultSettingsProvider(url=self.vault_url)
+        provider = AzureKeyVaultSettingsProvider(url=self.key_vault_url)
 
         await provider.load()
 
         default_credential_patch.assert_called_once_with()
         secret_client_patch.assert_called_once_with(
-            vault_url=self.vault_url,
+            vault_url=self.key_vault_url,
             credential=default_azure_credential_mock,
             user_agent_policy=mocker.ANY,
         )
@@ -188,7 +188,7 @@ class TestAzureKeyVaultSettingsProvider:
             return_value=secret_client_mock,
         )
         provider = AzureKeyVaultSettingsProvider(
-            url=self.vault_url,
+            url=self.key_vault_url,
             credential=default_azure_credential_mock,
         )
 
@@ -236,7 +236,7 @@ class TestAzureKeyVaultSettingsProvider:
             return_value=secret_client_mock,
         )
         provider = AzureKeyVaultSettingsProvider(
-            url=self.vault_url,
+            url=self.key_vault_url,
             credential=default_azure_credential_mock,
         )
 
@@ -300,7 +300,7 @@ class TestAzureKeyVaultSettingsProvider:
             return_value=secret_client_mock,
         )
         provider = AzureKeyVaultSettingsProvider(
-            url=self.vault_url,
+            url=self.key_vault_url,
             credential=default_azure_credential_mock,
         )
 

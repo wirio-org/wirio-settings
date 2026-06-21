@@ -57,7 +57,7 @@ try:  # noqa: SIM105
 except ImportError:
     pass
 
-try:  # noqa: SIM105
+try:
     from google.auth.credentials import Credentials
     from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_source import (
         GcpSecretManagerSettingsSource,

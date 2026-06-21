@@ -193,3 +193,6 @@ settings_manager.add_gcp_secret_manager(
     "project-id"
 )
 ```
+
+If no credentials are provided, Application Default Credentials (ADC) are used.
+We can also pass custom GCP credentials with the `credentials` parameter.

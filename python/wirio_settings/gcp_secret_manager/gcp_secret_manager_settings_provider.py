@@ -59,9 +59,7 @@ class GcpSecretManagerSettingsProvider(SettingsProvider):
         list_secrets_response = await secret_client.list_secrets(
             request=list_secrets_request
         )
-        secret_ids = [secret.name
-            async for secret in list_secrets_response
-           ]
+        secret_ids = [secret.name async for secret in list_secrets_response]
         return [secret_id.split("/")[-1] for secret_id in secret_ids]
 
     def _normalize_key(self, key: str) -> str:

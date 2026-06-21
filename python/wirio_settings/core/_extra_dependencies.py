@@ -10,7 +10,7 @@ class ExtraDependencies:
         "'boto3' is not installed. Please, run 'uv add wirio-settings[aws-secrets-manager]' to install the required dependencies"
     )
     GCP_SECRET_MANAGER_NOT_INSTALLED_ERROR_MESSAGE: ClassVar[str] = (
-        "'google-cloud-secret-manager' is not installed. Please, run 'uv add wirio-settings[gcp-secret-manager]' to install the required dependencies"
+        "'google-cloud-secret-manager' is not installed. Please, run 'uv add wirio-settings[gcp-secret-manager]' to install the required dependencies"  # noqa: S105
     )
 
     @staticmethod

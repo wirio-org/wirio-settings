@@ -38,7 +38,7 @@ except ImportError:
 class TestAzureKeyVaultSettingsSource:
     def test_build_provider(self, mocker: MockerFixture) -> None:
         vault_url = "https://example.vault.azure.net/"
-        credential = mocker.create_autospec(DefaultAzureCredential, instance=True)
+        credential_mock = mocker.create_autospec(DefaultAzureCredential, instance=True)
         settings_provider_mock = mocker.create_autospec(SettingsProvider, instance=True)
         settings_builder_mock = mocker.create_autospec(SettingsBuilder, instance=True)
         settings_provider_patch = mocker.patch(
@@ -48,7 +48,7 @@ class TestAzureKeyVaultSettingsSource:
         )
         source = AzureKeyVaultSettingsSource(
             url=vault_url,
-            credential=credential,
+            credential=credential_mock,
         )
 
         provider = source.build(settings_builder_mock)
@@ -56,5 +56,5 @@ class TestAzureKeyVaultSettingsSource:
         assert provider is settings_provider_mock
         settings_provider_patch.assert_called_once_with(
             url=vault_url,
-            credential=credential,
+            credential=credential_mock,
         )

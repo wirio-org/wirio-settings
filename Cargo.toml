@@ -8,7 +8,7 @@ name = "_wirio_settings"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.28.3", features = [
+pyo3 = { version = "0.29.0", features = [
     "experimental-inspect",
     "experimental-async",
 ] }

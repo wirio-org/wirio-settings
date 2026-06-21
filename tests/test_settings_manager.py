@@ -25,16 +25,22 @@ from wirio_settings.yaml.yaml_settings_source import YamlSettingsSource
 
 if TYPE_CHECKING:
     from azure.core.credentials_async import AsyncTokenCredential
+    from google.auth.credentials import Credentials
     from wirio_settings.aws_secrets_manager.aws_secrets_manager_settings_source import (
         AwsSecretsManagerSettingsSource,
     )
     from wirio_settings.azure_key_vault.azure_key_vault_settings_source import (
         AzureKeyVaultSettingsSource,
     )
+    from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_source import (
+        GcpSecretManagerSettingsSource,
+    )
 else:
     AsyncTokenCredential = Any
+    Credentials = Any
     AwsSecretsManagerSettingsSource = Any
     AzureKeyVaultSettingsSource = Any
+    GcpSecretManagerSettingsSource = Any
 
 try:
     from azure.core.credentials_async import AsyncTokenCredential
@@ -47,6 +53,14 @@ except ImportError:
 try:  # noqa: SIM105
     from wirio_settings.aws_secrets_manager.aws_secrets_manager_settings_source import (
         AwsSecretsManagerSettingsSource,
+    )
+except ImportError:
+    pass
+
+try:
+    from google.auth.credentials import Credentials
+    from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_source import (
+        GcpSecretManagerSettingsSource,
     )
 except ImportError:
     pass
@@ -372,7 +386,7 @@ class TestSettingsManager:
         reason=ExtraDependencies.AZURE_KEY_VAULT_NOT_INSTALLED_ERROR_MESSAGE,
     )
     def test_add_azure_key_vault(self, mocker: MockerFixture) -> None:
-        expected_vault_url = "https://example.vault.azure.net"
+        key_vault_url = "https://example.vault.azure.net"
         token_credential_mock = mocker.create_autospec(
             AsyncTokenCredential,
             instance=True,
@@ -387,7 +401,7 @@ class TestSettingsManager:
         )
 
         settings_manager.add_azure_key_vault(
-            url=expected_vault_url,
+            url=key_vault_url,
             credential=token_credential_mock,
         )
 
@@ -421,6 +435,31 @@ class TestSettingsManager:
         add_patch.assert_called_once()
         source = add_patch.call_args.args[0]
         assert isinstance(source, AwsSecretsManagerSettingsSource)
+
+    @pytest.mark.skipif(
+        not ExtraDependencies.is_gcp_secret_manager_installed(),
+        reason=ExtraDependencies.GCP_SECRET_MANAGER_NOT_INSTALLED_ERROR_MESSAGE,
+    )
+    def test_add_gcp_secret_manager(self, mocker: MockerFixture) -> None:
+        project_id = "project-id"
+        credentials_mock = mocker.create_autospec(Credentials, instance=True)
+        settings_manager = SettingsManager(
+            content_root_path="", add_default_providers=False
+        )
+        add_patch = mocker.patch.object(
+            settings_manager,
+            settings_manager.add.__name__,
+            autospec=True,
+        )
+
+        settings_manager.add_gcp_secret_manager(
+            project_id=project_id,
+            credentials=credentials_mock,
+        )
+
+        add_patch.assert_called_once()
+        source = add_patch.call_args.args[0]
+        assert isinstance(source, GcpSecretManagerSettingsSource)
 
     def test_use_default_factory_for_missing_optional_value_of_a_model(self) -> None:
         class Settings(BaseModel):

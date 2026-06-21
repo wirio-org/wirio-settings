@@ -1,5 +1,11 @@
 [project]
 name = "wirio-settings"
+dynamic = ["version"]
+description = "Powerful settings library for Python"
+authors = [{ name = "Andreu Codina" }]
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Programming Language :: Python :: 3.14",
@@ -12,13 +18,17 @@ keywords = [
     "Azure Key Vault",
     "aws",
     "AWS Secrets Manager",
+    "gcp",
+    "GCP Secret Manager",
 ]
-dynamic = ["version"]
 requires-python = ">=3.13"
-dependencies = [
-    "pydantic>=2.13.4",
-    "pyyaml>=6.0.3",
-]
+dependencies = ["pydantic>=2.13.4", "pyyaml>=6.0.3"]
+
+[project.urls]
+Homepage = "https://github.com/wirio-org/wirio-settings"
+Repository = "https://github.com/wirio-org/wirio-settings"
+Documentation = "https://wirio-org.github.io/wirio-settings"
+Changelog = "https://github.com/wirio-org/wirio/releases-settings"
 
 [project.optional-dependencies]
 azure-key-vault = [
@@ -27,6 +37,7 @@ azure-key-vault = [
     "azure-keyvault-secrets>=4.10.0",
 ]
 aws-secrets-manager = ["boto3[crt]>=1.42.71"]
+gcp-secret-manager = ["google-cloud-secret-manager>=2.29.0"]
 
 [dependency-groups]
 dev = [

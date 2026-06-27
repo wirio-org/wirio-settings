@@ -1,7 +1,7 @@
-from .convention_changer import ConventionChanger
+from wirio_settings._wirio_settings import ConventionChanger, SettingsPath
+
 from .settings_binder import SettingsBinder
 from .settings_builder import SettingsBuilder
-from .settings_path import SettingsPath
 from .settings_provider import SettingsProvider
 from .settings_root import SettingsRoot
 from .settings_section import SettingsSection

@@ -7,7 +7,7 @@ from azure.core.pipeline.policies._universal import HTTPRequestType
 from azure.identity.aio import DefaultAzureCredential
 from azure.keyvault.secrets.aio import SecretClient
 
-from wirio_settings.core.settings_path import SettingsPath
+from wirio_settings._wirio_settings import SettingsPath
 from wirio_settings.core.settings_provider import SettingsProvider
 
 

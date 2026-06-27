@@ -80,7 +80,11 @@ jobs:
         run: uv run -- maturin develop --uv
         shell: bash
 
-      - name: Test
+      - name: Rust tests
+        run: cargo test
+        shell: bash
+
+      - name: Python tests
         run: uv run -- pytest --cov=wirio_settings --cov-branch tests
         shell: bash
 

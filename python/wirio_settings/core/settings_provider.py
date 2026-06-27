@@ -1,7 +1,7 @@
 from abc import ABC
 from typing import override
 
-from wirio_settings.core.convention_changer import ConventionChanger
+from wirio_settings._wirio_settings import ConventionChanger
 from wirio_settings.core.wirio_undefined import WirioUndefined
 
 

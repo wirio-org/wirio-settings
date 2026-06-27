@@ -3,8 +3,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 from pytest_mock import MockerFixture
+from wirio_settings._wirio_settings import ConventionChanger
 from wirio_settings.core._extra_dependencies import ExtraDependencies
-from wirio_settings.core.convention_changer import ConventionChanger
 
 if TYPE_CHECKING:
     from azure.core.pipeline import PipelineRequest

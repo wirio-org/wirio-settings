@@ -1,6 +1,6 @@
 from typing import Any, Final, cast
 
-from wirio_settings.core.settings_path import SettingsPath
+from wirio_settings._wirio_settings import SettingsPath
 
 
 class JsonSettingsFileParser:

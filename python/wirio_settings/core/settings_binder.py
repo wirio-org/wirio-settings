@@ -10,8 +10,8 @@ from typing import (
 from pydantic import BaseModel, TypeAdapter
 from pydantic.fields import FieldInfo
 
+from wirio_settings._wirio_settings import SettingsPath
 from wirio_settings.core._typed_type import TypedType
-from wirio_settings.core.settings_path import SettingsPath
 from wirio_settings.core.wirio_undefined import WirioUndefined
 
 if TYPE_CHECKING:

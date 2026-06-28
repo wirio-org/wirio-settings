@@ -1,3 +1,13 @@
+<div align="center">
+<img alt="Logo" src="https://raw.githubusercontent.com/wirio-org/wirio-settings/refs/heads/main/docs/logo.png" width="450" height="450">
+
+[![CI](https://img.shields.io/github/actions/workflow/status/wirio-org/wirio-settings/ci.yaml?branch=main&logo=github&label=CI)](https://github.com/wirio-org/wirio-settings/actions/workflows/ci.yaml)
+[![PyPI - version](https://img.shields.io/pypi/v/wirio-settings?color=blue&label=pypi)](https://pypi.org/project/wirio-settings/)
+[![Python - versions](https://img.shields.io/pypi/pyversions/wirio-settings.svg)](https://github.com/wirio-org/wirio-settings)
+[![License](https://img.shields.io/github/license/wirio-org/wirio-settings.svg)](https://github.com/wirio-org/wirio-settings/blob/main/LICENSE)
+
+</div>
+
 ## Overview
 
 Lightning-fast, strongly typed, and zero boilerplate settings library for Python:
@@ -28,6 +38,24 @@ class ApplicationSettings(BaseModel):
 
 
 application_settings = SettingsManager().get_model(ApplicationSettings)
+```
+
+## ✨ Quickstart with Pydantic models and Azure Key Vault
+
+```python
+from pydantic import BaseModel
+from wirio_settings import SettingsManager
+
+
+class ApplicationSettings(BaseModel):
+    database_password: str
+
+
+application_settings = (
+    SettingsManager()
+    .add_azure_key_vault("https://example.vault.azure.net/")
+    .get_model(ApplicationSettings)
+)
 ```
 
 ## Source priority

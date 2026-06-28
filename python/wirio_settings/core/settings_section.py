@@ -1,7 +1,7 @@
 from typing import Final, cast, final, override
 
+from wirio_settings._wirio_settings import SettingsPath
 from wirio_settings.core.settings import Settings
-from wirio_settings.core.settings_path import SettingsPath
 from wirio_settings.core.settings_root import SettingsRoot
 
 

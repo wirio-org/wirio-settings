@@ -1,7 +1,7 @@
 [project]
 name = "wirio-settings"
 dynamic = ["version"]
-description = "Powerful settings library for Python"
+description = "Lightning-fast, strongly typed, and zero-boilerplate settings library for Python"
 authors = [{ name = "Andreu Codina" }]
 readme = "README.md"
 license = "MIT"
@@ -69,6 +69,9 @@ trusted-publishing = true
 [tool.ty.terminal]
 error-on-warning = true
 
+[tool.ruff]
+extend-exclude = ["python/wirio_settings/_wirio_settings.pyi"]
+
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
@@ -87,8 +90,9 @@ ignore = [
     "TRY003", # raise-vanilla-args
     "FBT001", # boolean-type-hint-positional-argument
     "FBT002", # boolean-default-value-positional-argument
-    "PT013",  #	pytest-incorrect-pytest-import
+    "PT013",  #	pytest-incorrect-pytest-import,
 ]
+
 
 [tool.pytest]
 strict = true

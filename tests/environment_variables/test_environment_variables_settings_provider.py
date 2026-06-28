@@ -1,20 +1,16 @@
 import os
 
-import pytest
+from pytest_mock import MockerFixture
 from wirio_settings.environment_variables.environment_variables_settings_provider import (
     EnvironmentVariablesSettingsProvider,
 )
 
 
 class TestEnvironmentVariablesSettingsProvider:
-    async def test_replace_double_underscore_with_dot_in_environment_variable_name(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_load_environment_variables(self, mocker: MockerFixture) -> None:
         expected_value = "WARNING"
-        monkeypatch.setattr(
-            os,
-            "environ",
-            {"LOGGING__LOG_LEVEL__DEFAULT": expected_value},
+        mocker.patch.dict(
+            os.environ, {"LOGGING__LOG_LEVEL__DEFAULT": expected_value}, clear=True
         )
         provider = EnvironmentVariablesSettingsProvider()
 

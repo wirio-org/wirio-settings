@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING, Any, Final, Self, cast, final, override
 
 from pydantic import TypeAdapter
 
+from wirio_settings._wirio_settings import SettingsPath
 from wirio_settings.core._extra_dependencies import ExtraDependencies
 from wirio_settings.core._typed_type import TypedType
 from wirio_settings.core.settings_builder import SettingsBuilder
-from wirio_settings.core.settings_path import SettingsPath
 from wirio_settings.core.settings_provider import SettingsProvider
 from wirio_settings.core.settings_root import SettingsRoot
 from wirio_settings.core.settings_section import SettingsSection

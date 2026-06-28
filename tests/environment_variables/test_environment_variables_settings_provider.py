@@ -9,8 +9,8 @@ from wirio_settings.environment_variables.environment_variables_settings_provide
 class TestEnvironmentVariablesSettingsProvider:
     async def test_load_environment_variables(self, mocker: MockerFixture) -> None:
         expected_value = "WARNING"
-        mocker.patch(
-            f"{os.__name__}.environ", {"LOGGING__LOG_LEVEL__DEFAULT": expected_value}
+        mocker.patch.dict(
+            os.environ, {"LOGGING__LOG_LEVEL__DEFAULT": expected_value}, clear=True
         )
         provider = EnvironmentVariablesSettingsProvider()
 

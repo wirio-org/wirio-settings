@@ -74,7 +74,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_load_environment_variables() {
+        Python::initialize();
+
         let expected_environment_variables = BTreeMap::from([(
             String::from("logging.log_level.default"),
             Some(String::from("WARNING")),

@@ -1,10 +1,8 @@
 use crate::core::{settings_path::SettingsPath, settings_provider::SettingsProvider};
 use pyo3::prelude::*;
+use std::collections::BTreeMap;
 use std::fmt;
-use std::{
-    collections::HashMap,
-    fmt::{Display, Formatter},
-};
+use std::fmt::{Display, Formatter};
 
 #[pyclass(str)]
 pub struct InternalEnvironmentVariablesSettingsProvider;
@@ -12,14 +10,14 @@ pub struct InternalEnvironmentVariablesSettingsProvider;
 #[pymethods]
 impl InternalEnvironmentVariablesSettingsProvider {
     #[staticmethod]
-    pub async fn load() -> PyResult<HashMap<String, Option<String>>> {
-        let mut data: HashMap<String, Option<String>> =
-            Python::attach(|python| -> PyResult<HashMap<String, Option<String>>> {
+    pub async fn load() -> PyResult<BTreeMap<String, Option<String>>> {
+        let mut data: BTreeMap<String, Option<String>> =
+            Python::attach(|python| -> PyResult<BTreeMap<String, Option<String>>> {
                 let environ = python.import("os")?.getattr("environ")?;
                 let dict_type = python.import("builtins")?.getattr("dict")?;
-                let environment_data: HashMap<String, String> =
+                let environment_data: BTreeMap<String, String> =
                     dict_type.call1((environ,))?.extract()?;
-                let mut loaded_data: HashMap<String, Option<String>> = HashMap::new();
+                let mut loaded_data: BTreeMap<String, Option<String>> = BTreeMap::new();
 
                 for (environment_variable_key, environment_variable_value) in environment_data {
                     let normalized_environment_variable_key =
@@ -57,7 +55,7 @@ impl Display for InternalEnvironmentVariablesSettingsProvider {
 mod tests {
     use super::InternalEnvironmentVariablesSettingsProvider;
     use pyo3::{prelude::*, types::PyDict};
-    use std::collections::HashMap;
+    use std::collections::BTreeMap;
 
     #[test]
     fn test_replace_double_underscore_with_dot_in_environment_variable_name() {
@@ -77,14 +75,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_load_environment_variables() {
-        Python::initialize();
-
-        let expected_environment_variables = HashMap::from([(
+        let expected_environment_variables = BTreeMap::from([(
             String::from("logging.log_level.default"),
             Some(String::from("WARNING")),
         )]);
 
-        Python::attach(|python| -> PyResult<Py<PyAny>> {
+        let original_environ = Python::attach(|python| -> PyResult<Py<PyAny>> {
             let os_module = python.import("os")?;
             let dict_type = python.import("builtins")?.getattr("dict")?;
             let original_environ = dict_type.call1((os_module.getattr("environ")?,))?;
@@ -95,9 +91,16 @@ mod tests {
         })
         .unwrap();
 
-        let data = InternalEnvironmentVariablesSettingsProvider::load()
-            .await
-            .unwrap();
+        let data_result = InternalEnvironmentVariablesSettingsProvider::load().await;
+
+        Python::attach(|python| -> PyResult<()> {
+            let os_module = python.import("os")?;
+            os_module.setattr("environ", original_environ.bind(python))?;
+            Ok(())
+        })
+        .unwrap();
+
+        let data = data_result.unwrap();
 
         assert_eq!(data, expected_environment_variables);
     }

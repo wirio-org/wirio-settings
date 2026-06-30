@@ -2,6 +2,7 @@ use pyo3::prelude::*;
 
 mod core;
 mod environment_variables;
+mod json;
 
 #[pymodule]
 mod _wirio_settings {
@@ -12,5 +13,8 @@ mod _wirio_settings {
     pub use crate::core::convention_changer::ConventionChanger;
 
     #[pymodule_export]
-    pub use crate::environment_variables::InternalEnvironmentVariablesSettingsProvider;
+    pub use crate::environment_variables::PythonEnvironmentVariablesSettingsProvider;
+
+    #[pymodule_export]
+    pub use crate::json::PythonJsonSettingsProvider;
 }

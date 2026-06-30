@@ -1,74 +1,82 @@
-use crate::core::{settings_path::SettingsPath, settings_provider::SettingsProvider};
+use crate::core::settings_provider::SettingsProvider;
 use pyo3::prelude::*;
 use std::collections::BTreeMap;
 use std::fmt;
-use std::fmt::{Display, Formatter};
 
 #[pyclass(str)]
-pub struct InternalEnvironmentVariablesSettingsProvider;
+pub struct PythonEnvironmentVariablesSettingsProvider;
 
 #[pymethods]
-impl InternalEnvironmentVariablesSettingsProvider {
+impl PythonEnvironmentVariablesSettingsProvider {
     #[staticmethod]
     pub async fn load() -> PyResult<BTreeMap<String, Option<String>>> {
-        let mut data: BTreeMap<String, Option<String>> =
-            Python::attach(|python| -> PyResult<BTreeMap<String, Option<String>>> {
-                let environ = python.import("os")?.getattr("environ")?;
-                let dict_type = python.import("builtins")?.getattr("dict")?;
-                let environment_data: BTreeMap<String, String> =
-                    dict_type.call1((environ,))?.extract()?;
-                let mut loaded_data: BTreeMap<String, Option<String>> = BTreeMap::new();
-
-                for (environment_variable_key, environment_variable_value) in environment_data {
-                    let normalized_environment_variable_key =
-                        InternalEnvironmentVariablesSettingsProvider::normalize_key(
-                            &environment_variable_key,
-                        );
-                    loaded_data.insert(
-                        normalized_environment_variable_key,
-                        Some(environment_variable_value),
-                    );
-                }
-
-                Ok(loaded_data)
-            })?;
-
-        SettingsProvider::normalize_loaded_data(&mut data);
-        Ok(data)
-    }
-
-    #[staticmethod]
-    fn normalize_key(key: &str) -> String {
-        key.replace("__", SettingsPath::KEY_DELIMITER)
+        EnvironmentVariablesSettingsProvider.load().await
     }
 }
 
-impl Display for InternalEnvironmentVariablesSettingsProvider {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let full_name = std::any::type_name::<Self>();
-        let short_name = full_name.split("::").last().unwrap_or(full_name);
-        write!(f, "{}", short_name)
+impl fmt::Display for PythonEnvironmentVariablesSettingsProvider {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        EnvironmentVariablesSettingsProvider.fmt(f)
+    }
+}
+
+struct EnvironmentVariablesSettingsProvider;
+
+impl EnvironmentVariablesSettingsProvider {
+    fn get_environment_variables(&self) -> PyResult<BTreeMap<String, Option<String>>> {
+        Python::attach(|python| -> PyResult<BTreeMap<String, Option<String>>> {
+            let environ = python.import("os")?.getattr("environ")?;
+            let dict_type = python.import("builtins")?.getattr("dict")?;
+            let environment_data: BTreeMap<String, String> =
+                dict_type.call1((environ,))?.extract()?;
+            let environment_data_with_optional_values = environment_data
+                .into_iter()
+                .map(|(key, value)| (key, Some(value)))
+                .collect();
+            Ok(environment_data_with_optional_values)
+        })
+    }
+}
+
+impl SettingsProvider for EnvironmentVariablesSettingsProvider {
+    async fn load(&self) -> PyResult<BTreeMap<String, Option<String>>> {
+        let mut environment_variables = self.get_environment_variables()?;
+        self.normalize_keys(&mut environment_variables);
+        Ok(environment_variables)
+    }
+
+    fn section_separator(&self) -> Option<&str> {
+        Some("__")
+    }
+}
+
+impl fmt::Display for EnvironmentVariablesSettingsProvider {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.get_type_name())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::InternalEnvironmentVariablesSettingsProvider;
+    use crate::{
+        core::settings_provider::SettingsProvider,
+        environment_variables::EnvironmentVariablesSettingsProvider,
+    };
     use pyo3::{prelude::*, types::PyDict};
     use std::collections::BTreeMap;
 
     #[test]
     fn test_replace_double_underscore_with_dot_in_environment_variable_name() {
-        let key = InternalEnvironmentVariablesSettingsProvider::normalize_key(
-            "LOGGING__LOG_LEVEL__DEFAULT",
-        );
+        let key = EnvironmentVariablesSettingsProvider
+            .normalize_section_separator(String::from("LOGGING__LOG_LEVEL__DEFAULT"));
 
         assert_eq!(key, "LOGGING.LOG_LEVEL.DEFAULT");
     }
 
     #[test]
     fn test_return_same_environment_variable_name_when_no_double_underscore_is_present() {
-        let key = InternalEnvironmentVariablesSettingsProvider::normalize_key("LOGGING");
+        let key = EnvironmentVariablesSettingsProvider
+            .normalize_section_separator(String::from("LOGGING"));
 
         assert_eq!(key, "LOGGING");
     }
@@ -94,7 +102,7 @@ mod tests {
         })
         .unwrap();
 
-        let data_result = InternalEnvironmentVariablesSettingsProvider::load().await;
+        let data_result = EnvironmentVariablesSettingsProvider.load().await;
 
         Python::attach(|python| -> PyResult<()> {
             let os_module = python.import("os")?;
@@ -110,9 +118,9 @@ mod tests {
 
     #[test]
     fn test_display_returns_type_name() {
-        let expected_display = "InternalEnvironmentVariablesSettingsProvider";
+        let expected_display = "EnvironmentVariablesSettingsProvider";
 
-        let display = InternalEnvironmentVariablesSettingsProvider.to_string();
+        let display = EnvironmentVariablesSettingsProvider.to_string();
 
         assert_eq!(display, expected_display);
     }

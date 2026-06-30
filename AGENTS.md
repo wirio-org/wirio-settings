@@ -2,8 +2,8 @@
 
 # Environment
 
-- Package manager: `uv`.
-- Check code is correct: `make check-code`.
+- Lint: `make lint`.
+- Test: `make test`.
 
 # Rust
 
@@ -16,6 +16,7 @@
 - Test names must start with `test_`, be followed by a verb in present tense, and read as `The test should...`. The names mustn't include the word "should", and they must be descriptive and concise, avoiding the inclusion of the tested function whenever possible. Examples: `test_create_user`, `test_fail_when_creating_user_with_untrusted_email`, `test_ban_user_using_administrator_account`.
 - Append new test cases to the end of the existing ones.
 - Use `unwrap` instead of `expect` in tests.
+- Instead of creating structs for testing, use the `mockall` crate for mocking.
 - Mock variables must end with `_mock`. For example, `configuration_mock`.
 
 ### General guidelines
@@ -23,6 +24,10 @@
 - When using PyO3, use attributes instead of functions such as `.add_function` or `add_submodule`.
 
 # Python
+
+## Environment
+
+- Package manager: `uv`.
 
 ## Code style
 

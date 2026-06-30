@@ -1,6 +1,6 @@
 from typing import final, override
 
-from wirio_settings._wirio_settings import InternalEnvironmentVariablesSettingsProvider
+from wirio_settings._wirio_settings import PythonEnvironmentVariablesSettingsProvider
 from wirio_settings.core.settings_provider import SettingsProvider
 
 
@@ -8,4 +8,4 @@ from wirio_settings.core.settings_provider import SettingsProvider
 class EnvironmentVariablesSettingsProvider(SettingsProvider):
     @override
     async def load(self) -> None:
-        self._data = await InternalEnvironmentVariablesSettingsProvider.load()
+        self._data = await PythonEnvironmentVariablesSettingsProvider.load()

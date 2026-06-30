@@ -37,8 +37,8 @@ jobs:
         run: uv sync --locked --all-extras
         shell: bash
 
-      - name: Check code
-        run: make check-code
+      - name: Lint
+        run: make lint
         shell: bash
 
   test:

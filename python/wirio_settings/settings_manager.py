@@ -82,6 +82,9 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
     def add(self, source: SettingsSource) -> None:
         self._add_source(source)
 
+    def add_sync(self, source: SettingsSource) -> None:
+        self._add_source_sync(source)
+
     def add_default_providers(self) -> Self:
         """Add default settings providers in the recommended order."""
         environment_name = environ.get("WIRIO_ENVIRONMENT", "local")
@@ -159,6 +162,11 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         self._sources.append(source)
         provider = source.build(self)
         self._call_async(provider.load())
+        self._providers.append(provider)
+
+    def _add_source_sync(self, source: SettingsSource) -> None:
+        self._sources.append(source)
+        provider = source.build(self)
         self._providers.append(provider)
 
     def _call_async(self, coroutine: Coroutine[Any, Any, None]) -> None:

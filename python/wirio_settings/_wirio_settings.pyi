@@ -9,12 +9,16 @@ class ConventionChanger:
         """
 
 @final
-class InternalEnvironmentVariablesSettingsProvider:
+class PythonEnvironmentVariablesSettingsProvider:
     def __str__(self, /) -> str: ...
     @staticmethod
     async def load() -> dict[str, str |None]: ...
+
+@final
+class PythonJsonFileSettingsProvider:
+    def __str__(self, /) -> str: ...
     @staticmethod
-    def normalize_key(key: str) -> str: ...
+    async def load() -> dict[str, str |None]: ...
 
 @final
 class SettingsPath:

@@ -4,11 +4,11 @@ install:
 
 .PHONY: lint
 lint:
-	uv run -- ruff check
+	uv run --locked -- ruff check
 	uv run -- ruff format --diff
 	uv run -- ty check
 	cargo fmt --all --check
-	cargo clippy -- -D warnings
+	cargo clippy --locked -- --deny warnings
 
 .PHONY: setup-development
 setup-development:

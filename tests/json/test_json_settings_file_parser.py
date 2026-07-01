@@ -1,7 +1,7 @@
 import re
 
 import pytest
-from wirio_settings._json._json_settings_file_parser import (
+from wirio_settings.json._json_settings_file_parser import (
     JsonSettingsFileParser,
 )
 

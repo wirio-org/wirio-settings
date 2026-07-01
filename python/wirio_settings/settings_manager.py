@@ -19,6 +19,7 @@ from wirio_settings.core.wirio_undefined import WirioUndefined
 from wirio_settings.environment_variables.environment_variables_settings_source import (
     EnvironmentVariablesSettingsSource,
 )
+from wirio_settings.json.json_settings_source import JsonSettingsSource
 from wirio_settings.yaml.yaml_settings_source import YamlSettingsSource
 
 if TYPE_CHECKING:
@@ -106,6 +107,12 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         """Add a settings provider that reads settings values from a YAML file."""
         final_path = (self._content_root_path / path).resolve()
         self.add(YamlSettingsSource(path=final_path, optional=optional))
+        return self
+
+    def add_json_file(self, path: str, optional: bool = False) -> Self:
+        """Add a settings provider that reads settings values from a JSON file."""
+        final_path = (self._content_root_path / path).resolve()
+        self.add(JsonSettingsSource(path=final_path, optional=optional))
         return self
 
     def add_azure_key_vault(

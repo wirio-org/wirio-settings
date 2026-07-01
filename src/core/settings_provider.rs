@@ -3,7 +3,7 @@ use pyo3::PyResult;
 use std::{collections::BTreeMap, fmt, mem};
 
 pub trait SettingsProvider: fmt::Display {
-    async fn load(&self) -> PyResult<BTreeMap<String, Option<String>>>;
+    async fn load(&mut self) -> PyResult<()>;
 
     fn normalize_keys(&self, data: &mut BTreeMap<String, Option<String>>) {
         if data.is_empty() {
@@ -15,7 +15,7 @@ pub trait SettingsProvider: fmt::Display {
 
         for (item_key, item_value) in original_data {
             let item_key_with_normalized_section_separator =
-                self.normalize_section_separator(item_key);
+                Self::normalize_section_separator(item_key);
             let item_key_in_snake_case =
                 ConventionChanger::to_snake_case(&item_key_with_normalized_section_separator);
             normalized_data.insert(item_key_in_snake_case, item_value);
@@ -24,14 +24,14 @@ pub trait SettingsProvider: fmt::Display {
         *data = normalized_data;
     }
 
-    fn normalize_section_separator(&self, key: String) -> String {
-        let Some(section_separator) = self.section_separator() else {
+    fn normalize_section_separator(key: String) -> String {
+        let Some(section_separator) = Self::section_separator() else {
             return key;
         };
         key.replace(section_separator, SettingsPath::KEY_DELIMITER)
     }
 
-    fn section_separator(&self) -> Option<&str> {
+    fn section_separator() -> Option<&'static str> {
         None
     }
 
@@ -53,7 +53,7 @@ mod tests {
         SettingsProvider {}
 
         impl SettingsProvider for SettingsProvider {
-            async fn load(&self) -> PyResult<BTreeMap<String, Option<String>>>;
+            async fn load(&mut self) -> PyResult<()>;
         }
     }
 

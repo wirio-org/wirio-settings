@@ -106,7 +106,7 @@ impl SettingsProvider for JsonFileSettingsProvider {
         })?;
         let json_object = parsed_json
             .as_object()
-            .ok_or_else(|| PyRuntimeError::new_err("Could not parse the JSON file"))?;
+            .ok_or_else(|| PyRuntimeError::new_err("JSON root value must be an object"))?;
         let mut parsed_data = JsonSettingsParser::new().parse(json_object)?;
         self.normalize_keys(&mut parsed_data);
         self.data = parsed_data;

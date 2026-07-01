@@ -1,4 +1,4 @@
+mod json_file_settings_provider;
 mod json_settings_parser;
-mod json_settings_provider;
 
-pub use json_settings_provider::PythonJsonSettingsProvider;
+pub use json_file_settings_provider::PythonJsonFileSettingsProvider;

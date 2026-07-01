@@ -1,5 +1,4 @@
-from pathlib import Path
-from typing import final, override
+from typing import Final, final, override
 
 from wirio_settings.core.settings_builder import SettingsBuilder
 from wirio_settings.core.settings_provider import SettingsProvider
@@ -9,7 +8,10 @@ from wirio_settings.yaml.yaml_settings_provider import YamlSettingsProvider
 
 @final
 class YamlSettingsSource(SettingsSource):
-    def __init__(self, path: Path, optional: bool) -> None:
+    _path: Final[str]
+    _optional: Final[bool]
+
+    def __init__(self, path: str, optional: bool) -> None:
         self._path = path
         self._optional = optional
 

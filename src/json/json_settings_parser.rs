@@ -7,7 +7,6 @@ use crate::_wirio_settings::SettingsPath;
 
 pub struct JsonSettingsParser {
     data: BTreeMap<String, Option<String>>,
-    case_folded_data: BTreeMap<String, String>,
     paths: Vec<String>,
 }
 
@@ -15,7 +14,6 @@ impl JsonSettingsParser {
     pub fn new() -> Self {
         Self {
             data: BTreeMap::new(),
-            case_folded_data: BTreeMap::new(),
             paths: Vec::new(),
         }
     }
@@ -88,15 +86,6 @@ impl JsonSettingsParser {
             .last()
             .cloned()
             .ok_or_else(|| PyRuntimeError::new_err("Internal parser context is missing"))?;
-        let case_folded_key = key.to_lowercase();
-
-        if self.case_folded_data.contains_key(&case_folded_key) {
-            return Err(PyRuntimeError::new_err(format!(
-                "A duplicate key '{key}' was found after case folding. JSON keys are case-insensitive, so this is not allowed."
-            )));
-        }
-
-        self.case_folded_data.insert(case_folded_key, key.clone());
         self.data.insert(key, value);
         Ok(())
     }
@@ -131,13 +120,11 @@ impl JsonSettingsParser {
 #[cfg(test)]
 mod tests {
     use super::JsonSettingsParser;
-    use pyo3::Python;
     use serde_json::json;
     use std::collections::BTreeMap;
 
     #[test]
     fn test_parse_scalar_values() {
-        Python::initialize();
         let expected_parsed_json = BTreeMap::from([
             (String::from("name"), Some(String::from("wirio"))),
             (String::from("port"), Some(String::from("8080"))),
@@ -162,7 +149,6 @@ mod tests {
 
     #[test]
     fn test_parse_nested_objects_and_arrays() {
-        Python::initialize();
         let expected_parsed_json = BTreeMap::from([
             (
                 String::from("Logging.LogLevel.Default"),
@@ -191,7 +177,6 @@ mod tests {
 
     #[test]
     fn test_set_none_and_empty_for_empty_structures() {
-        Python::initialize();
         let expected_parsed_json = BTreeMap::from([
             (String::from("Section"), None),
             (String::from("NestedSection.Section"), None),
@@ -210,23 +195,5 @@ mod tests {
             .unwrap();
 
         assert_eq!(parsed_json, expected_parsed_json);
-    }
-
-    #[test]
-    fn test_fail_when_duplicate_key_is_found_when_ignoring_case() {
-        Python::initialize();
-        let input = json!({
-            "Key": "value",
-            "key": "other"
-        });
-
-        let error = JsonSettingsParser::new()
-            .parse(input.as_object().unwrap())
-            .unwrap_err();
-
-        assert_eq!(
-            error.to_string(),
-            "RuntimeError: A duplicate key 'key' was found after case folding. JSON keys are case-insensitive, so this is not allowed."
-        );
     }
 }

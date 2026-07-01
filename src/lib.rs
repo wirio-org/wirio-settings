@@ -16,5 +16,5 @@ mod _wirio_settings {
     pub use crate::environment_variables::PythonEnvironmentVariablesSettingsProvider;
 
     #[pymodule_export]
-    pub use crate::json::PythonJsonSettingsProvider;
+    pub use crate::json::PythonJsonFileSettingsProvider;
 }

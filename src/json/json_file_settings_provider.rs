@@ -9,16 +9,16 @@ use std::path::PathBuf;
 use tokio::fs;
 
 #[pyclass(str)]
-pub struct PythonJsonSettingsProvider {
-    provider: JsonSettingsProvider,
+pub struct PythonJsonFileSettingsProvider {
+    provider: JsonFileSettingsProvider,
 }
 
 #[pymethods]
-impl PythonJsonSettingsProvider {
+impl PythonJsonFileSettingsProvider {
     #[new]
     fn new(path: &str, optional: bool) -> Self {
         Self {
-            provider: JsonSettingsProvider::new(path, optional),
+            provider: JsonFileSettingsProvider::new(path, optional),
         }
     }
 
@@ -32,19 +32,19 @@ impl PythonJsonSettingsProvider {
     }
 }
 
-impl fmt::Display for PythonJsonSettingsProvider {
+impl fmt::Display for PythonJsonFileSettingsProvider {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("JsonSettingsProvider")
     }
 }
 
-struct JsonSettingsProvider {
+struct JsonFileSettingsProvider {
     pub data: BTreeMap<String, Option<String>>,
     path: PathBuf,
     optional: bool,
 }
 
-impl JsonSettingsProvider {
+impl JsonFileSettingsProvider {
     /// Creates a JSON settings provider from a path.
     ///
     /// The `path` argument can be:
@@ -81,9 +81,11 @@ impl JsonSettingsProvider {
     }
 }
 
-impl SettingsProvider for JsonSettingsProvider {
+impl SettingsProvider for JsonFileSettingsProvider {
     async fn load(&mut self) -> PyResult<()> {
-        if !self.path.exists() {
+        let file_exists = fs::try_exists(&self.path).await.unwrap_or(false);
+
+        if !file_exists {
             if self.optional {
                 return Ok(());
             }
@@ -112,7 +114,7 @@ impl SettingsProvider for JsonSettingsProvider {
     }
 }
 
-impl fmt::Display for JsonSettingsProvider {
+impl fmt::Display for JsonFileSettingsProvider {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.get_type_name())
     }

@@ -21,7 +21,7 @@ notes: null
 """.strip(),
             encoding="utf-8",
         )
-        provider = YamlSettingsProvider(path=file_path, optional=False)
+        provider = YamlSettingsProvider(path=str(file_path), optional=False)
 
         await provider.load()
 
@@ -36,7 +36,7 @@ notes: null
         self, tmp_path: Path
     ) -> None:
         file_path = tmp_path / "missing.yaml"
-        provider = YamlSettingsProvider(path=file_path, optional=True)
+        provider = YamlSettingsProvider(path=str(file_path), optional=True)
 
         await provider.load()
 
@@ -44,7 +44,7 @@ notes: null
 
     async def test_fail_when_required_file_is_missing(self, tmp_path: Path) -> None:
         file_path = tmp_path / "missing.yaml"
-        provider = YamlSettingsProvider(path=file_path, optional=False)
+        provider = YamlSettingsProvider(path=str(file_path), optional=False)
 
         with pytest.raises(
             FileNotFoundError,
@@ -55,7 +55,7 @@ notes: null
     async def test_fail_when_yaml_file_has_invalid_syntax(self, tmp_path: Path) -> None:
         file_path = tmp_path / "settings.yaml"
         file_path.write_text("appName: [wirio", encoding="utf-8")
-        provider = YamlSettingsProvider(path=file_path, optional=False)
+        provider = YamlSettingsProvider(path=str(file_path), optional=False)
 
         with pytest.raises(yaml.YAMLError):
             await provider.load()
@@ -65,7 +65,7 @@ notes: null
     ) -> None:
         file_path = tmp_path / "settings.yaml"
         file_path.write_text("- wirio\n- config", encoding="utf-8")
-        provider = YamlSettingsProvider(path=file_path, optional=False)
+        provider = YamlSettingsProvider(path=str(file_path), optional=False)
 
         with pytest.raises(
             RuntimeError,
@@ -139,7 +139,7 @@ stringList:
     ) -> None:
         file_path = tmp_path / "settings.yaml"
         file_path.write_text("", encoding="utf-8")
-        provider = YamlSettingsProvider(path=file_path, optional=False)
+        provider = YamlSettingsProvider(path=str(file_path), optional=False)
 
         await provider.load()
 

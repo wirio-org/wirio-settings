@@ -19,6 +19,7 @@ from wirio_settings.core.wirio_undefined import WirioUndefined
 from wirio_settings.environment_variables.environment_variables_settings_source import (
     EnvironmentVariablesSettingsSource,
 )
+from wirio_settings.json.json_file_settings_source import JsonSettingsSource
 from wirio_settings.yaml.yaml_settings_source import YamlSettingsSource
 
 if TYPE_CHECKING:
@@ -82,6 +83,9 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
     def add(self, source: SettingsSource) -> None:
         self._add_source(source)
 
+    def add_sync(self, source: SettingsSource) -> None:
+        self._add_source_sync(source)
+
     def add_default_providers(self) -> Self:
         """Add default settings providers in the recommended order."""
         environment_name = environ.get("WIRIO_ENVIRONMENT", "local")
@@ -102,7 +106,13 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
     def add_yaml_file(self, path: str, optional: bool = False) -> Self:
         """Add a settings provider that reads settings values from a YAML file."""
         final_path = (self._content_root_path / path).resolve()
-        self.add(YamlSettingsSource(path=final_path, optional=optional))
+        self.add(YamlSettingsSource(path=str(final_path), optional=optional))
+        return self
+
+    def add_json_file(self, path: str, optional: bool = False) -> Self:
+        """Add a settings provider that reads settings values from a JSON file."""
+        final_path = (self._content_root_path / path).resolve()
+        self.add(JsonSettingsSource(path=str(final_path), optional=optional))
         return self
 
     def add_azure_key_vault(
@@ -159,6 +169,11 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         self._sources.append(source)
         provider = source.build(self)
         self._call_async(provider.load())
+        self._providers.append(provider)
+
+    def _add_source_sync(self, source: SettingsSource) -> None:
+        self._sources.append(source)
+        provider = source.build(self)
         self._providers.append(provider)
 
     def _call_async(self, coroutine: Coroutine[Any, Any, None]) -> None:

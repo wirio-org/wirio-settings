@@ -3,8 +3,8 @@ from typing import Any, Final, cast, final, override
 
 import boto3
 
-from wirio_settings._json._json_settings_file_parser import JsonSettingsFileParser
 from wirio_settings.core.settings_provider import SettingsProvider
+from wirio_settings.json._json_settings_file_parser import JsonSettingsFileParser
 
 
 @final

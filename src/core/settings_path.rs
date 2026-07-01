@@ -6,7 +6,7 @@ pub struct SettingsPath;
 #[pymethods]
 impl SettingsPath {
     #[classattr]
-    pub const KEY_DELIMITER: &'static str = ".";
+    pub const KEY_DELIMITER: &str = ".";
 
     #[staticmethod]
     pub fn get_section_key(path: &str) -> &str {

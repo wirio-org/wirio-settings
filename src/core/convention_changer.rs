@@ -7,7 +7,7 @@ pub struct ConventionChanger;
 
 #[pymethods]
 impl ConventionChanger {
-    /// Convert a PascalCase, camelCase, or kebab-case string to snake_case.
+    /// Convert a `PascalCase`, `camelCase`, or `kebab-case` string to `snake_case`.
     #[staticmethod]
     pub fn to_snake_case(string_to_convert: &str) -> String {
         static REGEX_1: LazyLock<Regex> =

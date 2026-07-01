@@ -1224,7 +1224,7 @@ class TestSettingsManager:
 
         yaml_source = settings_manager.sources[1]
         assert isinstance(yaml_source, YamlSettingsSource)
-        assert yaml_source._path.name == expected_yaml_file_name  # noqa: SLF001
+        assert Path(yaml_source._path).name == expected_yaml_file_name  # noqa: SLF001
 
     def test_use_run_until_complete_when_loop_is_available_and_not_running(
         self, mocker: MockerFixture

@@ -5,10 +5,10 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 from wirio_settings.settings_manager import SettingsManager
-from wirio_settings.yaml.yaml_settings_provider import YamlSettingsProvider
+from wirio_settings.yaml.yaml_file_settings_provider import YamlFileSettingsProvider
 
 
-class TestYamlSettingsProvider:
+class TestYamlFileSettingsProvider:
     async def test_load_values_from_yaml_file(self, tmp_path: Path) -> None:
         file_path = tmp_path / "settings.yaml"
         file_path.write_text(
@@ -20,7 +20,7 @@ notes: null
 """.strip(),
             encoding="utf-8",
         )
-        provider = YamlSettingsProvider(
+        provider = YamlFileSettingsProvider(
             content_root_path=None, path=str(file_path), optional=False
         )
 
@@ -37,7 +37,7 @@ notes: null
         self, tmp_path: Path
     ) -> None:
         file_path = tmp_path / "missing.yaml"
-        provider = YamlSettingsProvider(
+        provider = YamlFileSettingsProvider(
             content_root_path=None, path=str(file_path), optional=True
         )
 
@@ -47,7 +47,7 @@ notes: null
 
     async def test_fail_when_required_file_is_missing(self, tmp_path: Path) -> None:
         file_path = tmp_path / "missing.yaml"
-        provider = YamlSettingsProvider(
+        provider = YamlFileSettingsProvider(
             content_root_path=None, path=str(file_path), optional=False
         )
 
@@ -60,7 +60,7 @@ notes: null
     async def test_fail_when_yaml_file_has_invalid_syntax(self, tmp_path: Path) -> None:
         file_path = tmp_path / "settings.yaml"
         file_path.write_text("appName: [wirio", encoding="utf-8")
-        provider = YamlSettingsProvider(
+        provider = YamlFileSettingsProvider(
             content_root_path=None, path=str(file_path), optional=False
         )
 
@@ -72,7 +72,7 @@ notes: null
     ) -> None:
         file_path = tmp_path / "settings.yaml"
         file_path.write_text("- wirio\n- config", encoding="utf-8")
-        provider = YamlSettingsProvider(
+        provider = YamlFileSettingsProvider(
             content_root_path=None, path=str(file_path), optional=False
         )
 
@@ -83,6 +83,10 @@ notes: null
             await provider.load()
 
     async def test_get_model(self, tmp_path: Path) -> None:
+        class Submodel(BaseModel):
+            subfield_1: str
+            subfield_2: int
+
         class Settings(BaseModel):
             app_name: str
             port: int
@@ -93,6 +97,7 @@ notes: null
             price_as_decimal: Decimal
             int_list: list[int]
             string_list: list[str]
+            submodel: Submodel
 
         expected_app_name = "wirio"
         expected_port = 8080
@@ -102,6 +107,7 @@ notes: null
         expected_price_as_decimal = Decimal("19.99")
         expected_int_list = [1, 2, 3]
         expected_string_list = ["a", "b", "c"]
+        expected_submodel = Submodel(subfield_1="value_1", subfield_2=42)
         file_path = tmp_path / "settings.yaml"
         file_path.write_text(
             """
@@ -120,6 +126,9 @@ stringList:
   - a
   - b
   - c
+submodel:
+    subfield_1: value_1
+    subfield2: 42
 """.strip(),
             encoding="utf-8",
         )
@@ -142,13 +151,15 @@ stringList:
         assert model.price_as_decimal == expected_price_as_decimal
         assert model.int_list == expected_int_list
         assert model.string_list == expected_string_list
+        assert model.submodel.subfield_1 == expected_submodel.subfield_1
+        assert model.submodel.subfield_2 == expected_submodel.subfield_2
 
     async def test_return_empty_data_when_yaml_file_is_empty(
         self, tmp_path: Path
     ) -> None:
         file_path = tmp_path / "settings.yaml"
         file_path.write_text("", encoding="utf-8")
-        provider = YamlSettingsProvider(
+        provider = YamlFileSettingsProvider(
             content_root_path=None, path=str(file_path), optional=False
         )
 

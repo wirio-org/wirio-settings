@@ -82,7 +82,7 @@ impl SettingsProvider for YamlFileSettingsProvider {
             }
 
             return Err(PyRuntimeError::new_err(format!(
-                "JSON settings file '{}' does not exist",
+                "YAML settings file '{}' does not exist",
                 self.path.display()
             )));
         }

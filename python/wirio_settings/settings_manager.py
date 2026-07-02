@@ -19,7 +19,7 @@ from wirio_settings.environment_variables.environment_variables_settings_source 
     EnvironmentVariablesSettingsSource,
 )
 from wirio_settings.json.json_file_settings_source import JsonSettingsSource
-from wirio_settings.yaml.yaml_settings_source import YamlSettingsSource
+from wirio_settings.yaml.yaml_file_settings_source import YamlFileSettingsSource
 
 if TYPE_CHECKING:
     from azure.core.credentials_async import AsyncTokenCredential
@@ -101,7 +101,7 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
     def add_yaml_file(self, path: str, optional: bool = False) -> Self:
         """Add a settings provider that reads settings values from a YAML file."""
         self.add(
-            YamlSettingsSource(
+            YamlFileSettingsSource(
                 content_root_path=self._content_root_path, path=path, optional=optional
             )
         )

@@ -1,11 +1,13 @@
 from typing import Final, final, override
 
-from wirio_settings._wirio_settings import PythonYamlFileSettingsProvider
+from wirio_settings.core.settings_builder import SettingsBuilder
 from wirio_settings.core.settings_provider import SettingsProvider
+from wirio_settings.core.settings_source import SettingsSource
+from wirio_settings.yaml.yaml_file_settings_provider import YamlFileSettingsProvider
 
 
 @final
-class YamlSettingsProvider(SettingsProvider):
+class YamlFileSettingsSource(SettingsSource):
     _content_root_path: Final[str | None]
     _path: Final[str]
     _optional: Final[bool]
@@ -13,17 +15,14 @@ class YamlSettingsProvider(SettingsProvider):
     def __init__(
         self, content_root_path: str | None, path: str, optional: bool
     ) -> None:
-        super().__init__()
         self._content_root_path = content_root_path
         self._path = path
         self._optional = optional
 
     @override
-    async def load(self) -> None:
-        provider = PythonYamlFileSettingsProvider(
+    def build(self, builder: SettingsBuilder) -> SettingsProvider:
+        return YamlFileSettingsProvider(
             content_root_path=self._content_root_path,
             path=self._path,
             optional=self._optional,
         )
-        await provider.load()
-        self._data = provider.data

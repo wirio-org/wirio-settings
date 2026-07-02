@@ -9,16 +9,16 @@ use tokio::fs;
 use crate::core::{SerdeParser, SettingsProvider, file_provider};
 
 #[pyclass(str)]
-pub struct PythonJsonFileSettingsProvider {
-    provider: JsonFileSettingsProvider,
+pub struct PythonYamlFileSettingsProvider {
+    provider: YamlFileSettingsProvider,
 }
 
 #[pymethods]
-impl PythonJsonFileSettingsProvider {
+impl PythonYamlFileSettingsProvider {
     #[new]
     fn new(content_root_path: Option<&str>, path: &str, optional: bool) -> Self {
         Self {
-            provider: JsonFileSettingsProvider::new(content_root_path, path, optional),
+            provider: YamlFileSettingsProvider::new(content_root_path, path, optional),
         }
     }
 
@@ -32,25 +32,25 @@ impl PythonJsonFileSettingsProvider {
     }
 }
 
-impl fmt::Display for PythonJsonFileSettingsProvider {
+impl fmt::Display for PythonYamlFileSettingsProvider {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("JsonSettingsProvider")
+        f.write_str("YamlSettingsProvider")
     }
 }
 
-struct JsonFileSettingsProvider {
+struct YamlFileSettingsProvider {
     pub data: BTreeMap<String, Option<String>>,
     path: PathBuf,
     optional: bool,
 }
 
-impl JsonFileSettingsProvider {
-    /// Creates a JSON settings provider from a path.
+impl YamlFileSettingsProvider {
+    /// Creates a YAML settings provider from a path.
     ///
     /// The `path` argument can be:
-    /// - A file name (for example, `settings.json`).
-    /// - A relative path (for example, `config/settings.json`).
-    /// - An absolute path (for example, `/tmp/settings.json`).
+    /// - A file name (for example, `settings.yaml`).
+    /// - A relative path (for example, `config/settings.yaml`).
+    /// - An absolute path (for example, `/tmp/settings.yaml`).
     ///
     /// File names and relative paths are resolved against the current working directory.
     fn new(content_root_path: Option<&str>, path: &str, optional: bool) -> Self {
@@ -61,10 +61,10 @@ impl JsonFileSettingsProvider {
         }
     }
 
-    async fn read_json_file(&self) -> PyResult<String> {
+    async fn read_yaml_file(&self) -> PyResult<String> {
         fs::read_to_string(&self.path).await.map_err(|error| {
             PyRuntimeError::new_err(format!(
-                "Failed to read JSON settings file '{}': {}",
+                "Failed to read YAML settings file '{}': {}",
                 self.path.display(),
                 error
             ))
@@ -72,7 +72,7 @@ impl JsonFileSettingsProvider {
     }
 }
 
-impl SettingsProvider for JsonFileSettingsProvider {
+impl SettingsProvider for YamlFileSettingsProvider {
     async fn load(&mut self) -> PyResult<()> {
         let file_exists = fs::try_exists(&self.path).await.unwrap_or(false);
 
@@ -87,25 +87,32 @@ impl SettingsProvider for JsonFileSettingsProvider {
             )));
         }
 
-        let raw_json = self.read_json_file().await?;
-        let parsed_json: Value = serde_json::from_str(&raw_json).map_err(|error| {
+        let raw_yaml = self.read_yaml_file().await?;
+
+        if raw_yaml.trim().is_empty() {
+            self.data = BTreeMap::new();
+            return Ok(());
+        }
+
+        let parsed_yaml: Value = serde_saphyr::from_str(&raw_yaml).map_err(|error| {
             PyRuntimeError::new_err(format!(
-                "Could not parse JSON file '{}': {}",
+                "Could not parse YAML file '{}': {}",
                 self.path.display(),
                 error
             ))
         })?;
-        let json_object = parsed_json
+        let yaml_object = parsed_yaml
             .as_object()
-            .ok_or_else(|| PyRuntimeError::new_err("JSON root value must be an object"))?;
-        let mut parsed_data = SerdeParser::new().parse(json_object)?;
+            .ok_or_else(|| PyRuntimeError::new_err("Could not parse the YAML file"))?;
+
+        let mut parsed_data = SerdeParser::new().parse(yaml_object)?;
         self.normalize_keys(&mut parsed_data);
         self.data = parsed_data;
         Ok(())
     }
 }
 
-impl fmt::Display for JsonFileSettingsProvider {
+impl fmt::Display for YamlFileSettingsProvider {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.get_type_name())
     }

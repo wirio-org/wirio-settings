@@ -8,13 +8,21 @@ from wirio_settings.yaml.yaml_settings_provider import YamlSettingsProvider
 
 @final
 class YamlSettingsSource(SettingsSource):
+    _content_root_path: Final[str | None]
     _path: Final[str]
     _optional: Final[bool]
 
-    def __init__(self, path: str, optional: bool) -> None:
+    def __init__(
+        self, content_root_path: str | None, path: str, optional: bool
+    ) -> None:
+        self._content_root_path = content_root_path
         self._path = path
         self._optional = optional
 
     @override
     def build(self, builder: SettingsBuilder) -> SettingsProvider:
-        return YamlSettingsProvider(path=self._path, optional=self._optional)
+        return YamlSettingsProvider(
+            content_root_path=self._content_root_path,
+            path=self._path,
+            optional=self._optional,
+        )

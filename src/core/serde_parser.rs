@@ -5,12 +5,12 @@ use std::collections::BTreeMap;
 
 use crate::_wirio_settings::SettingsPath;
 
-pub struct JsonSettingsParser {
+pub struct SerdeParser {
     data: BTreeMap<String, Option<String>>,
     paths: Vec<String>,
 }
 
-impl JsonSettingsParser {
+impl SerdeParser {
     pub fn new() -> Self {
         Self {
             data: BTreeMap::new(),
@@ -119,7 +119,7 @@ impl JsonSettingsParser {
 
 #[cfg(test)]
 mod tests {
-    use super::JsonSettingsParser;
+    use super::SerdeParser;
     use serde_json::json;
     use std::collections::BTreeMap;
 
@@ -140,9 +140,7 @@ mod tests {
             "price": 19.99
         });
 
-        let parsed_json = JsonSettingsParser::new()
-            .parse(json.as_object().unwrap())
-            .unwrap();
+        let parsed_json = SerdeParser::new().parse(json.as_object().unwrap()).unwrap();
 
         assert_eq!(parsed_json, expected_parsed_json);
     }
@@ -168,9 +166,7 @@ mod tests {
             "AllowedHosts": ["localhost", "example.com"]
         });
 
-        let parsed_json = JsonSettingsParser::new()
-            .parse(json.as_object().unwrap())
-            .unwrap();
+        let parsed_json = SerdeParser::new().parse(json.as_object().unwrap()).unwrap();
 
         assert_eq!(parsed_json, expected_parsed_json);
     }
@@ -190,9 +186,7 @@ mod tests {
             "NestedItems": {"Items": []}
         });
 
-        let parsed_json = JsonSettingsParser::new()
-            .parse(json.as_object().unwrap())
-            .unwrap();
+        let parsed_json = SerdeParser::new().parse(json.as_object().unwrap()).unwrap();
 
         assert_eq!(parsed_json, expected_parsed_json);
     }

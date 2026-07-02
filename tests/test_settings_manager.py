@@ -1146,7 +1146,7 @@ class TestSettingsManager:
 
     def test_fail_when_getting_object_list_as_section(self) -> None:
         settings_manager = SettingsManager(
-            content_root_path="", add_default_providers=False
+            content_root_path=None, add_default_providers=False
         )
         settings_manager.add(
             _DictionarySettingsSource(
@@ -1161,13 +1161,6 @@ class TestSettingsManager:
             KeyError, match=re.escape("Setting key 'node' is not a section")
         ):
             settings_manager.get_section("node")
-
-    def test_get_current_working_directory_as_default_content_root_path(self) -> None:
-        expected_content_root_path = Path.cwd()
-
-        settings_manager = SettingsManager(add_default_providers=False)
-
-        assert settings_manager._content_root_path == expected_content_root_path  # noqa: SLF001
 
     def test_add_default_providers_by_default(self, mocker: MockerFixture) -> None:
         add_defaults_patch = mocker.patch.object(

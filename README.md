@@ -26,6 +26,16 @@ Lightning-fast, strongly typed, and zero boilerplate settings library for Python
 uv add wirio-settings
 ```
 
+## ✨ Quickstart with magic strings
+
+```python
+from wirio_settings import SettingsManager
+
+
+settings_manager = SettingsManager()
+database_password = settings_manager.get_required_value("database_password")
+```
+
 ## ✨ Quickstart with Pydantic models
 
 ```python
@@ -196,7 +206,7 @@ settings_manager.add_azure_key_vault(
 If no credential is provided, `DefaultAzureCredential` is used.
 We can also pass a custom async Azure credential with the `credential` parameter.
 
-## AWS Secrets Manager
+### AWS Secrets Manager
 
 ```bash
 uv add wirio-settings[aws-secrets-manager]

@@ -258,6 +258,9 @@ jobs:
   upload-test-coverage:
     name: Upload test coverage
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     # needs: [linux, musllinux, windows, macos, sdist]
     steps:
       - name: Checkout repository
@@ -274,8 +277,7 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
-          slug: wirio-org/wirio-settings
-          token: ${{ secrets.CODECOV_TOKEN }} # required for private repos or protected branches
+          use_oidc: true
           files: codecov.json
           fail_ci_if_error: true
 

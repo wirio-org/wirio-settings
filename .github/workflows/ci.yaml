@@ -264,8 +264,9 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Install cargo-llvm-cov
-        run: cargo install cargo-llvm-cov
-        shell: bash
+        uses: taiki-e/install-action@16b05812d776ae1dfaabc8277e421fb6d2506419 # 2.82.7
+        with:
+          tool: cargo-llvm-cov
 
       - name: Generate code coverage
         run: cargo llvm-cov --all-features --codecov --output-path codecov.json

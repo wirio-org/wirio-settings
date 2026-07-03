@@ -1,4 +1,5 @@
 comment:
   layout: "condensed_header, condensed_files, condensed_footer"
+  behavior: default
   hide_project_coverage: FALSE
   require_changes: false

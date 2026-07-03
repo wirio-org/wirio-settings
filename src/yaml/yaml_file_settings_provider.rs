@@ -38,7 +38,7 @@ impl PythonYamlFileSettingsProvider {
 
 impl fmt::Display for PythonYamlFileSettingsProvider {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("YamlSettingsProvider")
+        f.write_str("YamlFileSettingsProvider")
     }
 }
 

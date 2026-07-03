@@ -49,6 +49,10 @@ struct YamlFileSettingsProvider {
 }
 
 impl YamlFileSettingsProvider {
+    fn delete() -> u32 {
+        3
+    }
+
     /// Creates a YAML settings provider from a path.
     ///
     /// The `path` argument can be:

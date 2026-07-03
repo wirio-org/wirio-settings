@@ -7,7 +7,7 @@ use std::path::PathBuf;
 /// - A relative path (for example, `config/settings.yaml`).
 /// - An absolute path (for example, `/tmp/settings.yaml`).
 ///
-/// File names and relative paths are resolved against the current working directory.
+/// File names and relative paths are resolved against `content_root_path` when provided, otherwise against the current working directory.
 pub fn resolve_path(content_root_path: Option<&str>, path: &str) -> PathBuf {
     let path = PathBuf::from(path);
 

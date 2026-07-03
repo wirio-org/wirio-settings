@@ -120,34 +120,37 @@ impl SerdeParser {
 #[cfg(test)]
 mod tests {
     use super::SerdeParser;
-    use serde_json::json;
+    use serde_json::{Map, Number, Value};
     use std::collections::BTreeMap;
 
     #[test]
     fn test_parse_scalar_values() {
-        let expected_parsed_json = BTreeMap::from([
+        let expected_parsed_data = BTreeMap::from([
             (String::from("name"), Some(String::from("wirio"))),
             (String::from("port"), Some(String::from("8080"))),
             (String::from("enabled"), Some(String::from("true"))),
             (String::from("notes"), None),
             (String::from("price"), Some(String::from("19.99"))),
         ]);
-        let json = json!({
-            "name": "wirio",
-            "port": 8080,
-            "enabled": true,
-            "notes": null,
-            "price": 19.99
-        });
+        let data = Value::Object(Map::from_iter([
+            (String::from("name"), Value::String(String::from("wirio"))),
+            (String::from("port"), Value::Number(8080.into())),
+            (String::from("enabled"), Value::Bool(true)),
+            (String::from("notes"), Value::Null),
+            (
+                String::from("price"),
+                Value::Number(Number::from_f64(19.99).unwrap()),
+            ),
+        ]));
 
-        let parsed_json = SerdeParser::new().parse(json.as_object().unwrap()).unwrap();
+        let parsed_data = SerdeParser::new().parse(data.as_object().unwrap()).unwrap();
 
-        assert_eq!(parsed_json, expected_parsed_json);
+        assert_eq!(parsed_data, expected_parsed_data);
     }
 
     #[test]
     fn test_parse_nested_objects_and_arrays() {
-        let expected_parsed_json = BTreeMap::from([
+        let expected_parsed_data = BTreeMap::from([
             (
                 String::from("Logging.LogLevel.Default"),
                 Some(String::from("Information")),
@@ -161,33 +164,60 @@ mod tests {
                 Some(String::from("example.com")),
             ),
         ]);
-        let json = json!({
-            "Logging": {"LogLevel": {"Default": "Information"}},
-            "AllowedHosts": ["localhost", "example.com"]
-        });
+        let data = Value::Object(Map::from_iter([
+            (
+                String::from("Logging"),
+                Value::Object(Map::from_iter([(
+                    String::from("LogLevel"),
+                    Value::Object(Map::from_iter([(
+                        String::from("Default"),
+                        Value::String(String::from("Information")),
+                    )])),
+                )])),
+            ),
+            (
+                String::from("AllowedHosts"),
+                Value::Array(vec![
+                    Value::String(String::from("localhost")),
+                    Value::String(String::from("example.com")),
+                ]),
+            ),
+        ]));
 
-        let parsed_json = SerdeParser::new().parse(json.as_object().unwrap()).unwrap();
+        let parsed_data = SerdeParser::new().parse(data.as_object().unwrap()).unwrap();
 
-        assert_eq!(parsed_json, expected_parsed_json);
+        assert_eq!(parsed_data, expected_parsed_data);
     }
 
     #[test]
     fn test_set_none_and_empty_for_empty_structures() {
-        let expected_parsed_json = BTreeMap::from([
+        let expected_parsed_data = BTreeMap::from([
             (String::from("Section"), None),
             (String::from("NestedSection.Section"), None),
             (String::from("Items"), Some(String::new())),
             (String::from("NestedItems.Items"), Some(String::new())),
         ]);
-        let json = json!({
-            "Section": {},
-            "NestedSection": {"Section": {}},
-            "Items": [],
-            "NestedItems": {"Items": []}
-        });
+        let data = Value::Object(Map::from_iter([
+            (String::from("Section"), Value::Object(Map::new())),
+            (
+                String::from("NestedSection"),
+                Value::Object(Map::from_iter([(
+                    String::from("Section"),
+                    Value::Object(Map::new()),
+                )])),
+            ),
+            (String::from("Items"), Value::Array(vec![])),
+            (
+                String::from("NestedItems"),
+                Value::Object(Map::from_iter([(
+                    String::from("Items"),
+                    Value::Array(vec![]),
+                )])),
+            ),
+        ]));
 
-        let parsed_json = SerdeParser::new().parse(json.as_object().unwrap()).unwrap();
+        let parsed_data = SerdeParser::new().parse(data.as_object().unwrap()).unwrap();
 
-        assert_eq!(parsed_json, expected_parsed_json);
+        assert_eq!(parsed_data, expected_parsed_data);
     }
 }

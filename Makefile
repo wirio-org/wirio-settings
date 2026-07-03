@@ -19,4 +19,5 @@ setup-development:
 .PHONY: test
 test:
 	uv run -- pytest
+	-deactivate
 	cargo test

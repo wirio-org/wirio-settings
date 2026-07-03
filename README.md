@@ -189,7 +189,29 @@ Nested keys use `.`:
 - `database.port`
 - `logging.log_level.default`
 
-## Other sources
+## All sources
+
+### YAML file
+
+```python
+settings_manager.add_yaml_file("file.yaml")
+```
+
+Comments are supported in YAML files.
+
+### JSON file
+
+```python
+settings_manager.add_json_file("file.json")
+```
+
+Comments are not supported in JSON files.
+
+### Environment variables
+
+```python
+settings_manager.add_environment_variables()
+```
 
 ### Azure Key Vault
 

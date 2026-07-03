@@ -25,5 +25,5 @@ class YamlFileSettingsProvider(SettingsProvider):
             path=self._path,
             optional=self._optional,
         )
-        await provider.load()
+        provider.load()
         self._data = provider.data

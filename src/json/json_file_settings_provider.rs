@@ -27,8 +27,12 @@ impl PythonJsonFileSettingsProvider {
         &self.provider.data
     }
 
-    pub async fn load(&mut self) -> PyResult<()> {
-        self.provider.load().await
+    pub fn load(&mut self) -> PyResult<()> {
+        let runtime = tokio::runtime::Runtime::new().map_err(|error| {
+            PyRuntimeError::new_err(format!("Failed to create Tokio runtime: {error}"))
+        })?;
+
+        runtime.block_on(self.provider.load())
     }
 }
 
@@ -95,6 +99,7 @@ impl SettingsProvider for JsonFileSettingsProvider {
                 error
             ))
         })?;
+
         let json_object = parsed_json
             .as_object()
             .ok_or_else(|| PyRuntimeError::new_err("JSON root value must be an object"))?;
@@ -108,5 +113,95 @@ impl SettingsProvider for JsonFileSettingsProvider {
 impl fmt::Display for JsonFileSettingsProvider {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.get_type_name())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::JsonFileSettingsProvider;
+    use crate::core::SettingsProvider;
+    use serde_json::json;
+    use std::collections::BTreeMap;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn test_parse_scalar_values() {
+        let expected_parsed_json = BTreeMap::from([
+            (String::from("name"), Some(String::from("wirio"))),
+            (String::from("port"), Some(String::from("8080"))),
+            (String::from("enabled"), Some(String::from("true"))),
+            (String::from("notes"), None),
+            (String::from("price"), Some(String::from("19.99"))),
+        ]);
+        let json = json!({
+            "name": "wirio",
+            "port": 8080,
+            "enabled": true,
+            "notes": null,
+            "price": 19.99
+        });
+        let temporary_directory = tempdir().unwrap();
+        let file_path = temporary_directory.path().join("settings.json");
+        fs::write(&file_path, json.to_string()).unwrap();
+
+        let mut provider = JsonFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+        provider.load().await.unwrap();
+
+        assert_eq!(provider.data, expected_parsed_json);
+    }
+
+    #[tokio::test]
+    async fn test_parse_nested_objects_and_arrays() {
+        let expected_parsed_json = BTreeMap::from([
+            (
+                String::from("logging.log_level.default"),
+                Some(String::from("Information")),
+            ),
+            (
+                String::from("allowed_hosts.0"),
+                Some(String::from("localhost")),
+            ),
+            (
+                String::from("allowed_hosts.1"),
+                Some(String::from("example.com")),
+            ),
+        ]);
+        let json = json!({
+            "Logging": {"LogLevel": {"Default": "Information"}},
+            "AllowedHosts": ["localhost", "example.com"]
+        });
+        let temporary_directory = tempdir().unwrap();
+        let file_path = temporary_directory.path().join("settings.json");
+        fs::write(&file_path, json.to_string()).unwrap();
+
+        let mut provider = JsonFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+        provider.load().await.unwrap();
+
+        assert_eq!(provider.data, expected_parsed_json);
+    }
+
+    #[tokio::test]
+    async fn test_set_none_and_empty_for_empty_structures() {
+        let expected_parsed_json = BTreeMap::from([
+            (String::from("section"), None),
+            (String::from("nested_section.section"), None),
+            (String::from("items"), Some(String::new())),
+            (String::from("nested_items.items"), Some(String::new())),
+        ]);
+        let json = json!({
+            "Section": {},
+            "NestedSection": {"Section": {}},
+            "Items": [],
+            "NestedItems": {"Items": []}
+        });
+        let temporary_directory = tempdir().unwrap();
+        let file_path = temporary_directory.path().join("settings.json");
+        fs::write(&file_path, json.to_string()).unwrap();
+
+        let mut provider = JsonFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+        provider.load().await.unwrap();
+
+        assert_eq!(provider.data, expected_parsed_json);
     }
 }

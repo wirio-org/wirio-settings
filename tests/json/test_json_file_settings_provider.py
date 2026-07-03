@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from wirio_settings.settings_manager import SettingsManager
 
 
-class TestYamlFileSettingsProvider:
+class TestJsonFileSettingsProvider:
     async def test_get_model(self, tmp_path: Path) -> None:
         class Submodel(BaseModel):
             subfield_1: str
@@ -32,27 +32,24 @@ class TestYamlFileSettingsProvider:
         expected_int_list = [1, 2, 3]
         expected_string_list = ["a", "b", "c"]
         expected_submodel = Submodel(subfield_1="value_1", subfield_2=42)
-        file_path = tmp_path / "settings.yaml"
+        file_path = tmp_path / "settings.json"
         file_path.write_text(
             """
-appName: wirio
-port: 8080
-enabled: true
-notes: null
-notes_2:
-priceAsFloat: 19.99
-priceAsDecimal: 19.99
-intList:
-  - 1
-  - 2
-  - 3
-stringList:
-  - a
-  - b
-  - c
-submodel:
-  subfield_1: value_1
-  subfield2: 42
+{
+  "appName": "wirio",
+  "port": 8080,
+  "enabled": true,
+  "notes": null,
+  "notes_2": null,
+  "priceAsFloat": 19.99,
+  "priceAsDecimal": 19.99,
+  "intList": [1, 2, 3],
+  "stringList": ["a", "b", "c"],
+  "submodel": {
+    "subfield_1": "value_1",
+    "subfield2": 42
+  }
+}
 """.strip(),
             encoding="utf-8",
         )
@@ -60,8 +57,8 @@ submodel:
         settings_manager = SettingsManager(
             content_root_path=str(tmp_path), add_default_providers=False
         )
-        settings_manager.add_yaml_file(
-            path="settings.yaml",
+        settings_manager.add_json_file(
+            path="settings.json",
             optional=False,
         )
 

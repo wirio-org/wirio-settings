@@ -20,8 +20,8 @@ from wirio_settings.environment_variables.environment_variables_settings_source 
     EnvironmentVariablesSettingsSource,
 )
 from wirio_settings.settings_manager import SettingsManager
-from wirio_settings.yaml.yaml_settings_provider import YamlSettingsProvider
-from wirio_settings.yaml.yaml_settings_source import YamlSettingsSource
+from wirio_settings.yaml.yaml_file_settings_provider import YamlFileSettingsProvider
+from wirio_settings.yaml.yaml_file_settings_source import YamlFileSettingsSource
 
 if TYPE_CHECKING:
     from azure.core.credentials_async import AsyncTokenCredential
@@ -1146,7 +1146,7 @@ class TestSettingsManager:
 
     def test_fail_when_getting_object_list_as_section(self) -> None:
         settings_manager = SettingsManager(
-            content_root_path="", add_default_providers=False
+            content_root_path=None, add_default_providers=False
         )
         settings_manager.add(
             _DictionarySettingsSource(
@@ -1161,13 +1161,6 @@ class TestSettingsManager:
             KeyError, match=re.escape("Setting key 'node' is not a section")
         ):
             settings_manager.get_section("node")
-
-    def test_get_current_working_directory_as_default_content_root_path(self) -> None:
-        expected_content_root_path = Path.cwd()
-
-        settings_manager = SettingsManager(add_default_providers=False)
-
-        assert settings_manager._content_root_path == expected_content_root_path  # noqa: SLF001
 
     def test_add_default_providers_by_default(self, mocker: MockerFixture) -> None:
         add_defaults_patch = mocker.patch.object(
@@ -1210,10 +1203,10 @@ class TestSettingsManager:
 
         assert len(settings_manager.sources) == expected_sources_count
         assert len(settings_manager.providers) == expected_providers_count
-        assert isinstance(settings_manager.sources[0], YamlSettingsSource)
-        assert isinstance(settings_manager.providers[0], YamlSettingsProvider)
-        assert isinstance(settings_manager.sources[1], YamlSettingsSource)
-        assert isinstance(settings_manager.providers[1], YamlSettingsProvider)
+        assert isinstance(settings_manager.sources[0], YamlFileSettingsSource)
+        assert isinstance(settings_manager.providers[0], YamlFileSettingsProvider)
+        assert isinstance(settings_manager.sources[1], YamlFileSettingsSource)
+        assert isinstance(settings_manager.providers[1], YamlFileSettingsProvider)
         assert isinstance(
             settings_manager.sources[2], EnvironmentVariablesSettingsSource
         )
@@ -1223,7 +1216,7 @@ class TestSettingsManager:
         )
 
         yaml_source = settings_manager.sources[1]
-        assert isinstance(yaml_source, YamlSettingsSource)
+        assert isinstance(yaml_source, YamlFileSettingsSource)
         assert Path(yaml_source._path).name == expected_yaml_file_name  # noqa: SLF001
 
     def test_use_run_until_complete_when_loop_is_available_and_not_running(

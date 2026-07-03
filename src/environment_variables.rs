@@ -1,4 +1,4 @@
-use crate::core::settings_provider::SettingsProvider;
+use crate::core::SettingsProvider;
 use pyo3::prelude::*;
 use std::collections::BTreeMap;
 use std::fmt;
@@ -81,8 +81,7 @@ impl fmt::Display for EnvironmentVariablesSettingsProvider {
 #[cfg(test)]
 mod tests {
     use crate::{
-        core::settings_provider::SettingsProvider,
-        environment_variables::EnvironmentVariablesSettingsProvider,
+        core::SettingsProvider, environment_variables::EnvironmentVariablesSettingsProvider,
     };
     use pyo3::{prelude::*, types::PyDict};
     use std::collections::BTreeMap;

@@ -2,7 +2,6 @@ import asyncio
 from collections.abc import Coroutine
 from concurrent.futures import ThreadPoolExecutor
 from os import environ
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Self, cast, final, override
 
 from pydantic import TypeAdapter
@@ -20,7 +19,7 @@ from wirio_settings.environment_variables.environment_variables_settings_source 
     EnvironmentVariablesSettingsSource,
 )
 from wirio_settings.json.json_file_settings_source import JsonSettingsSource
-from wirio_settings.yaml.yaml_settings_source import YamlSettingsSource
+from wirio_settings.yaml.yaml_file_settings_source import YamlFileSettingsSource
 
 if TYPE_CHECKING:
     from azure.core.credentials_async import AsyncTokenCredential
@@ -45,7 +44,7 @@ else:
 
 @final
 class SettingsManager(SettingsBuilder, SettingsRoot):
-    _content_root_path: Final[Path]
+    _content_root_path: Final[str | None]
     _sources: Final[list[SettingsSource]]
     _providers: Final[list[SettingsProvider]]
 
@@ -60,11 +59,7 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
             add_default_providers: Whether to add the default settings providers.
 
         """
-        self._content_root_path = (
-            Path(content_root_path).resolve()
-            if content_root_path is not None
-            else Path.cwd().resolve()
-        )
+        self._content_root_path = content_root_path
         self._sources = []
         self._providers = []
 
@@ -105,14 +100,20 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
 
     def add_yaml_file(self, path: str, optional: bool = False) -> Self:
         """Add a settings provider that reads settings values from a YAML file."""
-        final_path = (self._content_root_path / path).resolve()
-        self.add(YamlSettingsSource(path=str(final_path), optional=optional))
+        self.add(
+            YamlFileSettingsSource(
+                content_root_path=self._content_root_path, path=path, optional=optional
+            )
+        )
         return self
 
     def add_json_file(self, path: str, optional: bool = False) -> Self:
         """Add a settings provider that reads settings values from a JSON file."""
-        final_path = (self._content_root_path / path).resolve()
-        self.add(JsonSettingsSource(path=str(final_path), optional=optional))
+        self.add(
+            JsonSettingsSource(
+                content_root_path=self._content_root_path, path=path, optional=optional
+            )
+        )
         return self
 
     def add_azure_key_vault(

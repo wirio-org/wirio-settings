@@ -1,5 +1,3 @@
-use super::json_settings_parser::JsonSettingsParser;
-use crate::core::settings_provider::SettingsProvider;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use serde_json::Value;
@@ -7,6 +5,8 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
 use tokio::fs;
+
+use crate::core::{SerdeParser, SettingsProvider, file_provider};
 
 #[pyclass(str)]
 pub struct PythonJsonFileSettingsProvider {
@@ -16,9 +16,9 @@ pub struct PythonJsonFileSettingsProvider {
 #[pymethods]
 impl PythonJsonFileSettingsProvider {
     #[new]
-    fn new(path: &str, optional: bool) -> Self {
+    fn new(content_root_path: Option<&str>, path: &str, optional: bool) -> Self {
         Self {
-            provider: JsonFileSettingsProvider::new(path, optional),
+            provider: JsonFileSettingsProvider::new(content_root_path, path, optional),
         }
     }
 
@@ -27,8 +27,12 @@ impl PythonJsonFileSettingsProvider {
         &self.provider.data
     }
 
-    pub async fn load(&mut self) -> PyResult<()> {
-        self.provider.load().await
+    pub fn load(&mut self) -> PyResult<()> {
+        let runtime = tokio::runtime::Runtime::new().map_err(|error| {
+            PyRuntimeError::new_err(format!("Failed to create Tokio runtime: {error}"))
+        })?;
+
+        runtime.block_on(self.provider.load())
     }
 }
 
@@ -52,20 +56,11 @@ impl JsonFileSettingsProvider {
     /// - A relative path (for example, `config/settings.json`).
     /// - An absolute path (for example, `/tmp/settings.json`).
     ///
-    /// File names and relative paths are resolved against the current working directory.
-    fn new(path: &str, optional: bool) -> Self {
-        let path = PathBuf::from(path);
-
-        let calculated_path = if path.has_root() {
-            path
-        } else {
-            let current_directory = std::env::current_dir().unwrap();
-            current_directory.join(path)
-        };
-
+    /// File names and relative paths are resolved against `content_root_path` when provided, otherwise against the current working directory.
+    fn new(content_root_path: Option<&str>, path: &str, optional: bool) -> Self {
         Self {
             data: BTreeMap::new(),
-            path: calculated_path,
+            path: file_provider::resolve_path(content_root_path, path),
             optional,
         }
     }
@@ -104,10 +99,11 @@ impl SettingsProvider for JsonFileSettingsProvider {
                 error
             ))
         })?;
+
         let json_object = parsed_json
             .as_object()
             .ok_or_else(|| PyRuntimeError::new_err("JSON root value must be an object"))?;
-        let mut parsed_data = JsonSettingsParser::new().parse(json_object)?;
+        let mut parsed_data = SerdeParser::new().parse(json_object)?;
         self.normalize_keys(&mut parsed_data);
         self.data = parsed_data;
         Ok(())
@@ -117,5 +113,95 @@ impl SettingsProvider for JsonFileSettingsProvider {
 impl fmt::Display for JsonFileSettingsProvider {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.get_type_name())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::JsonFileSettingsProvider;
+    use crate::core::SettingsProvider;
+    use serde_json::json;
+    use std::collections::BTreeMap;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn test_parse_scalar_values() {
+        let expected_parsed_json = BTreeMap::from([
+            (String::from("name"), Some(String::from("wirio"))),
+            (String::from("port"), Some(String::from("8080"))),
+            (String::from("enabled"), Some(String::from("true"))),
+            (String::from("notes"), None),
+            (String::from("price"), Some(String::from("19.99"))),
+        ]);
+        let json = json!({
+            "name": "wirio",
+            "port": 8080,
+            "enabled": true,
+            "notes": null,
+            "price": 19.99
+        });
+        let temporary_directory = tempdir().unwrap();
+        let file_path = temporary_directory.path().join("settings.json");
+        fs::write(&file_path, json.to_string()).unwrap();
+
+        let mut provider = JsonFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+        provider.load().await.unwrap();
+
+        assert_eq!(provider.data, expected_parsed_json);
+    }
+
+    #[tokio::test]
+    async fn test_parse_nested_objects_and_arrays() {
+        let expected_parsed_json = BTreeMap::from([
+            (
+                String::from("logging.log_level.default"),
+                Some(String::from("Information")),
+            ),
+            (
+                String::from("allowed_hosts.0"),
+                Some(String::from("localhost")),
+            ),
+            (
+                String::from("allowed_hosts.1"),
+                Some(String::from("example.com")),
+            ),
+        ]);
+        let json = json!({
+            "Logging": {"LogLevel": {"Default": "Information"}},
+            "AllowedHosts": ["localhost", "example.com"]
+        });
+        let temporary_directory = tempdir().unwrap();
+        let file_path = temporary_directory.path().join("settings.json");
+        fs::write(&file_path, json.to_string()).unwrap();
+
+        let mut provider = JsonFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+        provider.load().await.unwrap();
+
+        assert_eq!(provider.data, expected_parsed_json);
+    }
+
+    #[tokio::test]
+    async fn test_set_none_and_empty_for_empty_structures() {
+        let expected_parsed_json = BTreeMap::from([
+            (String::from("section"), None),
+            (String::from("nested_section.section"), None),
+            (String::from("items"), Some(String::new())),
+            (String::from("nested_items.items"), Some(String::new())),
+        ]);
+        let json = json!({
+            "Section": {},
+            "NestedSection": {"Section": {}},
+            "Items": [],
+            "NestedItems": {"Items": []}
+        });
+        let temporary_directory = tempdir().unwrap();
+        let file_path = temporary_directory.path().join("settings.json");
+        fs::write(&file_path, json.to_string()).unwrap();
+
+        let mut provider = JsonFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+        provider.load().await.unwrap();
+
+        assert_eq!(provider.data, expected_parsed_json);
     }
 }

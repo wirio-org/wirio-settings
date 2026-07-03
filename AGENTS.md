@@ -9,7 +9,10 @@
 
 ## Code style
 
+#### General guidelines
+
 - When `expect` is used, provide a message that describes the reason for the expectation. It must start with a capital letter and not end with a period.
+- Don't modify the `_wirio_settings.pyi` file manually. It is generated automatically by `maturin`. If you need to modify it, do so in the `_wirio_settings.rs` file and then run `make setup-development` to regenerate the `.pyi` file.
 
 ## Testing
 

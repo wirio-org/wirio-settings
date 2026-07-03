@@ -3,11 +3,11 @@ from typing import Final, final, override
 from wirio_settings.core.settings_builder import SettingsBuilder
 from wirio_settings.core.settings_provider import SettingsProvider
 from wirio_settings.core.settings_source import SettingsSource
-from wirio_settings.json.json_file_settings_provider import JsonFileSettingsProvider
+from wirio_settings.yaml.yaml_file_settings_provider import YamlFileSettingsProvider
 
 
 @final
-class JsonSettingsSource(SettingsSource):
+class YamlFileSettingsSource(SettingsSource):
     _content_root_path: Final[str | None]
     _path: Final[str]
     _optional: Final[bool]
@@ -21,7 +21,7 @@ class JsonSettingsSource(SettingsSource):
 
     @override
     def build(self, builder: SettingsBuilder) -> SettingsProvider:
-        return JsonFileSettingsProvider(
+        return YamlFileSettingsProvider(
             content_root_path=self._content_root_path,
             path=self._path,
             optional=self._optional,

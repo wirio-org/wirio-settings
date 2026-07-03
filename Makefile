@@ -21,3 +21,8 @@ test:
 	uv run -- pytest
 	-deactivate
 	cargo test
+
+.PHONY: test-coverage
+test-coverage:
+	cargo llvm-cov test --all-features --html
+	open ./target/llvm-cov/html/index.html

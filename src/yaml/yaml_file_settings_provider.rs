@@ -298,6 +298,6 @@ port: 8080
     fn test_display_returns_type_name() {
         let display = PythonYamlFileSettingsProvider::new(None, "settings.yaml", false).to_string();
 
-        assert_eq!(display, "YamlSettingsProvider");
+        assert_eq!(display, "YamlFileSettingsProvider");
     }
 }

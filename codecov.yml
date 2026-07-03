@@ -1,5 +1,6 @@
 comment:
-  layout: "condensed_header, condensed_files, condensed_footer"
+  layout: "header, diff, footer"
   behavior: default
   hide_project_coverage: FALSE
   require_changes: false
+  require_base: false

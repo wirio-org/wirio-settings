@@ -5,3 +5,12 @@ comment:
   require_changes: false
   require_base: false
   require_head: true
+
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true

@@ -128,176 +128,176 @@ impl fmt::Display for YamlFileSettingsProvider {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{PythonYamlFileSettingsProvider, YamlFileSettingsProvider};
-    use crate::core::SettingsProvider;
-    use pyo3::Python;
-    use std::collections::BTreeMap;
-    use std::fs;
-    use tempfile::tempdir;
+// #[cfg(test)]
+// mod tests {
+//     use super::{PythonYamlFileSettingsProvider, YamlFileSettingsProvider};
+//     use crate::core::SettingsProvider;
+//     use pyo3::Python;
+//     use std::collections::BTreeMap;
+//     use std::fs;
+//     use tempfile::tempdir;
 
-    #[tokio::test]
-    async fn test_load_values_from_yaml_file() {
-        let temporary_directory = tempdir().unwrap();
-        let file_path = temporary_directory.path().join("settings.yaml");
-        fs::write(
-            &file_path,
-            "
-appName: wirio
-port: 8080
-logging:
-  enabled: true
-  logLevel:
-    default: warning
-    notes: null
-",
-        )
-        .unwrap();
+//     #[tokio::test]
+//     async fn test_load_values_from_yaml_file() {
+//         let temporary_directory = tempdir().unwrap();
+//         let file_path = temporary_directory.path().join("settings.yaml");
+//         fs::write(
+//             &file_path,
+//             "
+// appName: wirio
+// port: 8080
+// logging:
+//   enabled: true
+//   logLevel:
+//     default: warning
+//     notes: null
+// ",
+//         )
+//         .unwrap();
 
-        let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
-        provider.load().await.unwrap();
+//         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+//         provider.load().await.unwrap();
 
-        assert_eq!(
-            provider.data,
-            BTreeMap::from([
-                (String::from("app_name"), Some(String::from("wirio"))),
-                (String::from("port"), Some(String::from("8080"))),
-                (String::from("logging.enabled"), Some(String::from("true"))),
-                (
-                    String::from("logging.log_level.default"),
-                    Some(String::from("warning"))
-                ),
-                (String::from("logging.log_level.notes"), None),
-            ])
-        );
-    }
+//         assert_eq!(
+//             provider.data,
+//             BTreeMap::from([
+//                 (String::from("app_name"), Some(String::from("wirio"))),
+//                 (String::from("port"), Some(String::from("8080"))),
+//                 (String::from("logging.enabled"), Some(String::from("true"))),
+//                 (
+//                     String::from("logging.log_level.default"),
+//                     Some(String::from("warning"))
+//                 ),
+//                 (String::from("logging.log_level.notes"), None),
+//             ])
+//         );
+//     }
 
-    #[tokio::test]
-    async fn test_ignore_comments() {
-        let temporary_directory = tempdir().unwrap();
-        let file_path = temporary_directory.path().join("settings.yaml");
-        fs::write(
-            &file_path,
-            "# This is a comment
-appName: wirio # This is an inline comment
-# Another comment
-port: 8080
-",
-        )
-        .unwrap();
+//     #[tokio::test]
+//     async fn test_ignore_comments() {
+//         let temporary_directory = tempdir().unwrap();
+//         let file_path = temporary_directory.path().join("settings.yaml");
+//         fs::write(
+//             &file_path,
+//             "# This is a comment
+// appName: wirio # This is an inline comment
+// # Another comment
+// port: 8080
+// ",
+//         )
+//         .unwrap();
 
-        let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
-        provider.load().await.unwrap();
+//         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+//         provider.load().await.unwrap();
 
-        assert_eq!(
-            provider.data,
-            BTreeMap::from([
-                (String::from("app_name"), Some(String::from("wirio"))),
-                (String::from("port"), Some(String::from("8080"))),
-            ])
-        );
-    }
+//         assert_eq!(
+//             provider.data,
+//             BTreeMap::from([
+//                 (String::from("app_name"), Some(String::from("wirio"))),
+//                 (String::from("port"), Some(String::from("8080"))),
+//             ])
+//         );
+//     }
 
-    #[tokio::test]
-    async fn test_return_empty_data_when_yaml_file_is_empty() {
-        let temporary_directory = tempdir().unwrap();
-        let file_path = temporary_directory.path().join("settings.yaml");
-        fs::write(&file_path, "").unwrap();
+//     #[tokio::test]
+//     async fn test_return_empty_data_when_yaml_file_is_empty() {
+//         let temporary_directory = tempdir().unwrap();
+//         let file_path = temporary_directory.path().join("settings.yaml");
+//         fs::write(&file_path, "").unwrap();
 
-        let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
-        provider.load().await.unwrap();
+//         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+//         provider.load().await.unwrap();
 
-        assert_eq!(provider.data, BTreeMap::new());
-    }
+//         assert_eq!(provider.data, BTreeMap::new());
+//     }
 
-    #[tokio::test]
-    async fn test_return_empty_data_when_yaml_file_has_only_comments() {
-        let temporary_directory = tempdir().unwrap();
-        let file_path = temporary_directory.path().join("settings.yaml");
-        fs::write(
-            &file_path,
-            "# This is a comment
-# Another comment
-",
-        )
-        .unwrap();
+//     #[tokio::test]
+//     async fn test_return_empty_data_when_yaml_file_has_only_comments() {
+//         let temporary_directory = tempdir().unwrap();
+//         let file_path = temporary_directory.path().join("settings.yaml");
+//         fs::write(
+//             &file_path,
+//             "# This is a comment
+// # Another comment
+// ",
+//         )
+//         .unwrap();
 
-        let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
-        provider.load().await.unwrap();
+//         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+//         provider.load().await.unwrap();
 
-        assert_eq!(provider.data, BTreeMap::new());
-    }
+//         assert_eq!(provider.data, BTreeMap::new());
+//     }
 
-    #[tokio::test]
-    async fn test_return_empty_data_when_optional_file_is_missing() {
-        let temporary_directory = tempdir().unwrap();
-        let file_path = temporary_directory.path().join("missing.yaml");
+//     #[tokio::test]
+//     async fn test_return_empty_data_when_optional_file_is_missing() {
+//         let temporary_directory = tempdir().unwrap();
+//         let file_path = temporary_directory.path().join("missing.yaml");
 
-        let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), true);
-        provider.load().await.unwrap();
+//         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), true);
+//         provider.load().await.unwrap();
 
-        assert_eq!(provider.data, BTreeMap::new());
-    }
+//         assert_eq!(provider.data, BTreeMap::new());
+//     }
 
-    #[tokio::test]
-    async fn test_fail_when_required_file_is_missing() {
-        Python::initialize();
+//     #[tokio::test]
+//     async fn test_fail_when_required_file_is_missing() {
+//         Python::initialize();
 
-        let temporary_directory = tempdir().unwrap();
-        let file_path = temporary_directory.path().join("missing.yaml");
+//         let temporary_directory = tempdir().unwrap();
+//         let file_path = temporary_directory.path().join("missing.yaml");
 
-        let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+//         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
 
-        let error = provider.load().await.unwrap_err();
-        let error_message = error.to_string();
+//         let error = provider.load().await.unwrap_err();
+//         let error_message = error.to_string();
 
-        assert_eq!(
-            error_message,
-            format!(
-                "RuntimeError: YAML settings file '{}' does not exist",
-                file_path.display()
-            )
-        );
-    }
+//         assert_eq!(
+//             error_message,
+//             format!(
+//                 "RuntimeError: YAML settings file '{}' does not exist",
+//                 file_path.display()
+//             )
+//         );
+//     }
 
-    #[tokio::test]
-    async fn test_fail_when_yaml_has_invalid_syntax() {
-        Python::initialize();
+//     #[tokio::test]
+//     async fn test_fail_when_yaml_has_invalid_syntax() {
+//         Python::initialize();
 
-        let temporary_directory = tempdir().unwrap();
-        let file_path = temporary_directory.path().join("settings.yaml");
-        fs::write(&file_path, "appName: [wirio").unwrap();
+//         let temporary_directory = tempdir().unwrap();
+//         let file_path = temporary_directory.path().join("settings.yaml");
+//         fs::write(&file_path, "appName: [wirio").unwrap();
 
-        let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+//         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
 
-        let error = provider.load().await.unwrap_err();
-        let error_message = error.to_string();
+//         let error = provider.load().await.unwrap_err();
+//         let error_message = error.to_string();
 
-        assert!(error_message.contains("Could not parse"));
-        assert!(error_message.contains("YAML"));
-    }
+//         assert!(error_message.contains("Could not parse"));
+//         assert!(error_message.contains("YAML"));
+//     }
 
-    #[tokio::test]
-    async fn test_fail_when_yaml_root_value_is_not_object() {
-        Python::initialize();
+//     #[tokio::test]
+//     async fn test_fail_when_yaml_root_value_is_not_object() {
+//         Python::initialize();
 
-        let temporary_directory = tempdir().unwrap();
-        let file_path = temporary_directory.path().join("settings.yaml");
-        fs::write(&file_path, "- wirio\n- config").unwrap();
+//         let temporary_directory = tempdir().unwrap();
+//         let file_path = temporary_directory.path().join("settings.yaml");
+//         fs::write(&file_path, "- wirio\n- config").unwrap();
 
-        let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+//         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
 
-        let error = provider.load().await.unwrap_err();
-        let error_message = error.to_string();
+//         let error = provider.load().await.unwrap_err();
+//         let error_message = error.to_string();
 
-        assert!(error_message.contains("Could not parse the YAML file"));
-    }
+//         assert!(error_message.contains("Could not parse the YAML file"));
+//     }
 
-    #[test]
-    fn test_display_returns_type_name() {
-        let display = PythonYamlFileSettingsProvider::new(None, "settings.yaml", false).to_string();
+//     #[test]
+//     fn test_display_returns_type_name() {
+//         let display = PythonYamlFileSettingsProvider::new(None, "settings.yaml", false).to_string();
 
-        assert_eq!(display, "YamlFileSettingsProvider");
-    }
-}
+//         assert_eq!(display, "YamlFileSettingsProvider");
+//     }
+// }

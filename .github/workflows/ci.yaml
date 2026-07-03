@@ -255,11 +255,37 @@ jobs:
           name: wheels-sdist
           path: dist
 
+  upload-test-coverage:
+    name: Upload test coverage
+    runs-on: ubuntu-latest
+    permissions:
+      # Used to upload coverage report to Codecov
+      id-token: write
+    needs: [linux, musllinux, windows, macos, sdist]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@16b05812d776ae1dfaabc8277e421fb6d2506419 # 2.82.7
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Generate code coverage
+        run: cargo llvm-cov --all-features --codecov --output-path codecov.json
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          use_oidc: true
+          files: codecov.json
+          fail_ci_if_error: true
+
   release:
     name: Release
     runs-on: ubuntu-latest
     if: ${{ startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' }}
-    needs: [linux, musllinux, windows, macos, sdist]
+    needs: [upload-test-coverage]
     environment: release
     permissions:
       # Use to sign the release artifacts

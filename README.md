@@ -256,3 +256,19 @@ settings_manager.add_gcp_secret_manager(
 
 If no credentials are provided, Application Default Credentials (ADC) are used.
 We can also pass custom GCP credentials with the `credentials` parameter.
+
+## Contributing
+
+### Generate test coverage report
+
+```bash
+rustup component add llvm-tools-preview
+```
+
+```bash
+cargo install cargo-llvm-cov
+```
+
+```bash
+make test-coverage
+```

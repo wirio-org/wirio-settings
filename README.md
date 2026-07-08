@@ -4,7 +4,6 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/wirio-org/wirio-settings/ci.yaml?branch=main&logo=github&label=CI)](https://github.com/wirio-org/wirio-settings/actions/workflows/ci.yaml)
 [![PyPI - version](https://img.shields.io/pypi/v/wirio-settings?color=blue&label=pypi)](https://pypi.org/project/wirio-settings/)
 [![Python - versions](https://img.shields.io/pypi/pyversions/wirio-settings.svg)](https://github.com/wirio-org/wirio-settings)
-[![codecov](https://codecov.io/gh/wirio-org/wirio-settings/graph/badge.svg)](https://codecov.io/gh/wirio-org/wirio-settings)
 [![License](https://img.shields.io/github/license/wirio-org/wirio-settings.svg)](https://github.com/wirio-org/wirio-settings/blob/main/LICENSE)
 
 </div>

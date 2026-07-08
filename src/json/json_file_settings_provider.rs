@@ -74,6 +74,22 @@ impl JsonFileSettingsProvider {
             ))
         })
     }
+
+    fn parse_raw_json(&self, raw_json: &str) -> PyResult<BTreeMap<String, Option<String>>> {
+        let parsed_json: Value = serde_json::from_str(raw_json).map_err(|error| {
+            PyRuntimeError::new_err(format!(
+                "Could not parse JSON file '{}': {}",
+                self.path.display(),
+                error
+            ))
+        })?;
+
+        let json_object = parsed_json
+            .as_object()
+            .ok_or_else(|| PyRuntimeError::new_err("JSON root value must be an object"))?;
+
+        SerdeParser::new().parse(json_object)
+    }
 }
 
 impl SettingsProvider for JsonFileSettingsProvider {
@@ -92,18 +108,7 @@ impl SettingsProvider for JsonFileSettingsProvider {
         }
 
         let raw_json = self.read_json_file().await?;
-        let parsed_json: Value = serde_json::from_str(&raw_json).map_err(|error| {
-            PyRuntimeError::new_err(format!(
-                "Could not parse JSON file '{}': {}",
-                self.path.display(),
-                error
-            ))
-        })?;
-
-        let json_object = parsed_json
-            .as_object()
-            .ok_or_else(|| PyRuntimeError::new_err("JSON root value must be an object"))?;
-        let mut parsed_data = SerdeParser::new().parse(json_object)?;
+        let mut parsed_data = self.parse_raw_json(&raw_json)?;
         self.normalize_keys(&mut parsed_data);
         self.data = parsed_data;
         Ok(())

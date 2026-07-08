@@ -131,7 +131,7 @@ impl AwsSecretsManagerSettingsProvider {
                 })?,
                 self.secret_access_key.clone().ok_or_else(|| {
                     PyRuntimeError::new_err(
-                        "Missing 'secret_access_key for explicit AWS credentials",
+                        "Missing 'secret_access_key' for explicit AWS credentials",
                     )
                 })?,
                 self.session_token.clone(),
@@ -251,7 +251,7 @@ mod tests {
         Python::initialize();
 
         let provider = AwsSecretsManagerSettingsProvider::new(
-            String::from("dev/TestApp"),
+            String::from("dev/secret-id"),
             None,
             None,
             Some(String::from("access-key")),
@@ -266,5 +266,58 @@ mod tests {
             error.to_string(),
             "RuntimeError: Both 'access_key_id' and 'secret_access_key' must be provided when using explicit AWS credentials"
         );
+    }
+
+    #[test]
+    fn test_fail_when_secret_json_is_invalid() {
+        Python::initialize();
+
+        let error =
+            AwsSecretsManagerSettingsProvider::parse_secret_string("{invalid-json").unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains("RuntimeError: Could not parse AWS Secrets Manager secret as JSON:")
+        );
+    }
+
+    #[test]
+    fn test_fail_when_session_token_is_provided_without_access_key_and_secret() {
+        Python::initialize();
+
+        let provider = AwsSecretsManagerSettingsProvider::new(
+            String::from("dev/secret-id"),
+            None,
+            None,
+            None,
+            None,
+            Some(String::from("session-token")),
+            None,
+        );
+
+        let error = provider.validate_explicit_credentials().unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "RuntimeError: Both 'access_key_id' and 'secret_access_key' must be provided when using explicit AWS credentials"
+        );
+    }
+
+    #[test]
+    fn test_not_validate_explicit_credentials_when_no_explicit_credentials_are_provided() {
+        let provider = AwsSecretsManagerSettingsProvider::new(
+            String::from("dev/secret-id"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+
+        let result = provider.validate_explicit_credentials();
+
+        assert!(result.is_ok());
     }
 }

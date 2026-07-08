@@ -122,11 +122,11 @@ jobs:
           args: --release --out dist --find-interpreter
           # args: --release --out dist --interpreter python3.13
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          manylinux: auto
-          # manylinux: 2_28
+          # manylinux: auto
           # Required by `ring`, which is used by the AWS Rust SDK
           # https://github.com/briansmith/ring/issues/1728
-          docker-options: --env CFLAGS_aarch64_unknown_linux_gnu=-D__ARM_ARCH=8
+          manylinux: 2_28
+          # docker-options: --env CFLAGS_aarch64_unknown_linux_gnu=-D__ARM_ARCH=8
 
       - name: Upload wheels
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

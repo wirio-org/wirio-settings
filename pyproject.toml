@@ -22,9 +22,7 @@ keywords = [
     "GCP Secret Manager",
 ]
 requires-python = ">=3.13"
-dependencies = [
-    "pydantic>=2.13.4",
-]
+dependencies = ["pydantic>=2.13.4"]
 
 [project.urls]
 Homepage = "https://github.com/wirio-org/wirio-settings"
@@ -43,15 +41,14 @@ gcp-secret-manager = ["google-cloud-secret-manager>=2.29.0"]
 
 [dependency-groups]
 dev = [
-    "coverage>=7.14.1",
-    "maturin>=1.13.3",
-    "pytest>=9.1.0",
+    "coverage>=7.15.0",
+    "maturin>=1.14.1",
+    "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "pytest-mock>=3.15.1",
-    "ruff>=0.15.18",
-    "testcontainers>=4.14.2",
-    "ty>=0.0.51",
+    "ruff>=0.15.20",
+    "ty>=0.0.57",
 ]
 
 [build-system]

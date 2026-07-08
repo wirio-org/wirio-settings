@@ -43,7 +43,7 @@ impl fmt::Display for PythonYamlFileSettingsProvider {
 }
 
 struct YamlFileSettingsProvider {
-    pub data: BTreeMap<String, Option<String>>,
+    data: BTreeMap<String, Option<String>>,
     path: PathBuf,
     optional: bool,
 }
@@ -259,6 +259,23 @@ port: 8080
                 file_path.display()
             )
         );
+    }
+
+    #[tokio::test]
+    async fn test_fail_when_path_points_to_directory() {
+        Python::initialize();
+
+        let temporary_directory = tempdir().unwrap();
+        let mut provider = YamlFileSettingsProvider::new(
+            None,
+            temporary_directory.path().to_str().unwrap(),
+            false,
+        );
+
+        let error = provider.load().await.unwrap_err();
+        let error_message = error.to_string();
+
+        assert!(error_message.contains("Failed to read YAML settings file"));
     }
 
     #[tokio::test]

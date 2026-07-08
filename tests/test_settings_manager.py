@@ -414,9 +414,13 @@ class TestSettingsManager:
         reason=ExtraDependencies.AWS_SECRETS_MANAGER_NOT_INSTALLED_ERROR_MESSAGE,
     )
     def test_add_aws_secrets_manager(self, mocker: MockerFixture) -> None:
-        expected_secret_name = "dev/TestApp"  # noqa: S105
+        expected_secret_id = "dev/TestApp"  # noqa: S105
         expected_region = "eu-west-1"
         expected_url = "https://secretsmanager.eu-west-1.amazonaws.com"
+        expected_access_key_id = "access-key"
+        expected_secret_access_key = "secret-key"  # noqa: S105
+        expected_session_token = "session-token"  # noqa: S105
+        expected_profile = "integration"
         settings_manager = SettingsManager(
             content_root_path="", add_default_providers=False
         )
@@ -427,9 +431,13 @@ class TestSettingsManager:
         )
 
         settings_manager.add_aws_secrets_manager(
-            secret_id=expected_secret_name,
+            secret_id=expected_secret_id,
             region=expected_region,
             url=expected_url,
+            access_key_id=expected_access_key_id,
+            secret_access_key=expected_secret_access_key,
+            session_token=expected_session_token,
+            profile=expected_profile,
         )
 
         add_patch.assert_called_once()

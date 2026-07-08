@@ -34,7 +34,7 @@ impl fmt::Display for PythonEnvironmentVariablesSettingsProvider {
 }
 
 struct EnvironmentVariablesSettingsProvider {
-    pub data: BTreeMap<String, Option<String>>,
+    data: BTreeMap<String, Option<String>>,
 }
 
 impl EnvironmentVariablesSettingsProvider {

@@ -8,6 +8,8 @@ name = "_wirio_settings"
 crate-type = ["cdylib"]
 
 [dependencies]
+aws-config = { version = "1.8.18", features = ["credentials-login"] }
+aws-sdk-secretsmanager = "1.108.0"
 pyo3 = { version = "0.29.0", features = [
     "experimental-inspect",
     "experimental-async",

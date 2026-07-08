@@ -4,7 +4,6 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/wirio-org/wirio-settings/ci.yaml?branch=main&logo=github&label=CI)](https://github.com/wirio-org/wirio-settings/actions/workflows/ci.yaml)
 [![PyPI - version](https://img.shields.io/pypi/v/wirio-settings?color=blue&label=pypi)](https://pypi.org/project/wirio-settings/)
 [![Python - versions](https://img.shields.io/pypi/pyversions/wirio-settings.svg)](https://github.com/wirio-org/wirio-settings)
-[![coverage](https://codecov.io/gh/wirio-org/wirio-settings/graph/badge.svg)](https://codecov.io/gh/wirio-org/wirio-settings)
 [![License](https://img.shields.io/github/license/wirio-org/wirio-settings.svg)](https://github.com/wirio-org/wirio-settings/blob/main/LICENSE)
 
 </div>
@@ -237,11 +236,23 @@ uv add wirio-settings[aws-secrets-manager]
 
 ```python
 settings_manager.add_aws_secrets_manager(
-    "SecretName"
+    "secret-id",
 )
 ```
 
 The secret value must be a JSON object. `wirio-settings` reads and flattens that JSON into settings keys.
+
+By default, the provider uses environment authentication. For example, the IAM role, the shared AWS configuration profile, or `AWS_*` environment variables. More information [here](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/credproviders.html#credproviders-default-credentials-provider-chain).
+
+If explicit credentials are provided, they override environment authentication for this provider instance:
+
+```python
+settings_manager.add_aws_secrets_manager(
+    secret_id="secret-id",
+    access_key_id="...",
+    secret_access_key="...",
+)
+```
 
 ### GCP Secret Manager
 

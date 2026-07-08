@@ -5,6 +5,13 @@
 - Lint: `make lint`.
 - Test: `make test`.
 
+# General guidelines
+
+- Don't modify the `_wirio_settings.pyi` file manually. It's generated automatically by `maturin`. If you need to modify it, do so in the `lib.rs` file and then run `make generate-stubs` to regenerate the `.pyi` file.
+- Review the added code and write comprehensive unit tests to achieve 100% test coverage. Use `cargo llvm-cov --text` to check the coverage.
+- Don't stop until the next steps, in order, pass: linter and tests.
+- After all steps, review if the documentation needs to be updated. If it does, update it accordingly.
+
 # Rust
 
 ## Code style
@@ -12,7 +19,8 @@
 #### General guidelines
 
 - When `expect` is used, provide a message that describes the reason for the expectation. It must start with a capital letter and not end with a period.
-- Don't modify the `_wirio_settings.pyi` file manually. It is generated automatically by `maturin`. If you need to modify it, do so in the `_wirio_settings.rs` file and then run `make setup-development` to regenerate the `.pyi` file.
+- Don't modify the `_wirio_settings.pyi` file manually. It is generated automatically by `maturin`. If you need to modify it, do so in the `lib.rs` file and then run `make generate-stubs` to regenerate the `.pyi` file.
+- When using PyO3, use attributes instead of functions such as `.add_function` or `add_submodule`.
 
 ## Testing
 
@@ -21,10 +29,8 @@
 - Use `unwrap` instead of `expect` in tests.
 - Instead of creating structs for testing, use the `mockall` crate for mocking.
 - Mock variables must end with `_mock`. For example, `configuration_mock`.
-
-### General guidelines
-
-- When using PyO3, use attributes instead of functions such as `.add_function` or `add_submodule`.
+- To create temporary files in tests, use the `tempfile` crate.
+- Asynchronous tests must be annotated using `#[tokio::test]` instead of `#[test]`.
 
 # Python
 

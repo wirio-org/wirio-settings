@@ -131,8 +131,15 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         self.add(AzureKeyVaultSettingsSource(url=url, credential=credential))
         return self
 
-    def add_aws_secrets_manager(
-        self, secret_id: str, region: str | None = None, url: str | None = None
+    def add_aws_secrets_manager(  # noqa: PLR0913
+        self,
+        secret_id: str,
+        region: str | None = None,
+        url: str | None = None,
+        access_key_id: str | None = None,
+        secret_access_key: str | None = None,
+        session_token: str | None = None,
+        profile: str | None = None,
     ) -> Self:
         """Add a settings provider that reads settings values from AWS Secrets Manager."""
         ExtraDependencies.ensure_aws_secrets_manager_is_installed()
@@ -142,7 +149,15 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         )
 
         self.add(
-            AwsSecretsManagerSettingsSource(secret_id=secret_id, region=region, url=url)
+            AwsSecretsManagerSettingsSource(
+                secret_id=secret_id,
+                region=region,
+                url=url,
+                access_key_id=access_key_id,
+                secret_access_key=secret_access_key,
+                session_token=session_token,
+                profile=profile,
+            )
         )
         return self
 

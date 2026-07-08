@@ -1,0 +1,3 @@
+mod aws_secrets_manager_settings_provider;
+
+pub use aws_secrets_manager_settings_provider::PythonAwsSecretsManagerSettingsProvider;

@@ -1,5 +1,6 @@
 use pyo3::prelude::*;
 
+mod aws_secrets_manager;
 mod core;
 mod environment_variables;
 mod json;
@@ -12,6 +13,9 @@ mod _wirio_settings {
 
     #[pymodule_export]
     pub use crate::core::ConventionChanger;
+
+    #[pymodule_export]
+    pub use crate::aws_secrets_manager::PythonAwsSecretsManagerSettingsProvider;
 
     #[pymodule_export]
     pub use crate::environment_variables::PythonEnvironmentVariablesSettingsProvider;

@@ -43,7 +43,7 @@ impl fmt::Display for PythonJsonFileSettingsProvider {
 }
 
 struct JsonFileSettingsProvider {
-    pub data: BTreeMap<String, Option<String>>,
+    data: BTreeMap<String, Option<String>>,
     path: PathBuf,
     optional: bool,
 }

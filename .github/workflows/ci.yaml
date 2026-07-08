@@ -17,80 +17,80 @@ permissions:
   contents: read
 
 jobs:
-  # lint:
-  #   name: Lint
-  #   if: github.actor != 'dependabot[bot]'
-  #   runs-on: ubuntu-24.04
-  #   env:
-  #     UV_NO_SYNC: 1
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+  lint:
+    name: Lint
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-24.04
+    env:
+      UV_NO_SYNC: 1
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-  #     - name: Install uv
-  #       uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
-  #       with:
-  #         version-file: pyproject.toml
-  #         resolution-strategy: highest
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          version-file: pyproject.toml
+          resolution-strategy: highest
 
-  #     - name: Install Python packages
-  #       run: uv sync --locked --all-extras
-  #       shell: bash
+      - name: Install Python packages
+        run: uv sync --locked --all-extras
+        shell: bash
 
-  #     - name: Lint
-  #       run: make lint
-  #       shell: bash
+      - name: Lint
+        run: make lint
+        shell: bash
 
-  # test:
-  #   name: Test (Python=${{ matrix.python-version }}, Resolution=${{ matrix.resolution-strategy }}, Extra=${{ matrix.extra }})
-  #   needs: lint
-  #   runs-on: ubuntu-24.04
-  #   strategy:
-  #     matrix:
-  #       python-version: ["3.13", "3.14"]
-  #       resolution-strategy: ["lowest-direct", "highest"]
-  #       extra:
-  #         [
-  #           "no-extra",
-  #           "azure-key-vault",
-  #           "aws-secrets-manager",
-  #           "gcp-secret-manager",
-  #         ]
-  #   env:
-  #     UV_NO_SYNC: 1
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+  test:
+    name: Test (Python=${{ matrix.python-version }}, Resolution=${{ matrix.resolution-strategy }}, Extra=${{ matrix.extra }})
+    needs: lint
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        python-version: ["3.13", "3.14"]
+        resolution-strategy: ["lowest-direct", "highest"]
+        extra:
+          [
+            "no-extra",
+            "azure-key-vault",
+            "aws-secrets-manager",
+            "gcp-secret-manager",
+          ]
+    env:
+      UV_NO_SYNC: 1
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-  #     - name: Install uv
-  #       uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
-  #       with:
-  #         version-file: pyproject.toml
-  #         resolution-strategy: highest
-  #         python-version: ${{ matrix.python-version }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          version-file: pyproject.toml
+          resolution-strategy: highest
+          python-version: ${{ matrix.python-version }}
 
-  #     - name: Install Python packages
-  #       run: |
-  #         uv sync \
-  #         --resolution ${{ matrix.resolution-strategy }} \
-  #         ${{ matrix.extra != 'no-extra' && format('--extra {0}', matrix.extra) || '' }}
-  #       shell: bash
+      - name: Install Python packages
+        run: |
+          uv sync \
+          --resolution ${{ matrix.resolution-strategy }} \
+          ${{ matrix.extra != 'no-extra' && format('--extra {0}', matrix.extra) || '' }}
+        shell: bash
 
-  #     - name: Install crates
-  #       run: uv run -- maturin develop --uv
-  #       shell: bash
+      - name: Install crates
+        run: uv run -- maturin develop --uv
+        shell: bash
 
-  #     - name: Rust tests
-  #       run: cargo test
-  #       shell: bash
+      - name: Rust tests
+        run: cargo test
+        shell: bash
 
-  #     - name: Python tests
-  #       run: uv run -- pytest --cov=wirio_settings --cov-branch tests
-  #       shell: bash
+      - name: Python tests
+        run: uv run -- pytest --cov=wirio_settings --cov-branch tests
+        shell: bash
 
   linux:
     runs-on: ${{ matrix.platform.runner }}
-    # needs: test
+    needs: test
     strategy:
       matrix:
         platform:
@@ -120,13 +120,11 @@ jobs:
         with:
           target: ${{ matrix.platform.target }}
           args: --release --out dist --find-interpreter
-          # args: --release --out dist --interpreter python3.13
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          # manylinux: auto
+          # Upgraded from `auto`
           # Required by `ring`, which is used by the AWS Rust SDK
           # https://github.com/briansmith/ring/issues/1728
           manylinux: 2_28
-          # docker-options: --env CFLAGS_aarch64_unknown_linux_gnu=-D__ARM_ARCH=8
 
       - name: Upload wheels
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -134,181 +132,181 @@ jobs:
           name: wheels-linux-${{ matrix.platform.target }}
           path: dist
 
-  # musllinux:
-  #   runs-on: ${{ matrix.platform.runner }}
-  #   needs: test
-  #   strategy:
-  #     matrix:
-  #       platform:
-  #         - runner: ubuntu-22.04
-  #           target: x86_64
-  #         - runner: ubuntu-22.04
-  #           target: x86
-  #         - runner: ubuntu-22.04
-  #           target: aarch64
-  #         - runner: ubuntu-22.04
-  #           target: armv7
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+  musllinux:
+    runs-on: ${{ matrix.platform.runner }}
+    needs: test
+    strategy:
+      matrix:
+        platform:
+          - runner: ubuntu-22.04
+            target: x86_64
+          - runner: ubuntu-22.04
+            target: x86
+          - runner: ubuntu-22.04
+            target: aarch64
+          - runner: ubuntu-22.04
+            target: armv7
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-  #     - name: Install Python
-  #       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-  #       with:
-  #         python-version: "3.13"
+      - name: Install Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.13"
 
-  #     - name: Build wheels
-  #       uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
-  #       with:
-  #         target: ${{ matrix.platform.target }}
-  #         args: --release --out dist --find-interpreter
-  #         sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-  #         manylinux: musllinux_1_2
+      - name: Build wheels
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          target: ${{ matrix.platform.target }}
+          args: --release --out dist --find-interpreter
+          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          manylinux: musllinux_1_2
 
-  #     - name: Upload wheels
-  #       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-  #       with:
-  #         name: wheels-musllinux-${{ matrix.platform.target }}
-  #         path: dist
+      - name: Upload wheels
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: wheels-musllinux-${{ matrix.platform.target }}
+          path: dist
 
-  # windows:
-  #   runs-on: ${{ matrix.platform.runner }}
-  #   needs: test
-  #   strategy:
-  #     matrix:
-  #       platform:
-  #         - runner: windows-latest
-  #           target: x64
-  #           python_arch: x64
-  #         - runner: windows-latest
-  #           target: x86
-  #           python_arch: x86
-  #         - runner: windows-11-arm
-  #           target: aarch64
-  #           python_arch: arm64
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+  windows:
+    runs-on: ${{ matrix.platform.runner }}
+    needs: test
+    strategy:
+      matrix:
+        platform:
+          - runner: windows-latest
+            target: x64
+            python_arch: x64
+          - runner: windows-latest
+            target: x86
+            python_arch: x86
+          - runner: windows-11-arm
+            target: aarch64
+            python_arch: arm64
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-  #     - name: Install Python
-  #       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-  #       with:
-  #         python-version: "3.13"
-  #         architecture: ${{ matrix.platform.python_arch }}
+      - name: Install Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.13"
+          architecture: ${{ matrix.platform.python_arch }}
 
-  #     - name: Build wheels
-  #       uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
-  #       with:
-  #         target: ${{ matrix.platform.target }}
-  #         args: --release --out dist --find-interpreter
-  #         sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      - name: Build wheels
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          target: ${{ matrix.platform.target }}
+          args: --release --out dist --find-interpreter
+          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
-  #     - name: Upload wheels
-  #       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-  #       with:
-  #         name: wheels-windows-${{ matrix.platform.target }}
-  #         path: dist
+      - name: Upload wheels
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: wheels-windows-${{ matrix.platform.target }}
+          path: dist
 
-  # macos:
-  #   runs-on: ${{ matrix.platform.runner }}
-  #   needs: test
-  #   strategy:
-  #     matrix:
-  #       platform:
-  #         - runner: macos-15-intel
-  #           target: x86_64
-  #         - runner: macos-latest
-  #           target: aarch64
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+  macos:
+    runs-on: ${{ matrix.platform.runner }}
+    needs: test
+    strategy:
+      matrix:
+        platform:
+          - runner: macos-15-intel
+            target: x86_64
+          - runner: macos-latest
+            target: aarch64
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-  #     - name: Install Python
-  #       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-  #       with:
-  #         python-version: "3.13"
+      - name: Install Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.13"
 
-  #     - name: Build wheels
-  #       uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
-  #       with:
-  #         target: ${{ matrix.platform.target }}
-  #         args: --release --out dist --find-interpreter
-  #         sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      - name: Build wheels
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          target: ${{ matrix.platform.target }}
+          args: --release --out dist --find-interpreter
+          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
-  #     - name: Upload wheels
-  #       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-  #       with:
-  #         name: wheels-macos-${{ matrix.platform.target }}
-  #         path: dist
+      - name: Upload wheels
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: wheels-macos-${{ matrix.platform.target }}
+          path: dist
 
-  # sdist:
-  #   runs-on: ubuntu-latest
-  #   needs: test
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+  sdist:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-  #     - name: Build sdist
-  #       uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
-  #       with:
-  #         command: sdist
-  #         args: --out dist
+      - name: Build sdist
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          command: sdist
+          args: --out dist
 
-  #     - name: Upload sdist
-  #       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-  #       with:
-  #         name: wheels-sdist
-  #         path: dist
+      - name: Upload sdist
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: wheels-sdist
+          path: dist
 
-  # upload-test-coverage:
-  #   name: Upload test coverage
-  #   runs-on: ubuntu-latest
-  #   permissions:
-  #     # Used to upload coverage report to Codecov
-  #     id-token: write
-  #   needs: [linux, musllinux, windows, macos, sdist]
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+  upload-test-coverage:
+    name: Upload test coverage
+    runs-on: ubuntu-latest
+    permissions:
+      # Used to upload coverage report to Codecov
+      id-token: write
+    needs: [linux, musllinux, windows, macos, sdist]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-  #     - name: Install cargo-llvm-cov
-  #       uses: taiki-e/install-action@16b05812d776ae1dfaabc8277e421fb6d2506419 # 2.82.7
-  #       with:
-  #         tool: cargo-llvm-cov
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@16b05812d776ae1dfaabc8277e421fb6d2506419 # 2.82.7
+        with:
+          tool: cargo-llvm-cov
 
-  #     - name: Generate code coverage
-  #       run: cargo llvm-cov --all-features --codecov --output-path codecov.json
+      - name: Generate code coverage
+        run: cargo llvm-cov --all-features --codecov --output-path codecov.json
 
-  #     - name: Upload coverage to Codecov
-  #       uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
-  #       with:
-  #         use_oidc: true
-  #         files: codecov.json
-  #         fail_ci_if_error: true
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          use_oidc: true
+          files: codecov.json
+          fail_ci_if_error: true
 
-  # release:
-  #   name: Release
-  #   runs-on: ubuntu-latest
-  #   if: ${{ startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' }}
-  #   needs: [upload-test-coverage]
-  #   environment: release
-  #   permissions:
-  #     # Use to sign the release artifacts
-  #     id-token: write
-  #     # Used to upload release artifacts
-  #     contents: write
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    if: ${{ startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' }}
+    needs: [upload-test-coverage]
+    environment: release
+    permissions:
+      # Use to sign the release artifacts
+      id-token: write
+      # Used to upload release artifacts
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-  #     - name: Download artifacts
-  #       uses: actions/download-artifact@v7
+      - name: Download artifacts
+        uses: actions/download-artifact@v7
 
-  #     - name: Install uv
-  #       uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
-  #       with:
-  #         version-file: pyproject.toml
-  #         resolution-strategy: highest
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          version-file: pyproject.toml
+          resolution-strategy: highest
 
-  #     - name: Publish to PyPI
-  #       run: uv publish 'wheels-*/*'
+      - name: Publish to PyPI
+        run: uv publish 'wheels-*/*'

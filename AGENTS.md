@@ -30,6 +30,7 @@
 - Instead of creating structs for testing, use the `mockall` crate for mocking.
 - Mock variables must end with `_mock`. For example, `configuration_mock`.
 - To create temporary files in tests, use the `tempfile` crate.
+- Asynchronous tests must be annotated using `#[tokio::test]` instead of `#[test]`.
 
 # Python
 

@@ -203,6 +203,7 @@ impl fmt::Display for AwsSecretsManagerSettingsProvider {
 #[cfg(test)]
 mod tests {
     use super::AwsSecretsManagerSettingsProvider;
+    use crate::core::SettingsProvider;
     use pyo3::Python;
     use serde_json::json;
     use std::collections::BTreeMap;
@@ -319,5 +320,45 @@ mod tests {
         let result = provider.validate_explicit_credentials();
 
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_create_aws_secrets_manager_client_with_region_profile_url_and_credentials() {
+        Python::initialize();
+
+        let provider = AwsSecretsManagerSettingsProvider::new(
+            String::from("dev/secret-id"),
+            Some(String::from("eu-west-1")),
+            Some(String::from("http://127.0.0.1:9")),
+            Some(String::from("access-key")),
+            Some(String::from("secret-key")),
+            Some(String::from("session-token")),
+            Some(String::from("integration")),
+        );
+
+        let aws_secrets_manager_client_result = provider.create_aws_secrets_manager_client().await;
+
+        assert!(aws_secrets_manager_client_result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_fail_when_loading_secret_and_request_fails() {
+        Python::initialize();
+
+        let mut provider = AwsSecretsManagerSettingsProvider::new(
+            String::from("dev/secret-id"),
+            Some(String::from("eu-west-1")),
+            Some(String::from("http://127.0.0.1:9")),
+            Some(String::from("access-key")),
+            Some(String::from("secret-key")),
+            None,
+            None,
+        );
+
+        let error = provider.load().await.unwrap_err();
+
+        assert!(error.to_string().starts_with(
+            "RuntimeError: Failed to read AWS secret 'dev/secret-id' from AWS Secrets Manager:"
+        ));
     }
 }

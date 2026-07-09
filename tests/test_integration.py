@@ -8,7 +8,7 @@ from wirio_settings import SettingsManager
     os.environ.get("INTEGRATION_TEST") is None, reason="Integration tests"
 )
 class TestIntegration:
-    def test_load_secret_using_aws_secrets_manager(self) -> None:
+    def test_load_secrets_using_aws_secrets_manager(self) -> None:
         secret_id = "dev/test-secret-id"  # noqa: S105
         expected_secret_1 = "secret-value-1"  # noqa: S105
         expected_secret_2 = "secret-value-2"  # noqa: S105
@@ -20,6 +20,27 @@ class TestIntegration:
 
         settings_manager.add_aws_secrets_manager(
             secret_id=secret_id,
+        )
+
+        assert settings_manager.get_required_value("secret_1") == expected_secret_1
+        assert settings_manager.get_required_value("secret_2") == expected_secret_2
+        assert (
+            settings_manager.get_required_value("parent.nested_secret")
+            == expected_nested_secret
+        )
+
+    def test_load_secrets_using_gcp_secret_manager(self) -> None:
+        project_id = os.environ["GCP_PROJECT_ID"]
+        expected_secret_1 = "secret-value-1"  # noqa: S105
+        expected_secret_2 = "secret-value-2"  # noqa: S105
+        expected_nested_secret = "Nested-value"  # noqa: S105
+        settings_manager = SettingsManager(
+            content_root_path="",
+            add_default_providers=False,
+        )
+
+        settings_manager.add_gcp_secret_manager(
+            project_id=project_id,
         )
 
         assert settings_manager.get_required_value("secret_1") == expected_secret_1

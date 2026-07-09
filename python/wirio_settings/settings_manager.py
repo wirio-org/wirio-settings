@@ -164,7 +164,7 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
     def add_gcp_secret_manager(
         self,
         project_id: str,
-        credentials: Credentials | None = None,
+        credentials_json: str | None = None,
     ) -> Self:
         """Add a settings provider that reads settings values from GCP Secret Manager."""
         ExtraDependencies.ensure_gcp_secret_manager_is_installed()
@@ -176,7 +176,7 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         self.add(
             GcpSecretManagerSettingsSource(
                 project_id=project_id,
-                credentials=credentials,
+                credentials_json=credentials_json,
             )
         )
         return self

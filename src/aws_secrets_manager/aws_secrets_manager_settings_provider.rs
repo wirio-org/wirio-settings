@@ -111,7 +111,7 @@ impl AwsSecretsManagerSettingsProvider {
             || self.session_token.is_some()
     }
 
-    async fn create_aws_secrets_manager_client(&self) -> PyResult<Client> {
+    async fn create_secrets_manager_client(&self) -> PyResult<Client> {
         self.validate_explicit_credentials()?;
 
         let mut config_loader = aws_config::defaults(BehaviorVersion::latest());
@@ -169,8 +169,8 @@ impl AwsSecretsManagerSettingsProvider {
 
 impl SettingsProvider for AwsSecretsManagerSettingsProvider {
     async fn load(&mut self) -> PyResult<()> {
-        let aws_secrets_manager_client = self.create_aws_secrets_manager_client().await?;
-        let get_secret_value_response = aws_secrets_manager_client
+        let secrets_manager_client = self.create_secrets_manager_client().await?;
+        let get_secret_value_response = secrets_manager_client
             .get_secret_value()
             .secret_id(&self.secret_id)
             .send()
@@ -323,7 +323,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_aws_secrets_manager_client_with_region_profile_url_and_credentials() {
+    async fn test_create_secrets_manager_client_with_region_profile_url_and_credentials() {
         Python::initialize();
 
         let provider = AwsSecretsManagerSettingsProvider::new(
@@ -336,9 +336,9 @@ mod tests {
             Some(String::from("integration")),
         );
 
-        let aws_secrets_manager_client_result = provider.create_aws_secrets_manager_client().await;
+        let secrets_manager_client_result = provider.create_secrets_manager_client().await;
 
-        assert!(aws_secrets_manager_client_result.is_ok());
+        assert!(secrets_manager_client_result.is_ok());
     }
 
     #[tokio::test]

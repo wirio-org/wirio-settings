@@ -18,7 +18,7 @@ Lightning-fast, strongly typed, and zero boilerplate settings library for Python
 - **Works naturally with Pydantic models:** Load your app settings directly into models.
 - **Async-ready by design:** Built to work smoothly with modern async Python apps and cloud SDKs.
 - **A practical replacement:** Replace `pydantic-settings` and `python-dotenv` with one unified settings library.
-- **Roadmap:** Planned capabilities include automatic reload on settings changes (events, sentinels, time, async), pluggable configuration stores, feature flags, lifetimes, prefixes, custom delimiters and aliases.
+- **Roadmap:** Planned capabilities include automatic reload on settings changes (events, sentinels, time, async), pluggable configuration stores, feature flags, lifetimes, prefixes, filters, custom delimiters and aliases.
 
 ## 📦 Installation
 

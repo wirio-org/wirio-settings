@@ -57,8 +57,7 @@ try:  # noqa: SIM105
 except ImportError:
     pass
 
-try:
-    from google.auth.credentials import Credentials
+try:  # noqa: SIM105
     from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_source import (
         GcpSecretManagerSettingsSource,
     )
@@ -450,7 +449,6 @@ class TestSettingsManager:
     )
     def test_add_gcp_secret_manager(self, mocker: MockerFixture) -> None:
         project_id = "project-id"
-        credentials_mock = mocker.create_autospec(Credentials, instance=True)
         settings_manager = SettingsManager(
             content_root_path="", add_default_providers=False
         )
@@ -462,7 +460,6 @@ class TestSettingsManager:
 
         settings_manager.add_gcp_secret_manager(
             project_id=project_id,
-            credentials=credentials_mock,
         )
 
         add_patch.assert_called_once()

@@ -80,8 +80,6 @@ mod tests {
     use crate::{
         core::SettingsProvider, environment_variables::EnvironmentVariablesSettingsProvider,
     };
-    use pyo3::{prelude::*, types::PyDict};
-    use std::collections::BTreeMap;
 
     #[test]
     fn test_replace_double_underscore_with_dot_in_environment_variable_name() {

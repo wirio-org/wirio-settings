@@ -49,3 +49,22 @@ class TestIntegration:
             settings_manager.get_required_value("parent.nested_secret")
             == expected_nested_secret
         )
+
+    def test_load_settings_using_environment_variables(self) -> None:
+        expected_feature_flag = "true"
+        expected_nested_value = "nested-value"
+        settings_manager = SettingsManager(
+            content_root_path="",
+            add_default_providers=False,
+        )
+
+        settings_manager.add_environment_variables()
+
+        assert (
+            settings_manager.get_required_value("test_integration_feature_flag_enabled")
+            == expected_feature_flag
+        )
+        assert (
+            settings_manager.get_required_value("test_integration_parent.nested_value")
+            == expected_nested_value
+        )

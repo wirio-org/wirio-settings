@@ -146,6 +146,15 @@ mod tests {
             "
 appName: wirio
 port: 8080
+price: 19.99
+intList:
+  - 1
+  - 2
+  - 3
+stringList:
+  - alpha
+  - beta
+fieldWithoutValue:
 logging:
   enabled: true
   logLevel:
@@ -163,6 +172,13 @@ logging:
             BTreeMap::from([
                 (String::from("app_name"), Some(String::from("wirio"))),
                 (String::from("port"), Some(String::from("8080"))),
+                (String::from("price"), Some(String::from("19.99"))),
+                (String::from("int_list.0"), Some(String::from("1"))),
+                (String::from("int_list.1"), Some(String::from("2"))),
+                (String::from("int_list.2"), Some(String::from("3"))),
+                (String::from("string_list.0"), Some(String::from("alpha"))),
+                (String::from("string_list.1"), Some(String::from("beta"))),
+                (String::from("field_without_value"), None),
                 (String::from("logging.enabled"), Some(String::from("true"))),
                 (
                     String::from("logging.log_level.default"),

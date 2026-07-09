@@ -82,7 +82,7 @@ impl GcpSecretManagerSettingsProvider {
         let service_account_key: Value =
             serde_json::from_str(credentials_json).map_err(|error| {
                 PyRuntimeError::new_err(format!(
-                    "Failed to parse GCP credentials JSON from Python credentials object: {error}",
+                    "Failed to parse GCP credentials JSON from 'credentials_json': {error}",
                 ))
             })?;
 
@@ -112,10 +112,6 @@ impl GcpSecretManagerSettingsProvider {
                     secret_names.push(secret_name);
                 }
                 Err(error) => {
-                    println!(
-                        "Failed to list secrets for project '{}' in GCP Secret Manager: {error}",
-                        self.project_id,
-                    );
                     return Err(PyRuntimeError::new_err(format!(
                         "Failed to list secrets for project '{}' in GCP Secret Manager: {error}",
                         self.project_id,
@@ -180,7 +176,7 @@ impl GcpSecretManagerSettingsProvider {
     }
 
     fn parse_secret_payload_to_string(secret_name: &str, data: &[u8]) -> PyResult<String> {
-        String::from_utf8(data.to_vec()).map_err(|error| {
+        std::str::from_utf8(data).map(str::to_owned).map_err(|error| {
             PyRuntimeError::new_err(format!(
                 "Secret '{secret_name}' in GCP Secret Manager does not contain valid UTF-8 data: {error}",
             ))

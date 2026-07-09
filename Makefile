@@ -47,6 +47,10 @@ gcp-secret-manager-integration-test:
 	gcloud secrets delete "Secret-2" --quiet
 	gcloud secrets delete "parent--nestedSecret" --quiet
 
+.PHONY: environment-variables-integration-test
+environment-variables-integration-test:
+	INTEGRATION_TEST=1 TEST_INTEGRATION_FEATURE_FLAG_ENABLED="true" TEST_INTEGRATION_PARENT__NESTED_VALUE="nested-value" uv run -- pytest tests/test_integration.py::TestIntegration::test_load_settings_using_environment_variables
+
 .PHONY: test-coverage
 test-coverage:
 	cargo llvm-cov test --all-features --html

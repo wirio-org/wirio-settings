@@ -44,24 +44,21 @@ impl EnvironmentVariablesSettingsProvider {
         }
     }
 
-    fn get_environment_variables() -> PyResult<BTreeMap<String, Option<String>>> {
-        Python::attach(|python| -> PyResult<BTreeMap<String, Option<String>>> {
-            let environ = python.import("os")?.getattr("environ")?;
-            let dict_type = python.import("builtins")?.getattr("dict")?;
-            let environment_data: BTreeMap<String, String> =
-                dict_type.call1((environ,))?.extract()?;
-            let environment_data_with_optional_values = environment_data
-                .into_iter()
-                .map(|(key, value)| (key, Some(value)))
-                .collect();
-            Ok(environment_data_with_optional_values)
-        })
+    fn get_environment_variables() -> BTreeMap<String, Option<String>> {
+        std::env::vars_os()
+            .map(|(key, value)| {
+                (
+                    key.to_string_lossy().into_owned(),
+                    Some(value.to_string_lossy().into_owned()),
+                )
+            })
+            .collect()
     }
 }
 
 impl SettingsProvider for EnvironmentVariablesSettingsProvider {
     async fn load(&mut self) -> PyResult<()> {
-        let mut environment_variables = Self::get_environment_variables()?;
+        let mut environment_variables = Self::get_environment_variables();
         self.normalize_keys(&mut environment_variables);
         self.data = environment_variables;
         Ok(())
@@ -102,42 +99,6 @@ mod tests {
         ));
 
         assert_eq!(key, "LOGGING");
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn test_load_environment_variables() {
-        Python::initialize();
-
-        let expected_environment_variables = BTreeMap::from([(
-            String::from("logging.log_level.default"),
-            Some(String::from("WARNING")),
-        )]);
-
-        let original_environ = Python::attach(|python| -> PyResult<Py<PyAny>> {
-            let os_module = python.import("os")?;
-            let dict_type = python.import("builtins")?.getattr("dict")?;
-            let original_environ = dict_type.call1((os_module.getattr("environ")?,))?;
-            let environ_mock = PyDict::new(python);
-            environ_mock.set_item("LOGGING__LOG_LEVEL__DEFAULT", "WARNING")?;
-            os_module.setattr("environ", environ_mock)?;
-            Ok(original_environ.unbind())
-        })
-        .unwrap();
-
-        let mut provider = EnvironmentVariablesSettingsProvider::new();
-        let load_result = provider.load().await;
-
-        Python::attach(|python| -> PyResult<()> {
-            let os_module = python.import("os")?;
-            os_module.setattr("environ", original_environ.bind(python))?;
-            Ok(())
-        })
-        .unwrap();
-
-        load_result.unwrap();
-
-        assert_eq!(provider.data, expected_environment_variables);
     }
 
     #[test]

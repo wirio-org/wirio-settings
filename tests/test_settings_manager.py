@@ -4,12 +4,17 @@ import re
 from asyncio import AbstractEventLoop
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, final, override
+from typing import final, override
 
 import pytest
 from pydantic import BaseModel, Field
 from pytest_mock import MockerFixture
-from wirio_settings.core._extra_dependencies import ExtraDependencies
+from wirio_settings.aws_secrets_manager.aws_secrets_manager_settings_source import (
+    AwsSecretsManagerSettingsSource,
+)
+from wirio_settings.azure_key_vault.azure_key_vault_settings_source import (
+    AzureKeyVaultSettingsSource,
+)
 from wirio_settings.core.settings_builder import SettingsBuilder
 from wirio_settings.core.settings_provider import SettingsProvider
 from wirio_settings.core.settings_source import SettingsSource
@@ -19,47 +24,12 @@ from wirio_settings.environment_variables.environment_variables_settings_provide
 from wirio_settings.environment_variables.environment_variables_settings_source import (
     EnvironmentVariablesSettingsSource,
 )
+from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_source import (
+    GcpSecretManagerSettingsSource,
+)
 from wirio_settings.settings_manager import SettingsManager
 from wirio_settings.yaml.yaml_file_settings_provider import YamlFileSettingsProvider
 from wirio_settings.yaml.yaml_file_settings_source import YamlFileSettingsSource
-
-if TYPE_CHECKING:
-    from google.auth.credentials import Credentials
-    from wirio_settings.aws_secrets_manager.aws_secrets_manager_settings_source import (
-        AwsSecretsManagerSettingsSource,
-    )
-    from wirio_settings.azure_key_vault.azure_key_vault_settings_source import (
-        AzureKeyVaultSettingsSource,
-    )
-    from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_source import (
-        GcpSecretManagerSettingsSource,
-    )
-else:
-    Credentials = Any
-    AwsSecretsManagerSettingsSource = Any
-    AzureKeyVaultSettingsSource = Any
-    GcpSecretManagerSettingsSource = Any
-
-try:  # noqa: SIM105
-    from wirio_settings.azure_key_vault.azure_key_vault_settings_source import (
-        AzureKeyVaultSettingsSource,
-    )
-except ImportError:
-    pass
-
-try:  # noqa: SIM105
-    from wirio_settings.aws_secrets_manager.aws_secrets_manager_settings_source import (
-        AwsSecretsManagerSettingsSource,
-    )
-except ImportError:
-    pass
-
-try:  # noqa: SIM105
-    from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_source import (
-        GcpSecretManagerSettingsSource,
-    )
-except ImportError:
-    pass
 
 
 @final
@@ -377,10 +347,6 @@ class TestSettingsManager:
         assert sources[0] is source1
         assert sources[1] is source2
 
-    @pytest.mark.skipif(
-        not ExtraDependencies.is_azure_key_vault_installed(),
-        reason=ExtraDependencies.AZURE_KEY_VAULT_NOT_INSTALLED_ERROR_MESSAGE,
-    )
     def test_add_azure_key_vault(self, mocker: MockerFixture) -> None:
         key_vault_url = "https://example.vault.azure.net"
         client_id = "client-id"
@@ -406,10 +372,6 @@ class TestSettingsManager:
         source = add_patch.call_args.args[0]
         assert isinstance(source, AzureKeyVaultSettingsSource)
 
-    @pytest.mark.skipif(
-        not ExtraDependencies.is_aws_secrets_manager_installed(),
-        reason=ExtraDependencies.AWS_SECRETS_MANAGER_NOT_INSTALLED_ERROR_MESSAGE,
-    )
     def test_add_aws_secrets_manager(self, mocker: MockerFixture) -> None:
         expected_secret_id = "dev/TestApp"  # noqa: S105
         expected_region = "eu-west-1"
@@ -441,10 +403,6 @@ class TestSettingsManager:
         source = add_patch.call_args.args[0]
         assert isinstance(source, AwsSecretsManagerSettingsSource)
 
-    @pytest.mark.skipif(
-        not ExtraDependencies.is_gcp_secret_manager_installed(),
-        reason=ExtraDependencies.GCP_SECRET_MANAGER_NOT_INSTALLED_ERROR_MESSAGE,
-    )
     def test_add_gcp_secret_manager(self, mocker: MockerFixture) -> None:
         project_id = "project-id"
         settings_manager = SettingsManager(

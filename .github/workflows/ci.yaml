@@ -34,7 +34,7 @@ jobs:
           resolution-strategy: highest
 
       - name: Install Python packages
-        run: uv sync --locked --all-extras
+        run: uv sync --locked
         shell: bash
 
       - name: Lint
@@ -42,20 +42,13 @@ jobs:
         shell: bash
 
   test:
-    name: Test (Python=${{ matrix.python-version }}, Resolution=${{ matrix.resolution-strategy }}, Extra=${{ matrix.extra }})
+    name: Test (Python=${{ matrix.python-version }}, Resolution=${{ matrix.resolution-strategy }})
     needs: lint
     runs-on: ubuntu-24.04
     strategy:
       matrix:
         python-version: ["3.13", "3.14"]
         resolution-strategy: ["lowest-direct", "highest"]
-        extra:
-          [
-            "no-extra",
-            "azure-key-vault",
-            "aws-secrets-manager",
-            "gcp-secret-manager",
-          ]
     env:
       UV_NO_SYNC: 1
     steps:
@@ -72,8 +65,7 @@ jobs:
       - name: Install Python packages
         run: |
           uv sync \
-          --resolution ${{ matrix.resolution-strategy }} \
-          ${{ matrix.extra != 'no-extra' && format('--extra {0}', matrix.extra) || '' }}
+          --resolution ${{ matrix.resolution-strategy }}
         shell: bash
 
       - name: Install crates

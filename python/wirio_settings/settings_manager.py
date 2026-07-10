@@ -2,12 +2,17 @@ import asyncio
 from collections.abc import Coroutine
 from concurrent.futures import ThreadPoolExecutor
 from os import environ
-from typing import TYPE_CHECKING, Any, Final, Self, cast, final, override
+from typing import Any, Final, Self, cast, final, override
 
 from pydantic import TypeAdapter
 
 from wirio_settings._wirio_settings import SettingsPath
-from wirio_settings.core._extra_dependencies import ExtraDependencies
+from wirio_settings.aws_secrets_manager.aws_secrets_manager_settings_source import (
+    AwsSecretsManagerSettingsSource,
+)
+from wirio_settings.azure_key_vault.azure_key_vault_settings_source import (
+    AzureKeyVaultSettingsSource,
+)
 from wirio_settings.core._typed_type import TypedType
 from wirio_settings.core.settings_builder import SettingsBuilder
 from wirio_settings.core.settings_provider import SettingsProvider
@@ -18,26 +23,11 @@ from wirio_settings.core.wirio_undefined import WirioUndefined
 from wirio_settings.environment_variables.environment_variables_settings_source import (
     EnvironmentVariablesSettingsSource,
 )
+from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_source import (
+    GcpSecretManagerSettingsSource,
+)
 from wirio_settings.json.json_file_settings_source import JsonSettingsSource
 from wirio_settings.yaml.yaml_file_settings_source import YamlFileSettingsSource
-
-if TYPE_CHECKING:
-    from google.auth.credentials import Credentials
-
-    from wirio_settings.aws_secrets_manager.aws_secrets_manager_settings_source import (
-        AwsSecretsManagerSettingsSource,
-    )
-    from wirio_settings.azure_key_vault.azure_key_vault_settings_source import (
-        AzureKeyVaultSettingsSource,
-    )
-    from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_source import (
-        GcpSecretManagerSettingsSource,
-    )
-else:
-    Credentials = Any
-    AwsSecretsManagerSettingsSource = Any
-    AzureKeyVaultSettingsSource = Any
-    GcpSecretManagerSettingsSource = Any
 
 
 @final
@@ -122,12 +112,6 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         tenant_id: str | None = None,
     ) -> Self:
         """Add a settings provider that reads settings values from Azure Key Vault."""
-        ExtraDependencies.ensure_azure_key_vault_is_installed()
-        global AzureKeyVaultSettingsSource  # noqa: PLW0603
-        from wirio_settings.azure_key_vault.azure_key_vault_settings_source import (  # noqa: PLC0415
-            AzureKeyVaultSettingsSource,
-        )
-
         self.add(
             AzureKeyVaultSettingsSource(
                 url=url,
@@ -149,12 +133,6 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         profile: str | None = None,
     ) -> Self:
         """Add a settings provider that reads settings values from AWS Secrets Manager."""
-        ExtraDependencies.ensure_aws_secrets_manager_is_installed()
-        global AwsSecretsManagerSettingsSource  # noqa: PLW0603
-        from wirio_settings.aws_secrets_manager.aws_secrets_manager_settings_source import (  # noqa: PLC0415
-            AwsSecretsManagerSettingsSource,
-        )
-
         self.add(
             AwsSecretsManagerSettingsSource(
                 secret_id=secret_id,
@@ -174,12 +152,6 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         credentials_json: str | None = None,
     ) -> Self:
         """Add a settings provider that reads settings values from GCP Secret Manager."""
-        ExtraDependencies.ensure_gcp_secret_manager_is_installed()
-        global GcpSecretManagerSettingsSource  # noqa: PLW0603
-        from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_source import (  # noqa: PLC0415
-            GcpSecretManagerSettingsSource,
-        )
-
         self.add(
             GcpSecretManagerSettingsSource(
                 project_id=project_id,

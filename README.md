@@ -225,8 +225,29 @@ settings_manager.add_azure_key_vault(
 )
 ```
 
-If no credential is provided, `DefaultAzureCredential` is used.
-We can also pass a custom async Azure credential with the `credential` parameter.
+If no explicit credentials are provided, `DefaultAzureCredential` is used.
+
+In `wirio-settings`, `DefaultAzureCredential` tries credentials in this order and uses the first one that succeeds:
+
+1. Environment credential (`AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`)
+2. Workload identity credential
+3. Managed identity credential. This is the System-assigned managed identity by default. If we want to use a User-assigned managed identity, set the `AZURE_CLIENT_ID` environment variable.
+4. Developer tools credential (Azure CLI / Azure Developer CLI)
+
+If you want to use explicit service principal credentials, provide all three values:
+
+```python
+settings_manager.add_azure_key_vault(
+    "https://example.vault.azure.net",
+    client_id="...",
+    client_secret="...",
+    tenant_id="...",
+)
+```
+
+When using explicit credentials, `tenant_id`, `client_id`, and `client_secret` must all be provided.
+
+**Azure permissions:** Usually, the `Key Vault Secrets User` role is used to read secrets.
 
 ### AWS Secrets Manager
 

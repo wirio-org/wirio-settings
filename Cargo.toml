@@ -8,8 +8,13 @@ name = "_wirio_settings"
 crate-type = ["cdylib"]
 
 [dependencies]
+async-trait = "0.1.89"
 aws-config = { version = "1.8.18", features = ["credentials-login"] }
 aws-sdk-secretsmanager = "1.108.0"
+azure_core = "1.0.0"
+azure_identity = "1.0.0"
+azure_security_keyvault_secrets = "1.0.0"
+futures = "0.3.32"
 google-cloud-auth = "1.13.0"
 google-cloud-gax = "1.11.0"
 google-cloud-secretmanager-v1 = "1.10.0"

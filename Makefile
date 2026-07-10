@@ -60,9 +60,9 @@ azure-key-vault-integration-test:
 	sleep 5
 	-az keyvault secret purge --vault-name "$$AZURE_KEY_VAULT_NAME" --name "Secret2" --output none
 	sleep 5
-	-az keyvault secret delete --vault-name "$$AZURE_KEY_VAULT_NAME" --name "parent--nestedSecret"
+	-az keyvault secret delete --vault-name "$$AZURE_KEY_VAULT_NAME" --name "parent--nestedSecret" --output none
 	sleep 5
-	-az keyvault secret purge --vault-name "$$AZURE_KEY_VAULT_NAME" --name "parent--nestedSecret"
+	-az keyvault secret purge --vault-name "$$AZURE_KEY_VAULT_NAME" --name "parent--nestedSecret" --output none
 	sleep 5
 	az keyvault secret set --vault-name "$$AZURE_KEY_VAULT_NAME" --name "secret1" --value "secret-value-1" --output none
 	sleep 5

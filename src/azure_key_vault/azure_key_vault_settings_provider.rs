@@ -1,12 +1,15 @@
 use azure_identity::ClientSecretCredential;
+use azure_security_keyvault_secrets::SecretClientOptions;
 use azure_security_keyvault_secrets::{ResourceExt, SecretClient, models::SecretProperties};
 use futures::TryStreamExt;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::Arc;
 
 use crate::azure_key_vault::default_azure_credential::DefaultAzureCredential;
+use crate::azure_key_vault::remove_user_agent::RemoveUserAgent;
 use crate::core::SettingsProvider;
 
 #[pyclass(str)]
@@ -97,6 +100,15 @@ impl AzureKeyVaultSettingsProvider {
                     "Failed to create explicit Azure credential for Azure Key Vault: {error}"
                 ))
             })?;
+
+            let remove_user_agent = Arc::new(RemoveUserAgent);
+
+            // Construct client options with our policy, that runs after the built-in per-call UserAgentPolicy
+            let mut secret_client_options = SecretClientOptions::default();
+            secret_client_options
+                .client_options
+                .per_call_policies
+                .push(remove_user_agent);
 
             return SecretClient::new(&self.url, credential, None).map_err(|error| {
                 PyRuntimeError::new_err(format!(

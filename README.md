@@ -215,10 +215,6 @@ settings_manager.add_environment_variables()
 
 ### Azure Key Vault
 
-```bash
-uv add wirio-settings[azure-key-vault]
-```
-
 ```python
 settings_manager.add_azure_key_vault(
     "https://example.vault.azure.net",
@@ -251,10 +247,6 @@ When using explicit credentials, `tenant_id`, `client_id`, and `client_secret` m
 
 ### AWS Secrets Manager
 
-```bash
-uv add wirio-settings[aws-secrets-manager]
-```
-
 ```python
 settings_manager.add_aws_secrets_manager(
     "secret-id",
@@ -276,10 +268,6 @@ settings_manager.add_aws_secrets_manager(
 ```
 
 ### GCP Secret Manager
-
-```bash
-uv add wirio-settings[gcp-secret-manager]
-```
 
 ```python
 settings_manager.add_gcp_secret_manager(

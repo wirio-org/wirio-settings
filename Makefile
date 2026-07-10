@@ -22,33 +22,9 @@ test:
 	-deactivate
 	cargo test
 
-# Prerequisite: aws login
-.PHONY: aws-secrets-manager-integration-test
-aws-secrets-manager-integration-test:
-	aws secretsmanager delete-secret --secret-id "dev/test-secret-id" --force-delete-without-recovery
-	aws secretsmanager create-secret --name "dev/test-secret-id" --secret-string '{"secret_1":"secret-value-1","Secret-2":"secret-value-2","parent":{"nestedSecret":"Nested-value"}}'
-	INTEGRATION_TEST=1 uv run -- pytest tests/test_integration.py::TestIntegration::test_load_secrets_using_aws_secrets_manager
-	aws secretsmanager delete-secret --secret-id "dev/test-secret-id" --force-delete-without-recovery
-
-
-# Prerequisites:
-# gcloud auth login
-# gcloud config set project <project_id>
-.PHONY: gcp-secret-manager-integration-test
-gcp-secret-manager-integration-test:
-	-gcloud secrets delete "secret_1" --quiet
-	-gcloud secrets delete "Secret-2" --quiet
-	-gcloud secrets delete "parent--nestedSecret" --quiet
-	printf '%s' "secret-value-1" | gcloud secrets create "secret_1" --data-file=-
-	printf '%s' "secret-value-2" | gcloud secrets create "Secret-2" --data-file=-
-	printf '%s' "Nested-value" | gcloud secrets create "parent--nestedSecret" --data-file=-
-	INTEGRATION_TEST=1 GCP_PROJECT_ID="$$(gcloud config get-value project --quiet)" uv run -- pytest tests/test_integration.py::TestIntegration::test_load_secrets_using_gcp_secret_manager
-	gcloud secrets delete "secret_1" --quiet
-	gcloud secrets delete "Secret-2" --quiet
-	gcloud secrets delete "parent--nestedSecret" --quiet
-
 # Prerequisites:
 # az login
+# az account set --subscription <subscription_id>
 # AZURE_KEY_VAULT_NAME=<key_vault_name> make azure-key-vault-integration-test
 .PHONY: azure-key-vault-integration-test
 azure-key-vault-integration-test:
@@ -82,6 +58,31 @@ azure-key-vault-integration-test:
 	az keyvault secret delete --vault-name "$$AZURE_KEY_VAULT_NAME" --name "parent--nestedSecret" --output none
 	sleep 5
 	az keyvault secret purge --vault-name "$$AZURE_KEY_VAULT_NAME" --name "parent--nestedSecret" --output none
+
+# Prerequisite: aws login
+.PHONY: aws-secrets-manager-integration-test
+aws-secrets-manager-integration-test:
+	aws secretsmanager delete-secret --secret-id "dev/test-secret-id" --force-delete-without-recovery
+	aws secretsmanager create-secret --name "dev/test-secret-id" --secret-string '{"secret_1":"secret-value-1","Secret-2":"secret-value-2","parent":{"nestedSecret":"Nested-value"}}'
+	INTEGRATION_TEST=1 uv run -- pytest tests/test_integration.py::TestIntegration::test_load_secrets_using_aws_secrets_manager
+	aws secretsmanager delete-secret --secret-id "dev/test-secret-id" --force-delete-without-recovery
+
+
+# Prerequisites:
+# gcloud auth login
+# gcloud config set project <project_id>
+.PHONY: gcp-secret-manager-integration-test
+gcp-secret-manager-integration-test:
+	-gcloud secrets delete "secret_1" --quiet
+	-gcloud secrets delete "Secret-2" --quiet
+	-gcloud secrets delete "parent--nestedSecret" --quiet
+	printf '%s' "secret-value-1" | gcloud secrets create "secret_1" --data-file=-
+	printf '%s' "secret-value-2" | gcloud secrets create "Secret-2" --data-file=-
+	printf '%s' "Nested-value" | gcloud secrets create "parent--nestedSecret" --data-file=-
+	INTEGRATION_TEST=1 GCP_PROJECT_ID="$$(gcloud config get-value project --quiet)" uv run -- pytest tests/test_integration.py::TestIntegration::test_load_secrets_using_gcp_secret_manager
+	gcloud secrets delete "secret_1" --quiet
+	gcloud secrets delete "Secret-2" --quiet
+	gcloud secrets delete "parent--nestedSecret" --quiet
 
 .PHONY: environment-variables-integration-test
 environment-variables-integration-test:

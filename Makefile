@@ -1,7 +1,3 @@
-.PHONY: install
-install:
-	uv sync --all-extras
-
 .PHONY: lint
 lint:
 	uv run --locked -- ruff check

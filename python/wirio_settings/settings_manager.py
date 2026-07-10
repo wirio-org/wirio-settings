@@ -22,7 +22,6 @@ from wirio_settings.json.json_file_settings_source import JsonSettingsSource
 from wirio_settings.yaml.yaml_file_settings_source import YamlFileSettingsSource
 
 if TYPE_CHECKING:
-    from azure.core.credentials_async import AsyncTokenCredential
     from google.auth.credentials import Credentials
 
     from wirio_settings.aws_secrets_manager.aws_secrets_manager_settings_source import (
@@ -35,7 +34,6 @@ if TYPE_CHECKING:
         GcpSecretManagerSettingsSource,
     )
 else:
-    AsyncTokenCredential = Any
     Credentials = Any
     AwsSecretsManagerSettingsSource = Any
     AzureKeyVaultSettingsSource = Any
@@ -119,7 +117,9 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
     def add_azure_key_vault(
         self,
         url: str,
-        credential: AsyncTokenCredential | None = None,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        tenant_id: str | None = None,
     ) -> Self:
         """Add a settings provider that reads settings values from Azure Key Vault."""
         ExtraDependencies.ensure_azure_key_vault_is_installed()
@@ -128,7 +128,14 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
             AzureKeyVaultSettingsSource,
         )
 
-        self.add(AzureKeyVaultSettingsSource(url=url, credential=credential))
+        self.add(
+            AzureKeyVaultSettingsSource(
+                url=url,
+                client_id=client_id,
+                client_secret=client_secret,
+                tenant_id=tenant_id,
+            )
+        )
         return self
 
     def add_aws_secrets_manager(  # noqa: PLR0913

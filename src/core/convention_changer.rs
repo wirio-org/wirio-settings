@@ -73,8 +73,7 @@ mod tests {
 
             assert_eq!(
                 converted_value, expected_string,
-                "Failed on input: '{}'",
-                string_to_convert
+                "Failed on input: '{string_to_convert}'",
             );
         }
     }

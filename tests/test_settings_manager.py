@@ -24,7 +24,6 @@ from wirio_settings.yaml.yaml_file_settings_provider import YamlFileSettingsProv
 from wirio_settings.yaml.yaml_file_settings_source import YamlFileSettingsSource
 
 if TYPE_CHECKING:
-    from azure.core.credentials_async import AsyncTokenCredential
     from google.auth.credentials import Credentials
     from wirio_settings.aws_secrets_manager.aws_secrets_manager_settings_source import (
         AwsSecretsManagerSettingsSource,
@@ -36,14 +35,12 @@ if TYPE_CHECKING:
         GcpSecretManagerSettingsSource,
     )
 else:
-    AsyncTokenCredential = Any
     Credentials = Any
     AwsSecretsManagerSettingsSource = Any
     AzureKeyVaultSettingsSource = Any
     GcpSecretManagerSettingsSource = Any
 
-try:
-    from azure.core.credentials_async import AsyncTokenCredential
+try:  # noqa: SIM105
     from wirio_settings.azure_key_vault.azure_key_vault_settings_source import (
         AzureKeyVaultSettingsSource,
     )
@@ -386,10 +383,9 @@ class TestSettingsManager:
     )
     def test_add_azure_key_vault(self, mocker: MockerFixture) -> None:
         key_vault_url = "https://example.vault.azure.net"
-        token_credential_mock = mocker.create_autospec(
-            AsyncTokenCredential,
-            instance=True,
-        )
+        client_id = "client-id"
+        client_secret = "client-secret"  # noqa: S105
+        tenant_id = "tenant-id"
         settings_manager = SettingsManager(
             content_root_path="", add_default_providers=False
         )
@@ -401,7 +397,9 @@ class TestSettingsManager:
 
         settings_manager.add_azure_key_vault(
             url=key_vault_url,
-            credential=token_credential_mock,
+            client_id=client_id,
+            client_secret=client_secret,
+            tenant_id=tenant_id,
         )
 
         add_patch.assert_called_once()

@@ -296,7 +296,7 @@ Common use cases:
 
 Example directory:
 
-```text
+```
 secrets/
     database_password
     openai_api_key

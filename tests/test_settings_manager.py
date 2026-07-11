@@ -27,6 +27,9 @@ from wirio_settings.environment_variables.environment_variables_settings_source 
 from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_source import (
     GcpSecretManagerSettingsSource,
 )
+from wirio_settings.key_per_file.key_per_file_settings_source import (
+    KeyPerFileSettingsSource,
+)
 from wirio_settings.settings_manager import SettingsManager
 from wirio_settings.yaml.yaml_file_settings_provider import YamlFileSettingsProvider
 from wirio_settings.yaml.yaml_file_settings_source import YamlFileSettingsSource
@@ -421,6 +424,26 @@ class TestSettingsManager:
         add_patch.assert_called_once()
         source = add_patch.call_args.args[0]
         assert isinstance(source, GcpSecretManagerSettingsSource)
+
+    def test_add_key_per_file(self, mocker: MockerFixture) -> None:
+        directory_path = "secrets"
+        settings_manager = SettingsManager(
+            content_root_path="", add_default_providers=False
+        )
+        add_patch = mocker.patch.object(
+            settings_manager,
+            settings_manager.add.__name__,
+            autospec=True,
+        )
+
+        settings_manager.add_key_per_file(
+            directory_path=directory_path,
+            optional=True,
+        )
+
+        add_patch.assert_called_once()
+        source = add_patch.call_args.args[0]
+        assert isinstance(source, KeyPerFileSettingsSource)
 
     def test_use_default_factory_for_missing_optional_value_of_a_model(self) -> None:
         class Settings(BaseModel):

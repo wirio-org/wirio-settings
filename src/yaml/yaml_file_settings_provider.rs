@@ -78,7 +78,13 @@ impl YamlFileSettingsProvider {
 
 impl SettingsProvider for YamlFileSettingsProvider {
     async fn load(&mut self) -> PyResult<()> {
-        let file_exists = fs::try_exists(&self.path).await.unwrap_or(false);
+        let file_exists = fs::try_exists(&self.path).await.map_err(|error| {
+            PyRuntimeError::new_err(format!(
+                "Failed to inspect '{}': {}",
+                self.path.display(),
+                error
+            ))
+        })?;
 
         if !file_exists {
             if self.optional {
@@ -135,6 +141,7 @@ mod tests {
     use pyo3::Python;
     use std::collections::BTreeMap;
     use std::fs;
+    use std::path::PathBuf;
     use tempfile::tempdir;
 
     #[tokio::test]
@@ -332,5 +339,19 @@ port: 8080
         let display = PythonYamlFileSettingsProvider::new(None, "settings.yaml", false).to_string();
 
         assert_eq!(display, "YamlFileSettingsProvider");
+    }
+
+    #[tokio::test]
+    async fn test_fail_when_checking_file_existence_with_invalid_path() {
+        Python::initialize();
+
+        let invalid_file_path = PathBuf::from("\0invalid.yaml");
+        let mut provider =
+            YamlFileSettingsProvider::new(None, invalid_file_path.to_str().unwrap(), false);
+
+        let error = provider.load().await.unwrap_err();
+        let error_message = error.to_string();
+
+        assert!(error_message.contains("RuntimeError: Failed to inspect"));
     }
 }

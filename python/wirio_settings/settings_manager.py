@@ -27,6 +27,9 @@ from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_source import
     GcpSecretManagerSettingsSource,
 )
 from wirio_settings.json.json_file_settings_source import JsonSettingsSource
+from wirio_settings.key_per_file.key_per_file_settings_source import (
+    KeyPerFileSettingsSource,
+)
 from wirio_settings.yaml.yaml_file_settings_source import YamlFileSettingsSource
 
 
@@ -100,6 +103,16 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         self.add(
             JsonSettingsSource(
                 content_root_path=self._content_root_path, path=path, optional=optional
+            )
+        )
+        return self
+
+    def add_key_per_file(self, directory_path: str, optional: bool = False) -> Self:
+        """Add settings using files from a directory. File names are used as the key, file contents are used as the value."""
+        self.add(
+            KeyPerFileSettingsSource(
+                directory_path=directory_path,
+                optional=optional,
             )
         )
         return self

@@ -6,6 +6,7 @@ mod core;
 mod environment_variables;
 mod gcp_secret_manager;
 mod json;
+mod key_per_file;
 mod yaml;
 
 #[pymodule]
@@ -30,6 +31,9 @@ mod _wirio_settings {
 
     #[pymodule_export]
     pub use crate::json::PythonJsonFileSettingsProvider;
+
+    #[pymodule_export]
+    pub use crate::key_per_file::PythonKeyPerFileSettingsProvider;
 
     #[pymodule_export]
     pub use crate::yaml::PythonYamlFileSettingsProvider;

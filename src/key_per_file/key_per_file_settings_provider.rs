@@ -72,7 +72,15 @@ impl KeyPerFileSettingsProvider {
 
 impl SettingsProvider for KeyPerFileSettingsProvider {
     async fn load(&mut self) -> PyResult<()> {
-        let directory_exists = fs::try_exists(&self.directory_path).await.unwrap_or(false);
+        let directory_exists = fs::try_exists(&self.directory_path)
+            .await
+            .map_err(|error| {
+                PyRuntimeError::new_err(format!(
+                    "Failed to inspect '{}': {}",
+                    self.directory_path.display(),
+                    error
+                ))
+            })?;
 
         if !directory_exists {
             if self.optional {
@@ -116,10 +124,11 @@ impl SettingsProvider for KeyPerFileSettingsProvider {
                 error
             ))
         })? {
+            let directory_entry_path = directory_entry.path();
             let file_type = directory_entry.file_type().await.map_err(|error| {
                 PyRuntimeError::new_err(format!(
                     "Failed to inspect the entry '{}': {}",
-                    directory_entry.path().display(),
+                    directory_entry_path.display(),
                     error
                 ))
             })?;
@@ -128,15 +137,30 @@ impl SettingsProvider for KeyPerFileSettingsProvider {
                 continue;
             }
 
+            if file_type.is_symlink() {
+                let entry_metadata =
+                    fs::metadata(&directory_entry_path).await.map_err(|error| {
+                        PyRuntimeError::new_err(format!(
+                            "Failed to inspect the entry '{}': {}",
+                            directory_entry_path.display(),
+                            error
+                        ))
+                    })?;
+
+                if entry_metadata.is_dir() {
+                    continue;
+                }
+            }
+
             let file_name = directory_entry.file_name().to_string_lossy().into_owned();
 
             let file_content =
-                fs::read_to_string(directory_entry.path())
+                fs::read_to_string(&directory_entry_path)
                     .await
                     .map_err(|error| {
                         PyRuntimeError::new_err(format!(
                             "Failed to read the entry '{}': {}",
-                            directory_entry.path().display(),
+                            directory_entry_path.display(),
                             error
                         ))
                     })?;
@@ -161,7 +185,7 @@ mod tests {
     use super::KeyPerFileSettingsProvider;
     use crate::core::SettingsProvider;
     use pyo3::Python;
-    use std::collections::BTreeMap;
+    use std::{collections::BTreeMap, path::PathBuf};
     use tempfile::tempdir;
     use tokio::fs;
 
@@ -255,5 +279,19 @@ mod tests {
             error_message,
             format!("RuntimeError: '{}' is not a directory", file_path.display())
         );
+    }
+
+    #[tokio::test]
+    async fn test_fail_when_checking_directory_existence_with_invalid_path() {
+        Python::initialize();
+
+        let invalid_directory_path = PathBuf::from("\0invalid");
+        let mut provider =
+            KeyPerFileSettingsProvider::new(invalid_directory_path.to_str().unwrap(), false);
+
+        let error = provider.load().await.unwrap_err();
+
+        let error_message = error.to_string();
+        assert!(error_message.contains("RuntimeError: Failed to inspect"));
     }
 }

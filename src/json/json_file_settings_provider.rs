@@ -94,7 +94,13 @@ impl JsonFileSettingsProvider {
 
 impl SettingsProvider for JsonFileSettingsProvider {
     async fn load(&mut self) -> PyResult<()> {
-        let file_exists = fs::try_exists(&self.path).await.unwrap_or(false);
+        let file_exists = fs::try_exists(&self.path).await.map_err(|error| {
+            PyRuntimeError::new_err(format!(
+                "Failed to inspect '{}': {}",
+                self.path.display(),
+                error
+            ))
+        })?;
 
         if !file_exists {
             if self.optional {
@@ -125,9 +131,11 @@ impl fmt::Display for JsonFileSettingsProvider {
 mod tests {
     use super::JsonFileSettingsProvider;
     use crate::core::SettingsProvider;
+    use pyo3::Python;
     use serde_json::json;
     use std::collections::BTreeMap;
     use std::fs;
+    use std::path::PathBuf;
     use tempfile::tempdir;
 
     #[tokio::test]
@@ -208,5 +216,19 @@ mod tests {
         provider.load().await.unwrap();
 
         assert_eq!(provider.data, expected_parsed_json);
+    }
+
+    #[tokio::test]
+    async fn test_fail_when_checking_file_existence_with_invalid_path() {
+        Python::initialize();
+
+        let invalid_file_path = PathBuf::from("\0invalid.json");
+        let mut provider =
+            JsonFileSettingsProvider::new(None, invalid_file_path.to_str().unwrap(), false);
+
+        let error = provider.load().await.unwrap_err();
+        let error_message = error.to_string();
+
+        assert!(error_message.contains("RuntimeError: Failed to inspect"));
     }
 }

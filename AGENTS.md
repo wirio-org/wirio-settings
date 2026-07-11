@@ -21,6 +21,7 @@
 - When `expect` is used, provide a message that describes the reason for the expectation. It must start with a capital letter and not end with a period.
 - Don't modify the `_wirio_settings.pyi` file manually. It is generated automatically by `maturin`. If you need to modify it, do so in the `lib.rs` file and then run `make generate-stubs` to regenerate the `.pyi` file.
 - When using PyO3, use attributes instead of functions such as `.add_function` or `add_submodule`.
+- To work with directories and files, use `tokio::fs` instead of `std::fs`. This is because `std::fs` is blocking, while `tokio::fs` is asynchronous and non-blocking. Using `std::fs` can lead to performance issues in asynchronous applications, as it can block the event loop and prevent other tasks from executing. Therefore, it's recommended to use `tokio::fs` for file system operations in asynchronous Rust applications.
 
 ## Testing
 

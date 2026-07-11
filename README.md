@@ -255,7 +255,7 @@ settings_manager.add_aws_secrets_manager(
 
 The secret value must be a JSON object. `wirio-settings` reads and flattens that JSON into settings keys.
 
-By default, the provider uses environment authentication. For example, the IAM role, the shared AWS configuration profile, or `AWS_*` environment variables. More information [here](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/credproviders.html#credproviders-default-credentials-provider-chain).
+By default, the provider uses the [credential provider chain](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/credproviders.html#credproviders-default-credentials-provider-chain). For example, the IAM role, the shared AWS configuration profile, or `AWS_*` environment variables.
 
 If explicit credentials are provided, they override environment authentication for this provider instance:
 
@@ -275,8 +275,35 @@ settings_manager.add_gcp_secret_manager(
 )
 ```
 
-If no credentials are provided, Application Default Credentials (ADC) are used.
-We can also pass custom GCP credentials with the `credentials` parameter.
+If no credentials are provided, [Application Default Credentials (ADC)](https://docs.cloud.google.com/docs/authentication/application-default-credentials) are used.
+We can also pass custom GCP credentials with the `credentials_json` parameter.
+
+### Key-per-file directory
+
+```python
+settings_manager.add_key_per_file("secrets")
+```
+
+Given a directory, each file name becomes a setting key and the file content becomes the setting value.
+
+This source is useful when secrets are mounted as files by the runtime instead of exposed as environment variables. It lets us keep application code unchanged while switching the secret delivery mechanism.
+
+Common use cases:
+
+- Kubernetes with [Secrets Store CSI Driver](https://secrets-store-csi-driver.sigs.k8s.io/) where providers such as Azure Key Vault mount each secret as a file.
+- Docker/Kubernetes secret mounts (for example, `/run/secrets`).
+- Platform-managed secret volumes in production environments where file-based delivery is preferred.
+
+Example directory:
+
+```text
+secrets/
+    database_password
+    openai_api_key
+    api_base_url
+```
+
+Then values are available as `database_password`, `openai_api_key`, and `api_base_url`.
 
 ## Contributing
 

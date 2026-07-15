@@ -25,34 +25,24 @@ test:
 .PHONY: azure-key-vault-integration-test
 azure-key-vault-integration-test:
 	-az keyvault secret delete --vault-name "$$AZURE_KEY_VAULT_NAME" --name "secret1" --output none
-	sleep 5
-	-az keyvault secret purge --vault-name "$$AZURE_KEY_VAULT_NAME" --name "secret1" --output none
-	sleep 5
 	-az keyvault secret delete --vault-name "$$AZURE_KEY_VAULT_NAME" --name "Secret2" --output none
-	sleep 5
-	-az keyvault secret purge --vault-name "$$AZURE_KEY_VAULT_NAME" --name "Secret2" --output none
-	sleep 5
 	-az keyvault secret delete --vault-name "$$AZURE_KEY_VAULT_NAME" --name "parent--nestedSecret" --output none
 	sleep 5
+	-az keyvault secret purge --vault-name "$$AZURE_KEY_VAULT_NAME" --name "secret1" --output none
+	-az keyvault secret purge --vault-name "$$AZURE_KEY_VAULT_NAME" --name "Secret2" --output none
 	-az keyvault secret purge --vault-name "$$AZURE_KEY_VAULT_NAME" --name "parent--nestedSecret" --output none
 	sleep 5
 	az keyvault secret set --vault-name "$$AZURE_KEY_VAULT_NAME" --name "secret1" --value "secret-value-1" --output none
-	sleep 5
 	az keyvault secret set --vault-name "$$AZURE_KEY_VAULT_NAME" --name "Secret2" --value "secret-value-2" --output none
-	sleep 5
 	az keyvault secret set --vault-name "$$AZURE_KEY_VAULT_NAME" --name "parent--nestedSecret" --value "Nested-value" --output none
 	sleep 5
 	INTEGRATION_TEST=1 AZURE_KEY_VAULT_URL="https://$$AZURE_KEY_VAULT_NAME.vault.azure.net" uv run -- pytest tests/test_integration.py::TestIntegration::test_load_secrets_using_azure_key_vault
 	az keyvault secret delete --vault-name "$$AZURE_KEY_VAULT_NAME" --name "secret1" --output none
-	sleep 5
-	az keyvault secret purge --vault-name "$$AZURE_KEY_VAULT_NAME" --name "secret1" --output none
-	sleep 5
 	az keyvault secret delete --vault-name "$$AZURE_KEY_VAULT_NAME" --name "Secret2" --output none
-	sleep 5
-	az keyvault secret purge --vault-name "$$AZURE_KEY_VAULT_NAME" --name "Secret2" --output none
-	sleep 5
 	az keyvault secret delete --vault-name "$$AZURE_KEY_VAULT_NAME" --name "parent--nestedSecret" --output none
 	sleep 5
+	az keyvault secret purge --vault-name "$$AZURE_KEY_VAULT_NAME" --name "secret1" --output none
+	az keyvault secret purge --vault-name "$$AZURE_KEY_VAULT_NAME" --name "Secret2" --output none
 	az keyvault secret purge --vault-name "$$AZURE_KEY_VAULT_NAME" --name "parent--nestedSecret" --output none
 
 # Prerequisite: aws login

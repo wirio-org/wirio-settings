@@ -28,10 +28,7 @@ impl PythonJsonFileSettingsProvider {
     }
 
     pub fn load(&mut self) -> PyResult<()> {
-        let runtime = tokio::runtime::Runtime::new().map_err(|error| {
-            PyRuntimeError::new_err(format!("Failed to create Tokio runtime: {error}"))
-        })?;
-
+        let runtime = pyo3_async_runtimes::tokio::get_runtime();
         runtime.block_on(self.provider.load())
     }
 }
@@ -134,9 +131,9 @@ mod tests {
     use pyo3::Python;
     use serde_json::json;
     use std::collections::BTreeMap;
-    use std::fs;
     use std::path::PathBuf;
     use tempfile::tempdir;
+    use tokio::fs;
 
     #[tokio::test]
     async fn test_parse_scalar_values() {
@@ -156,9 +153,9 @@ mod tests {
         });
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.json");
-        fs::write(&file_path, json.to_string()).unwrap();
-
+        fs::write(&file_path, json.to_string()).await.unwrap();
         let mut provider = JsonFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+
         provider.load().await.unwrap();
 
         assert_eq!(provider.data, expected_parsed_json);
@@ -186,9 +183,9 @@ mod tests {
         });
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.json");
-        fs::write(&file_path, json.to_string()).unwrap();
-
+        fs::write(&file_path, json.to_string()).await.unwrap();
         let mut provider = JsonFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+
         provider.load().await.unwrap();
 
         assert_eq!(provider.data, expected_parsed_json);
@@ -210,9 +207,9 @@ mod tests {
         });
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.json");
-        fs::write(&file_path, json.to_string()).unwrap();
-
+        fs::write(&file_path, json.to_string()).await.unwrap();
         let mut provider = JsonFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+
         provider.load().await.unwrap();
 
         assert_eq!(provider.data, expected_parsed_json);

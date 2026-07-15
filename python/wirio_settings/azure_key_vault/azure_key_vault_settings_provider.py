@@ -25,7 +25,7 @@ class AzureKeyVaultSettingsProvider(SettingsProvider):
         self._tenant_id = tenant_id
 
     @override
-    async def load(self) -> None:
+    def load(self) -> None:
         provider = PythonAzureKeyVaultSettingsProvider(
             url=self._url,
             client_id=self._client_id,

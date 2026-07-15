@@ -34,7 +34,7 @@ class AwsSecretsManagerSettingsProvider(SettingsProvider):
         self._profile = profile
 
     @override
-    async def load(self) -> None:
+    def load(self) -> None:
         provider = PythonAwsSecretsManagerSettingsProvider(
             secret_id=self._secret_id,
             region=self._region,

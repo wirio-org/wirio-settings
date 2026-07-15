@@ -1,41 +1,33 @@
-use pyo3::prelude::*;
 use regex::Regex;
 use std::sync::LazyLock;
 
-#[pyclass]
-pub struct ConventionChanger;
+/// Convert a `PascalCase`, `camelCase`, or `kebab-case` string to `snake_case`.
+pub fn to_snake_case(string_to_convert: &str) -> String {
+    static REGEX_1: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"([A-Z]+)([A-Z][a-z])").unwrap());
+    static REGEX_2: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"([a-z])([A-Z])").unwrap());
+    static REGEX_3: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"([0-9])([A-Z])").unwrap());
+    static REGEX_4: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"([a-z])([0-9])").unwrap());
 
-#[pymethods]
-impl ConventionChanger {
-    /// Convert a `PascalCase`, `camelCase`, or `kebab-case` string to `snake_case`.
-    #[staticmethod]
-    pub fn to_snake_case(string_to_convert: &str) -> String {
-        static REGEX_1: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"([A-Z]+)([A-Z][a-z])").unwrap());
-        static REGEX_2: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"([a-z])([A-Z])").unwrap());
-        static REGEX_3: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"([0-9])([A-Z])").unwrap());
-        static REGEX_4: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"([a-z])([0-9])").unwrap());
+    // Handle the sequence of uppercase letters followed by a lowercase letter
+    let converted = REGEX_1.replace_all(string_to_convert, "${1}_${2}");
 
-        // Handle the sequence of uppercase letters followed by a lowercase letter
-        let converted = REGEX_1.replace_all(string_to_convert, "${1}_${2}");
+    // Insert an underscore between a lowercase letter and an uppercase letter
+    let converted = REGEX_2.replace_all(&converted, "${1}_${2}");
 
-        // Insert an underscore between a lowercase letter and an uppercase letter
-        let converted = REGEX_2.replace_all(&converted, "${1}_${2}");
+    // Insert an underscore between a digit and an uppercase letter
+    let converted = REGEX_3.replace_all(&converted, "${1}_${2}");
 
-        // Insert an underscore between a digit and an uppercase letter
-        let converted = REGEX_3.replace_all(&converted, "${1}_${2}");
+    // Insert an underscore between a lowercase letter and a digit
+    let converted = REGEX_4.replace_all(&converted, "${1}_${2}");
 
-        // Insert an underscore between a lowercase letter and a digit
-        let converted = REGEX_4.replace_all(&converted, "${1}_${2}");
-
-        // Replace hyphens with underscores to handle kebab-case
-        converted.replace('-', "_").to_lowercase()
-    }
+    // Replace hyphens with underscores to handle kebab-case
+    converted.replace('-', "_").to_lowercase()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::ConventionChanger;
+    use crate::core::convention_changer;
 
     #[test]
     fn test_convert_to_snake_case() {
@@ -69,7 +61,7 @@ mod tests {
         ];
 
         for (string_to_convert, expected_string) in test_cases {
-            let converted_value = ConventionChanger::to_snake_case(string_to_convert);
+            let converted_value = convention_changer::to_snake_case(string_to_convert);
 
             assert_eq!(
                 converted_value, expected_string,

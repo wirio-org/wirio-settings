@@ -15,9 +15,6 @@ mod _wirio_settings {
     pub use crate::core::SettingsPath;
 
     #[pymodule_export]
-    pub use crate::core::ConventionChanger;
-
-    #[pymodule_export]
     pub use crate::aws_secrets_manager::PythonAwsSecretsManagerSettingsProvider;
 
     #[pymodule_export]

@@ -7,7 +7,7 @@ from wirio_settings.core.settings_provider import SettingsProvider
 @final
 class EnvironmentVariablesSettingsProvider(SettingsProvider):
     @override
-    async def load(self) -> None:
+    def load(self) -> None:
         provider = PythonEnvironmentVariablesSettingsProvider()
-        await provider.load()
+        provider.load()
         self._data = provider.data

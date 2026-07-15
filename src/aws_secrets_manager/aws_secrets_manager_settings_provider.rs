@@ -46,10 +46,7 @@ impl PythonAwsSecretsManagerSettingsProvider {
     }
 
     pub fn load(&mut self) -> PyResult<()> {
-        let runtime = tokio::runtime::Runtime::new().map_err(|error| {
-            PyRuntimeError::new_err(format!("Failed to create Tokio runtime: {error}"))
-        })?;
-
+        let runtime = pyo3_async_runtimes::tokio::get_runtime();
         runtime.block_on(self.provider.load())
     }
 }

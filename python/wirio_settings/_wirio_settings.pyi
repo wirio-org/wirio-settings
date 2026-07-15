@@ -1,14 +1,6 @@
 from typing import Final, final
 
 @final
-class ConventionChanger:
-    @staticmethod
-    def to_snake_case(string_to_convert: str) -> str:
-        """
-        Convert a `PascalCase`, `camelCase`, or `kebab-case` string to `snake_case`.
-        """
-
-@final
 class PythonAwsSecretsManagerSettingsProvider:
     def __new__(cls, /, secret_id: str, region: str |None = None, url: str |None = None, access_key_id: str |None = None, secret_access_key: str |None = None, session_token: str |None = None, profile: str |None = None) -> PythonAwsSecretsManagerSettingsProvider: ...
     def __str__(self, /) -> str: ...
@@ -30,7 +22,7 @@ class PythonEnvironmentVariablesSettingsProvider:
     def __str__(self, /) -> str: ...
     @property
     def data(self, /) -> dict[str, str |None]: ...
-    async def load(self, /) -> None: ...
+    def load(self, /) -> None: ...
 
 @final
 class PythonGcpSecretManagerSettingsProvider:

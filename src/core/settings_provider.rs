@@ -1,4 +1,4 @@
-use crate::{_wirio_settings::SettingsPath, core::convention_changer::ConventionChanger};
+use crate::{_wirio_settings::SettingsPath, core::convention_changer};
 use pyo3::PyResult;
 use std::{collections::BTreeMap, fmt, mem};
 
@@ -17,7 +17,7 @@ pub trait SettingsProvider: fmt::Display {
             let item_key_with_normalized_section_separator =
                 Self::normalize_section_separator(item_key);
             let item_key_in_snake_case =
-                ConventionChanger::to_snake_case(&item_key_with_normalized_section_separator);
+                convention_changer::to_snake_case(&item_key_with_normalized_section_separator);
             normalized_data.insert(item_key_in_snake_case, item_value);
         }
 

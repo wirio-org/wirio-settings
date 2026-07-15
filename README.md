@@ -26,7 +26,7 @@ Lightning-fast, strongly typed, and zero boilerplate settings library for Python
 uv add wirio-settings
 ```
 
-## ✨ Quickstart with magic strings
+## ✨ Quickstart with fixed strings
 
 ```python
 from wirio_settings import SettingsManager
@@ -223,12 +223,12 @@ settings_manager.add_azure_key_vault(
 
 If no explicit credentials are provided, `DefaultAzureCredential` is used.
 
-In `wirio-settings`, `DefaultAzureCredential` tries credentials in this order and uses the first one that succeeds:
+`DefaultAzureCredential` tries credentials in this order and uses the first one that succeeds:
 
 1. Environment credential (`AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`)
 2. Workload identity credential
-3. Managed identity credential. This is the System-assigned managed identity by default. If we want to use a User-assigned managed identity, set the `AZURE_CLIENT_ID` environment variable.
-4. Developer tools credential (Azure CLI / Azure Developer CLI)
+3. Developer tools credential (Azure CLI / Azure Developer CLI)
+4. Managed identity credential. This is the System-assigned managed identity by default. If we want to use a User-assigned managed identity, set the `AZURE_CLIENT_ID` environment variable.
 
 If you want to use explicit service principal credentials, provide all three values:
 
@@ -300,10 +300,9 @@ Example directory:
 secrets/
     database_password
     openai_api_key
-    api_base_url
 ```
 
-Then values are available as `database_password`, `openai_api_key`, and `api_base_url`.
+Then values are available as `database_password` and `openai_api_key`.
 
 ## Contributing
 

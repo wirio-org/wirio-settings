@@ -22,8 +22,9 @@ impl PythonEnvironmentVariablesSettingsProvider {
         &self.provider.data
     }
 
-    pub async fn load(&mut self) -> PyResult<()> {
-        self.provider.load().await
+    pub fn load(&mut self) -> PyResult<()> {
+        let runtime = pyo3_async_runtimes::tokio::get_runtime();
+        runtime.block_on(self.provider.load())
     }
 }
 

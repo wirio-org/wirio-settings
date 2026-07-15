@@ -1,9 +1,5 @@
-import asyncio
-import os
 import re
-from asyncio import AbstractEventLoop
 from collections.abc import Sequence
-from pathlib import Path
 from typing import final, override
 
 import pytest
@@ -18,12 +14,6 @@ from wirio_settings.azure_key_vault.azure_key_vault_settings_source import (
 from wirio_settings.core.settings_builder import SettingsBuilder
 from wirio_settings.core.settings_provider import SettingsProvider
 from wirio_settings.core.settings_source import SettingsSource
-from wirio_settings.environment_variables.environment_variables_settings_provider import (
-    EnvironmentVariablesSettingsProvider,
-)
-from wirio_settings.environment_variables.environment_variables_settings_source import (
-    EnvironmentVariablesSettingsSource,
-)
 from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_source import (
     GcpSecretManagerSettingsSource,
 )
@@ -31,8 +21,6 @@ from wirio_settings.key_per_file.key_per_file_settings_source import (
     KeyPerFileSettingsSource,
 )
 from wirio_settings.settings_manager import SettingsManager
-from wirio_settings.yaml.yaml_file_settings_provider import YamlFileSettingsProvider
-from wirio_settings.yaml.yaml_file_settings_source import YamlFileSettingsSource
 
 
 @final
@@ -44,9 +32,8 @@ class _DictionarySettingsProvider(SettingsProvider):
         self._values = values
 
     @override
-    async def load(self) -> None:
+    def load(self) -> None:
         self._data = self._values
-        await super().load()
 
 
 @final
@@ -315,23 +302,6 @@ class TestSettingsManager:
             settings_manager.get_model(_Settings)
 
         assert exception_info.value.args[0] == "Missing setting value for key 'port'"
-
-    def test_convert_source_names_to_snake_case(self) -> None:
-        expected_app_name = "wirio"
-        expected_port = "8080"
-        settings_manager = SettingsManager(
-            content_root_path="", add_default_providers=False
-        )
-        settings_manager.add(
-            _DictionarySettingsSource(
-                {"APP_NAME": expected_app_name, "PORT": expected_port}
-            )
-        )
-
-        settings = settings_manager.get_model(_Settings)
-
-        assert settings.app_name == expected_app_name
-        assert settings.port == expected_port
 
     def test_return_added_sources(self) -> None:
         expected_sources = 2
@@ -1169,60 +1139,3 @@ class TestSettingsManager:
         SettingsManager(content_root_path="", add_default_providers=False)
 
         add_defaults_patch.assert_not_called()
-
-    def test_add_defaults_in_expected_order_and_using_current_environment_name(
-        self, mocker: MockerFixture, tmp_path: Path
-    ) -> None:
-        expected_environment_name = "development"
-        expected_yaml_file_name = f"settings.{expected_environment_name}.yaml"
-        expected_sources_count = 3
-        expected_providers_count = 3
-
-        mocker.patch.dict(
-            os.environ,
-            {"WIRIO_ENVIRONMENT": expected_environment_name},
-        )
-
-        settings_manager = SettingsManager(content_root_path=str(tmp_path))
-
-        assert len(settings_manager.sources) == expected_sources_count
-        assert len(settings_manager.providers) == expected_providers_count
-        assert isinstance(settings_manager.sources[0], YamlFileSettingsSource)
-        assert isinstance(settings_manager.providers[0], YamlFileSettingsProvider)
-        assert isinstance(settings_manager.sources[1], YamlFileSettingsSource)
-        assert isinstance(settings_manager.providers[1], YamlFileSettingsProvider)
-        assert isinstance(
-            settings_manager.sources[2], EnvironmentVariablesSettingsSource
-        )
-        assert isinstance(
-            settings_manager.providers[2],
-            EnvironmentVariablesSettingsProvider,
-        )
-
-        yaml_source = settings_manager.sources[1]
-        assert isinstance(yaml_source, YamlFileSettingsSource)
-        assert Path(yaml_source._path).name == expected_yaml_file_name  # noqa: SLF001
-
-    def test_use_run_until_complete_when_loop_is_available_and_not_running(
-        self, mocker: MockerFixture
-    ) -> None:
-        event_loop_mock = mocker.create_autospec(AbstractEventLoop, instance=True)
-        event_loop_mock.is_running.return_value = False
-        event_loop_mock.run_until_complete.side_effect = asyncio.run
-
-        mocker.patch(
-            f"{asyncio.__name__}.{asyncio.get_running_loop.__name__}",
-            autospec=True,
-            return_value=event_loop_mock,
-        )
-
-        settings_manager = SettingsManager(
-            content_root_path="", add_default_providers=False
-        )
-
-        async def load_provider() -> None:
-            return
-
-        settings_manager._call_async(load_provider())  # noqa: SLF001
-
-        event_loop_mock.run_until_complete.assert_called_once()

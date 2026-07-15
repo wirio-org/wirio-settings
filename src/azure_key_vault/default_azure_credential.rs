@@ -27,8 +27,8 @@ impl DefaultAzureCredential {
         let source_factories: Vec<CredentialSourceFactory> = vec![
             Self::create_environment_credential,
             Self::create_workload_identity_credential,
-            Self::create_managed_identity_credential,
             Self::create_developer_tools_credential,
+            Self::create_managed_identity_credential,
         ];
         Arc::new(Self {
             sources_factories: source_factories,

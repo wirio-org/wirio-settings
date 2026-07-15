@@ -1,8 +1,5 @@
-import asyncio
-from collections.abc import Coroutine
-from concurrent.futures import ThreadPoolExecutor
 from os import environ
-from typing import Any, Final, Self, cast, final, override
+from typing import Final, Self, cast, final, override
 
 from pydantic import TypeAdapter
 
@@ -67,10 +64,10 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         return self._providers
 
     def add(self, source: SettingsSource) -> None:
-        self._add_source(source)
-
-    def add_sync(self, source: SettingsSource) -> None:
-        self._add_source_sync(source)
+        self._sources.append(source)
+        provider = source.build(self)
+        provider.load()
+        self._providers.append(provider)
 
     def add_default_providers(self) -> Self:
         """Add default settings providers in the recommended order."""
@@ -172,30 +169,6 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
             )
         )
         return self
-
-    def _add_source(self, source: SettingsSource) -> None:
-        self._sources.append(source)
-        provider = source.build(self)
-        self._call_async(provider.load())
-        self._providers.append(provider)
-
-    def _add_source_sync(self, source: SettingsSource) -> None:
-        self._sources.append(source)
-        provider = source.build(self)
-        self._providers.append(provider)
-
-    def _call_async(self, coroutine: Coroutine[Any, Any, None]) -> None:
-        try:
-            event_loop = asyncio.get_running_loop()
-        except RuntimeError:
-            asyncio.run(coroutine)
-            return
-
-        if event_loop.is_running():
-            self._call_async_in_new_thread(coroutine)
-            return
-
-        event_loop.run_until_complete(coroutine)
 
     @override
     def get_required_value[TField = str](
@@ -302,11 +275,3 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
             return False
 
         return any(not child.key.isdigit() for child in children)
-
-    def _call_async_in_new_thread(self, coroutine: Coroutine[Any, Any, None]) -> None:
-        def run_coroutine() -> None:
-            asyncio.run(coroutine)
-
-        with ThreadPoolExecutor(max_workers=1) as thread_pool_executor:
-            future = thread_pool_executor.submit(run_coroutine)
-            future.result()

@@ -19,7 +19,7 @@ class GcpSecretManagerSettingsProvider(SettingsProvider):
         self._credentials_json = credentials_json
 
     @override
-    async def load(self) -> None:
+    def load(self) -> None:
         provider = PythonGcpSecretManagerSettingsProvider(
             project_id=self._project_id,
             credentials_json=self._credentials_json,

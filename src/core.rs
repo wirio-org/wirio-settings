@@ -5,7 +5,6 @@ mod settings_provider;
 
 pub mod file_provider;
 
-pub use convention_changer::ConventionChanger;
 pub use serde_parser::SerdeParser;
 pub use settings_path::SettingsPath;
 pub use settings_provider::SettingsProvider;

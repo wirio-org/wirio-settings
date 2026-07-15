@@ -20,6 +20,8 @@ keywords = [
     "AWS Secrets Manager",
     "gcp",
     "GCP Secret Manager",
+    "kubernetes",
+    "Kubernetes CSI",
 ]
 requires-python = ">=3.13"
 dependencies = ["pydantic>=2.13.4"]
@@ -32,14 +34,14 @@ Changelog = "https://github.com/wirio-org/wirio/releases-settings"
 
 [dependency-groups]
 dev = [
-    "coverage>=7.15.0",
+    "coverage>=7.15.1",
     "maturin>=1.14.1",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "pytest-mock>=3.15.1",
     "ruff>=0.15.21",
-    "ty>=0.0.58",
+    "ty>=0.0.59",
 ]
 
 [build-system]

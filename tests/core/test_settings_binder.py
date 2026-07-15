@@ -20,9 +20,8 @@ class _DictionarySettingsProvider(SettingsProvider):
         self._values = values
 
     @override
-    async def load(self) -> None:
+    def load(self) -> None:
         self._data = self._values
-        await super().load()
 
 
 @final

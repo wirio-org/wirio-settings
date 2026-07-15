@@ -1,7 +1,6 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import override
 
-from wirio_settings._wirio_settings import ConventionChanger
 from wirio_settings.core.wirio_undefined import WirioUndefined
 
 
@@ -17,14 +16,8 @@ class SettingsProvider(ABC):
     def data(self) -> dict[str, str | None]:
         return self._data
 
-    async def load(self) -> None:
-        normalized_data: dict[str, str | None] = {}
-
-        for item_key, item_data in self._data.items():
-            item_key_in_snake_case = ConventionChanger.to_snake_case(item_key)
-            normalized_data[item_key_in_snake_case] = item_data
-
-        self._data = normalized_data
+    @abstractmethod
+    def load(self) -> None: ...
 
     def try_get(self, key: str) -> str | None | WirioUndefined:
         return self._data.get(key, WirioUndefined.INSTANCE)

@@ -15,7 +15,7 @@ class KeyPerFileSettingsProvider(SettingsProvider):
         self._optional = optional
 
     @override
-    async def load(self) -> None:
+    def load(self) -> None:
         provider = PythonKeyPerFileSettingsProvider(
             directory_path=self._directory_path,
             optional=self._optional,

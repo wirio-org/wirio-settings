@@ -19,7 +19,7 @@ class YamlFileSettingsProvider(SettingsProvider):
         self._optional = optional
 
     @override
-    async def load(self) -> None:
+    def load(self) -> None:
         provider = PythonYamlFileSettingsProvider(
             content_root_path=self._content_root_path,
             path=self._path,

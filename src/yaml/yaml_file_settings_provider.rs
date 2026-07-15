@@ -28,10 +28,7 @@ impl PythonYamlFileSettingsProvider {
     }
 
     pub fn load(&mut self) -> PyResult<()> {
-        let runtime = tokio::runtime::Runtime::new().map_err(|error| {
-            PyRuntimeError::new_err(format!("Failed to create Tokio runtime: {error}"))
-        })?;
-
+        let runtime = pyo3_async_runtimes::tokio::get_runtime();
         runtime.block_on(self.provider.load())
     }
 }
@@ -140,9 +137,9 @@ mod tests {
     use crate::core::SettingsProvider;
     use pyo3::Python;
     use std::collections::BTreeMap;
-    use std::fs;
     use std::path::PathBuf;
     use tempfile::tempdir;
+    use tokio::fs;
 
     #[tokio::test]
     async fn test_load_values_from_yaml_file() {
@@ -165,10 +162,13 @@ fieldWithoutValue:
 logging:
   enabled: true
   logLevel:
+
     default: warning
+
     notes: null
 ",
         )
+        .await
         .unwrap();
 
         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
@@ -208,6 +208,7 @@ appName: wirio # This is an inline comment
 port: 8080
 ",
         )
+        .await
         .unwrap();
 
         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
@@ -226,7 +227,7 @@ port: 8080
     async fn test_return_empty_data_when_yaml_file_is_empty() {
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.yaml");
-        fs::write(&file_path, "").unwrap();
+        fs::write(&file_path, "").await.unwrap();
 
         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
         provider.load().await.unwrap();
@@ -244,6 +245,7 @@ port: 8080
 # Another comment
 ",
         )
+        .await
         .unwrap();
 
         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
@@ -307,7 +309,7 @@ port: 8080
 
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.yaml");
-        fs::write(&file_path, "appName: [wirio").unwrap();
+        fs::write(&file_path, "appName: [wirio").await.unwrap();
 
         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
 
@@ -324,7 +326,7 @@ port: 8080
 
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.yaml");
-        fs::write(&file_path, "- wirio\n- config").unwrap();
+        fs::write(&file_path, "- wirio\n- config").await.unwrap();
 
         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
 
@@ -353,5 +355,25 @@ port: 8080
         let error_message = error.to_string();
 
         assert!(error_message.contains("RuntimeError: Failed to inspect"));
+    }
+
+    #[tokio::test]
+    async fn test_set_none_and_empty_for_empty_structures() {
+        let expected_parsed_yaml = BTreeMap::from([
+            (String::from("section"), None),
+            (String::from("nested_section.section"), None),
+            (String::from("items"), Some(String::new())),
+            (String::from("nested_items.items"), Some(String::new())),
+        ]);
+        let raw_yaml =
+            "section: {}\nnested_section:\n  section: {}\nitems: []\nnested_items:\n  items: []";
+        let temporary_directory = tempdir().unwrap();
+        let file_path = temporary_directory.path().join("settings.yaml");
+        fs::write(&file_path, raw_yaml).await.unwrap();
+        let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+
+        provider.load().await.unwrap();
+
+        assert_eq!(provider.data, expected_parsed_yaml);
     }
 }

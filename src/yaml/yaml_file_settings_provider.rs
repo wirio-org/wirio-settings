@@ -359,7 +359,7 @@ port: 8080
 
     #[tokio::test]
     async fn test_set_none_and_empty_for_empty_structures() {
-        let expected_parsed_json = BTreeMap::from([
+        let expected_parsed_yaml = BTreeMap::from([
             (String::from("section"), None),
             (String::from("nested_section.section"), None),
             (String::from("items"), Some(String::new())),
@@ -368,12 +368,12 @@ port: 8080
         let raw_yaml =
             "section: {}\nnested_section:\n  section: {}\nitems: []\nnested_items:\n  items: []";
         let temporary_directory = tempdir().unwrap();
-        let file_path = temporary_directory.path().join("settings.json");
+        let file_path = temporary_directory.path().join("settings.yaml");
         fs::write(&file_path, raw_yaml).await.unwrap();
         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
 
         provider.load().await.unwrap();
 
-        assert_eq!(provider.data, expected_parsed_json);
+        assert_eq!(provider.data, expected_parsed_yaml);
     }
 }

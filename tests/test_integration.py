@@ -59,7 +59,7 @@ class TestIntegration:
         os.environ.get("INTEGRATION_TEST") is None, reason="Integration test"
     )
     def test_load_secrets_using_azure_key_vault(self) -> None:
-        key_vault_url = "https://kv-wiriosettings-001.vault.azure.net"
+        key_vault_url = os.environ["AZURE_KEY_VAULT_URL"]
         expected_secret_1 = "secret-value-1"  # noqa: S105
         expected_secret_2 = "secret-value-2"  # noqa: S105
         expected_nested_secret = "Nested-value"  # noqa: S105

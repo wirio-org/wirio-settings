@@ -1,45 +1,36 @@
-use crate::core::SettingsProvider;
+use crate::core::{PythonSettingsProvider, SettingLookup, SettingsProvider};
 use pyo3::prelude::*;
 use std::collections::BTreeMap;
 use std::fmt;
 
-#[pyclass(str)]
-pub struct PythonEnvironmentVariablesSettingsProvider {
-    provider: EnvironmentVariablesSettingsProvider,
+#[pyclass(extends = PythonSettingsProvider, str)]
+pub struct EnvironmentVariablesSettingsProvider {
+    data: BTreeMap<String, Option<String>>,
 }
 
 #[pymethods]
-impl PythonEnvironmentVariablesSettingsProvider {
+impl EnvironmentVariablesSettingsProvider {
     #[new]
-    fn new() -> Self {
-        Self {
-            provider: EnvironmentVariablesSettingsProvider::new(),
-        }
+    pub fn new_python() -> PyClassInitializer<Self> {
+        PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new())
     }
 
     #[getter]
     fn data(&self) -> &BTreeMap<String, Option<String>> {
-        &self.provider.data
+        SettingsProvider::data(self)
     }
 
-    pub fn load(&mut self) -> PyResult<()> {
-        let runtime = pyo3_async_runtimes::tokio::get_runtime();
-        runtime.block_on(self.provider.load())
+    fn try_get(&self, key: &str) -> SettingLookup {
+        SettingsProvider::try_get(self, key)
     }
-}
 
-impl fmt::Display for PythonEnvironmentVariablesSettingsProvider {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("EnvironmentVariablesSettingsProvider")
+    pub fn load_sync(&mut self) -> PyResult<()> {
+        SettingsProvider::load_sync(self)
     }
-}
-
-struct EnvironmentVariablesSettingsProvider {
-    data: BTreeMap<String, Option<String>>,
 }
 
 impl EnvironmentVariablesSettingsProvider {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             data: BTreeMap::new(),
         }
@@ -58,6 +49,10 @@ impl EnvironmentVariablesSettingsProvider {
 }
 
 impl SettingsProvider for EnvironmentVariablesSettingsProvider {
+    fn data(&self) -> &BTreeMap<String, Option<String>> {
+        &self.data
+    }
+
     async fn load(&mut self) -> PyResult<()> {
         let mut environment_variables = Self::get_environment_variables();
         self.normalize_keys(&mut environment_variables);

@@ -1,3 +1,3 @@
 mod key_per_file_settings_provider;
 
-pub use key_per_file_settings_provider::PythonKeyPerFileSettingsProvider;
+pub use key_per_file_settings_provider::KeyPerFileSettingsProvider;

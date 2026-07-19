@@ -9,6 +9,8 @@ impl SettingsPath {
     pub const KEY_DELIMITER: &str = ".";
 
     #[staticmethod]
+    /// Returns the last section key from a given settings path.
+    /// If the path does not contain the delimiter, it returns the original path.
     pub fn get_section_key(path: &str) -> &str {
         match path.rfind(Self::KEY_DELIMITER) {
             Some(index) => &path[index + Self::KEY_DELIMITER.len()..],

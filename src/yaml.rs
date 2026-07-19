@@ -1,3 +1,3 @@
 mod yaml_file_settings_provider;
 
-pub use yaml_file_settings_provider::PythonYamlFileSettingsProvider;
+pub use yaml_file_settings_provider::YamlFileSettingsProvider;

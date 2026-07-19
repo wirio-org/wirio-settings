@@ -7,57 +7,10 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fmt;
 
-use crate::core::{SerdeParser, SettingsProvider};
+use crate::core::{PythonSettingsProvider, SerdeParser, SettingLookup, SettingsProvider};
 
-#[pyclass(str)]
-pub struct PythonAwsSecretsManagerSettingsProvider {
-    provider: AwsSecretsManagerSettingsProvider,
-}
-
-#[pymethods]
-impl PythonAwsSecretsManagerSettingsProvider {
-    #[new]
-    #[pyo3(signature = (secret_id, region=None, url=None, access_key_id=None, secret_access_key=None, session_token=None, profile=None))]
-    fn new(
-        secret_id: String,
-        region: Option<String>,
-        url: Option<String>,
-        access_key_id: Option<String>,
-        secret_access_key: Option<String>,
-        session_token: Option<String>,
-        profile: Option<String>,
-    ) -> Self {
-        Self {
-            provider: AwsSecretsManagerSettingsProvider::new(
-                secret_id,
-                region,
-                url,
-                access_key_id,
-                secret_access_key,
-                session_token,
-                profile,
-            ),
-        }
-    }
-
-    #[getter]
-    fn data(&self) -> &BTreeMap<String, Option<String>> {
-        &self.provider.data
-    }
-
-    pub fn load(&mut self) -> PyResult<()> {
-        let runtime = pyo3_async_runtimes::tokio::get_runtime();
-        runtime.block_on(self.provider.load())
-    }
-}
-
-impl fmt::Display for PythonAwsSecretsManagerSettingsProvider {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("AwsSecretsManagerSettingsProvider")
-    }
-}
-
-struct AwsSecretsManagerSettingsProvider {
+#[pyclass(extends = PythonSettingsProvider, str)]
+pub struct AwsSecretsManagerSettingsProvider {
     data: BTreeMap<String, Option<String>>,
     secret_id: String,
     region: Option<String>,
@@ -68,8 +21,47 @@ struct AwsSecretsManagerSettingsProvider {
     profile: Option<String>,
 }
 
+#[pymethods]
 impl AwsSecretsManagerSettingsProvider {
-    fn new(
+    #[new]
+    #[pyo3(signature = (secret_id, region=None, url=None, access_key_id=None, secret_access_key=None, session_token=None, profile=None))]
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_python(
+        secret_id: String,
+        region: Option<String>,
+        url: Option<String>,
+        access_key_id: Option<String>,
+        secret_access_key: Option<String>,
+        session_token: Option<String>,
+        profile: Option<String>,
+    ) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new(
+            secret_id,
+            region,
+            url,
+            access_key_id,
+            secret_access_key,
+            session_token,
+            profile,
+        ))
+    }
+
+    #[getter]
+    fn data(&self) -> &BTreeMap<String, Option<String>> {
+        SettingsProvider::data(self)
+    }
+
+    fn try_get(&self, key: &str) -> SettingLookup {
+        SettingsProvider::try_get(self, key)
+    }
+
+    pub fn load_sync(&mut self) -> PyResult<()> {
+        SettingsProvider::load_sync(self)
+    }
+}
+
+impl AwsSecretsManagerSettingsProvider {
+    pub fn new(
         secret_id: String,
         region: Option<String>,
         url: Option<String>,
@@ -165,6 +157,10 @@ impl AwsSecretsManagerSettingsProvider {
 }
 
 impl SettingsProvider for AwsSecretsManagerSettingsProvider {
+    fn data(&self) -> &BTreeMap<String, Option<String>> {
+        &self.data
+    }
+
     async fn load(&mut self) -> PyResult<()> {
         let secrets_manager_client = self.create_secrets_manager_client().await?;
         let get_secret_value_response = secrets_manager_client
@@ -352,10 +348,26 @@ mod tests {
             None,
         );
 
-        let error = provider.load().await.unwrap_err();
+        let error = SettingsProvider::load(&mut provider).await.unwrap_err();
 
         assert!(error.to_string().starts_with(
             "RuntimeError: Failed to read AWS secret 'dev/secret-id' from AWS Secrets Manager:"
         ));
+    }
+
+    #[test]
+    fn test_display_returns_type_name() {
+        let display = AwsSecretsManagerSettingsProvider::new(
+            String::from("dev/secret-id"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .to_string();
+
+        assert_eq!(display, "AwsSecretsManagerSettingsProvider");
     }
 }

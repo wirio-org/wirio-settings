@@ -1,3 +1,3 @@
 mod gcp_secret_manager_settings_provider;
 
-pub use gcp_secret_manager_settings_provider::PythonGcpSecretManagerSettingsProvider;
+pub use gcp_secret_manager_settings_provider::GcpSecretManagerSettingsProvider;

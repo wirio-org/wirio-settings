@@ -7,7 +7,7 @@ from wirio_settings.core.settings_root import SettingsRoot
 
 @final
 class SettingsSection(Settings):
-    """Represent a section of application settings values."""
+    """Represent a section of settings values."""
 
     _root: Final[SettingsRoot]
     _path: Final[str]

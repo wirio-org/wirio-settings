@@ -6,45 +6,18 @@ use std::fmt;
 use std::path::PathBuf;
 use tokio::fs;
 
-use crate::core::{SerdeParser, SettingsProvider, file_provider};
+use crate::core::{
+    PythonSettingsProvider, SerdeParser, SettingLookup, SettingsProvider, file_provider,
+};
 
-#[pyclass(str)]
-pub struct PythonYamlFileSettingsProvider {
-    provider: YamlFileSettingsProvider,
-}
-
-#[pymethods]
-impl PythonYamlFileSettingsProvider {
-    #[new]
-    fn new(content_root_path: Option<&str>, path: &str, optional: bool) -> Self {
-        Self {
-            provider: YamlFileSettingsProvider::new(content_root_path, path, optional),
-        }
-    }
-
-    #[getter]
-    fn data(&self) -> &BTreeMap<String, Option<String>> {
-        &self.provider.data
-    }
-
-    pub fn load(&mut self) -> PyResult<()> {
-        let runtime = pyo3_async_runtimes::tokio::get_runtime();
-        runtime.block_on(self.provider.load())
-    }
-}
-
-impl fmt::Display for PythonYamlFileSettingsProvider {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("YamlFileSettingsProvider")
-    }
-}
-
-struct YamlFileSettingsProvider {
+#[pyclass(extends = PythonSettingsProvider, str)]
+pub struct YamlFileSettingsProvider {
     data: BTreeMap<String, Option<String>>,
     path: PathBuf,
     optional: bool,
 }
 
+#[pymethods]
 impl YamlFileSettingsProvider {
     /// Creates a YAML settings provider from a path.
     ///
@@ -54,7 +27,35 @@ impl YamlFileSettingsProvider {
     /// - An absolute path (for example, `/tmp/settings.yaml`).
     ///
     /// File names and relative paths are resolved against `content_root_path` when provided, otherwise against the current working directory.
-    fn new(content_root_path: Option<&str>, path: &str, optional: bool) -> Self {
+    #[new]
+    pub fn new_python(
+        content_root_path: Option<&str>,
+        path: &str,
+        optional: bool,
+    ) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new(
+            content_root_path,
+            path,
+            optional,
+        ))
+    }
+
+    #[getter]
+    fn data(&self) -> &BTreeMap<String, Option<String>> {
+        SettingsProvider::data(self)
+    }
+
+    fn try_get(&self, key: &str) -> SettingLookup {
+        SettingsProvider::try_get(self, key)
+    }
+
+    pub fn load_sync(&mut self) -> PyResult<()> {
+        SettingsProvider::load_sync(self)
+    }
+}
+
+impl YamlFileSettingsProvider {
+    pub fn new(content_root_path: Option<&str>, path: &str, optional: bool) -> Self {
         Self {
             data: BTreeMap::new(),
             path: file_provider::resolve_path(content_root_path, path),
@@ -74,6 +75,10 @@ impl YamlFileSettingsProvider {
 }
 
 impl SettingsProvider for YamlFileSettingsProvider {
+    fn data(&self) -> &BTreeMap<String, Option<String>> {
+        &self.data
+    }
+
     async fn load(&mut self) -> PyResult<()> {
         let file_exists = fs::try_exists(&self.path).await.map_err(|error| {
             PyRuntimeError::new_err(format!(
@@ -133,7 +138,7 @@ impl fmt::Display for YamlFileSettingsProvider {
 
 #[cfg(test)]
 mod tests {
-    use super::{PythonYamlFileSettingsProvider, YamlFileSettingsProvider};
+    use super::YamlFileSettingsProvider;
     use crate::core::SettingsProvider;
     use pyo3::Python;
     use std::collections::BTreeMap;
@@ -172,7 +177,7 @@ logging:
         .unwrap();
 
         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
-        provider.load().await.unwrap();
+        SettingsProvider::load(&mut provider).await.unwrap();
 
         assert_eq!(
             provider.data,
@@ -212,7 +217,7 @@ port: 8080
         .unwrap();
 
         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
-        provider.load().await.unwrap();
+        SettingsProvider::load(&mut provider).await.unwrap();
 
         assert_eq!(
             provider.data,
@@ -230,7 +235,7 @@ port: 8080
         fs::write(&file_path, "").await.unwrap();
 
         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
-        provider.load().await.unwrap();
+        SettingsProvider::load(&mut provider).await.unwrap();
 
         assert_eq!(provider.data, BTreeMap::new());
     }
@@ -249,7 +254,7 @@ port: 8080
         .unwrap();
 
         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
-        provider.load().await.unwrap();
+        SettingsProvider::load(&mut provider).await.unwrap();
 
         assert_eq!(provider.data, BTreeMap::new());
     }
@@ -260,7 +265,7 @@ port: 8080
         let file_path = temporary_directory.path().join("missing.yaml");
 
         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), true);
-        provider.load().await.unwrap();
+        SettingsProvider::load(&mut provider).await.unwrap();
 
         assert_eq!(provider.data, BTreeMap::new());
     }
@@ -274,7 +279,7 @@ port: 8080
 
         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
 
-        let error = provider.load().await.unwrap_err();
+        let error = SettingsProvider::load(&mut provider).await.unwrap_err();
         let error_message = error.to_string();
 
         assert_eq!(
@@ -297,7 +302,7 @@ port: 8080
             false,
         );
 
-        let error = provider.load().await.unwrap_err();
+        let error = SettingsProvider::load(&mut provider).await.unwrap_err();
         let error_message = error.to_string();
 
         assert!(error_message.contains("Failed to read YAML settings file"));
@@ -313,7 +318,7 @@ port: 8080
 
         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
 
-        let error = provider.load().await.unwrap_err();
+        let error = SettingsProvider::load(&mut provider).await.unwrap_err();
         let error_message = error.to_string();
 
         assert!(error_message.contains("Could not parse"));
@@ -330,7 +335,7 @@ port: 8080
 
         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
 
-        let error = provider.load().await.unwrap_err();
+        let error = SettingsProvider::load(&mut provider).await.unwrap_err();
         let error_message = error.to_string();
 
         assert!(error_message.contains("Could not parse the YAML file"));
@@ -338,7 +343,7 @@ port: 8080
 
     #[test]
     fn test_display_returns_type_name() {
-        let display = PythonYamlFileSettingsProvider::new(None, "settings.yaml", false).to_string();
+        let display = YamlFileSettingsProvider::new(None, "settings.yaml", false).to_string();
 
         assert_eq!(display, "YamlFileSettingsProvider");
     }
@@ -351,7 +356,7 @@ port: 8080
         let mut provider =
             YamlFileSettingsProvider::new(None, invalid_file_path.to_str().unwrap(), false);
 
-        let error = provider.load().await.unwrap_err();
+        let error = SettingsProvider::load(&mut provider).await.unwrap_err();
         let error_message = error.to_string();
 
         assert!(error_message.contains("RuntimeError: Failed to inspect"));
@@ -372,7 +377,7 @@ port: 8080
         fs::write(&file_path, raw_yaml).await.unwrap();
         let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
 
-        provider.load().await.unwrap();
+        SettingsProvider::load(&mut provider).await.unwrap();
 
         assert_eq!(provider.data, expected_parsed_yaml);
     }

@@ -15,23 +15,29 @@ mod _wirio_settings {
     pub use crate::core::SettingsPath;
 
     #[pymodule_export]
-    pub use crate::aws_secrets_manager::PythonAwsSecretsManagerSettingsProvider;
+    pub use crate::core::PythonSettingsProvider;
 
     #[pymodule_export]
-    pub use crate::azure_key_vault::PythonAzureKeyVaultSettingsProvider;
+    pub use crate::core::SettingLookup;
 
     #[pymodule_export]
-    pub use crate::environment_variables::PythonEnvironmentVariablesSettingsProvider;
+    pub use crate::aws_secrets_manager::AwsSecretsManagerSettingsProvider;
 
     #[pymodule_export]
-    pub use crate::gcp_secret_manager::PythonGcpSecretManagerSettingsProvider;
+    pub use crate::azure_key_vault::AzureKeyVaultSettingsProvider;
 
     #[pymodule_export]
-    pub use crate::json::PythonJsonFileSettingsProvider;
+    pub use crate::environment_variables::EnvironmentVariablesSettingsProvider;
 
     #[pymodule_export]
-    pub use crate::key_per_file::PythonKeyPerFileSettingsProvider;
+    pub use crate::gcp_secret_manager::GcpSecretManagerSettingsProvider;
 
     #[pymodule_export]
-    pub use crate::yaml::PythonYamlFileSettingsProvider;
+    pub use crate::json::JsonFileSettingsProvider;
+
+    #[pymodule_export]
+    pub use crate::key_per_file::KeyPerFileSettingsProvider;
+
+    #[pymodule_export]
+    pub use crate::yaml::YamlFileSettingsProvider;
 }

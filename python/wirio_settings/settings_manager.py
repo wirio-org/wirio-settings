@@ -12,11 +12,10 @@ from wirio_settings.azure_key_vault.azure_key_vault_settings_source import (
 )
 from wirio_settings.core._typed_type import TypedType
 from wirio_settings.core.settings_builder import SettingsBuilder
-from wirio_settings.core.settings_provider import SettingsProvider
+from wirio_settings.core.settings_provider import SettingLookup, SettingsProvider
 from wirio_settings.core.settings_root import SettingsRoot
 from wirio_settings.core.settings_section import SettingsSection
 from wirio_settings.core.settings_source import SettingsSource
-from wirio_settings.core.wirio_undefined import WirioUndefined
 from wirio_settings.environment_variables.environment_variables_settings_source import (
     EnvironmentVariablesSettingsSource,
 )
@@ -66,7 +65,7 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
     def add(self, source: SettingsSource) -> None:
         self._sources.append(source)
         provider = source.build(self)
-        provider.load()
+        provider.load_sync()
         self._providers.append(provider)
 
     def add_default_providers(self) -> Self:
@@ -171,21 +170,20 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         return self
 
     @override
-    def get_required_value[TField = str](
+    def get_value[TField = str](
         self,
         key: str,
         value_type: type[TField] | type[str] = str,
-    ) -> TField:
-        """Get a setting value by its key or raise an error if the key is not found or the value is `None`. Optionally, validate the setting value against the specified type."""
-        value = self._try_get_setting(key)
+    ) -> TField | None:
+        setting = self._try_get_setting(key)
 
-        if isinstance(value, WirioUndefined):
-            error_message = f"Missing setting value for key '{key}'"
-            raise KeyError(error_message)
+        if not isinstance(setting, SettingLookup.Found):
+            return None
+
+        value = setting.value
 
         if value is None:
-            error_message = f"Setting value for key '{key}' is None"
-            raise ValueError(error_message)
+            return None
 
         raw_value: object = value
         typed_value_type = TypedType.from_type(value_type)
@@ -196,18 +194,23 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         return cast("TField", TypeAdapter(value_type).validate_python(raw_value))
 
     @override
-    def get_value[TField = str](
+    def get_required_value[TField = str](
         self,
         key: str,
         value_type: type[TField] | type[str] = str,
-    ) -> TField | None:
-        value = self._try_get_setting(key)
+    ) -> TField:
+        """Get a setting value by its key or raise an error if the key is not found or the value is `None`. Optionally, validate the setting value against the specified type."""
+        setting = self._try_get_setting(key)
 
-        if isinstance(value, WirioUndefined):
-            return None
+        if not isinstance(setting, SettingLookup.Found):
+            error_message = f"Missing setting value for key '{key}'"
+            raise KeyError(error_message)
+
+        value = setting.value
 
         if value is None:
-            return None
+            error_message = f"Setting value for key '{key}' is None"
+            raise ValueError(error_message)
 
         raw_value: object = value
         typed_value_type = TypedType.from_type(value_type)

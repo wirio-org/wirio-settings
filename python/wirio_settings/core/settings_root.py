@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 from wirio_settings.core.settings import Settings
-from wirio_settings.core.wirio_undefined import WirioUndefined
+from wirio_settings.core.settings_provider import SettingLookup
 
 if TYPE_CHECKING:
     from wirio_settings.core.settings_provider import SettingsProvider
@@ -26,11 +26,11 @@ class SettingsRoot(Settings, ABC):
         value_type: type[TField] | type[str] = str,
     ) -> TField | None: ...
 
-    def _try_get_setting(self, key: str) -> str | None | WirioUndefined:
+    def _try_get_setting(self, key: str) -> SettingLookup:
         for provider in reversed(self.providers):
-            value = provider.try_get(key)
+            setting = provider.try_get(key)
 
-            if not isinstance(value, WirioUndefined):
-                return value
+            if isinstance(setting, SettingLookup.Found):
+                return setting
 
-        return WirioUndefined.INSTANCE
+        return SettingLookup.Missing()

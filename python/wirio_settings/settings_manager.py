@@ -3,7 +3,7 @@ from typing import Final, Self, cast, final, override
 
 from pydantic import TypeAdapter
 
-from wirio_settings._wirio_settings import SettingsPath
+from wirio_settings._wirio_settings import SettingLookup, SettingsPath, SettingsProvider
 from wirio_settings.aws_secrets_manager.aws_secrets_manager_settings_source import (
     AwsSecretsManagerSettingsSource,
 )
@@ -12,22 +12,20 @@ from wirio_settings.azure_key_vault.azure_key_vault_settings_source import (
 )
 from wirio_settings.core._typed_type import TypedType
 from wirio_settings.core.settings_builder import SettingsBuilder
-from wirio_settings.core.settings_provider import SettingsProvider
 from wirio_settings.core.settings_root import SettingsRoot
 from wirio_settings.core.settings_section import SettingsSection
 from wirio_settings.core.settings_source import SettingsSource
-from wirio_settings.core.wirio_undefined import WirioUndefined
 from wirio_settings.environment_variables.environment_variables_settings_source import (
     EnvironmentVariablesSettingsSource,
 )
 from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_source import (
     GcpSecretManagerSettingsSource,
 )
-from wirio_settings.json.json_file_settings_source import JsonSettingsSource
+from wirio_settings.json_file.json_file_settings_source import JsonFileSettingsSource
 from wirio_settings.key_per_file.key_per_file_settings_source import (
     KeyPerFileSettingsSource,
 )
-from wirio_settings.yaml.yaml_file_settings_source import YamlFileSettingsSource
+from wirio_settings.yaml_file.yaml_file_settings_source import YamlFileSettingsSource
 
 
 @final
@@ -66,7 +64,7 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
     def add(self, source: SettingsSource) -> None:
         self._sources.append(source)
         provider = source.build(self)
-        provider.load()
+        provider.load_sync()
         self._providers.append(provider)
 
     def add_default_providers(self) -> Self:
@@ -98,7 +96,7 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
     def add_json_file(self, path: str, optional: bool = False) -> Self:
         """Add a settings provider that reads settings values from a JSON file."""
         self.add(
-            JsonSettingsSource(
+            JsonFileSettingsSource(
                 content_root_path=self._content_root_path, path=path, optional=optional
             )
         )
@@ -171,21 +169,20 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         return self
 
     @override
-    def get_required_value[TField = str](
+    def get_value[TField = str](
         self,
         key: str,
         value_type: type[TField] | type[str] = str,
-    ) -> TField:
-        """Get a setting value by its key or raise an error if the key is not found or the value is `None`. Optionally, validate the setting value against the specified type."""
-        value = self._try_get_setting(key)
+    ) -> TField | None:
+        setting = self._try_get_setting(key)
 
-        if isinstance(value, WirioUndefined):
-            error_message = f"Missing setting value for key '{key}'"
-            raise KeyError(error_message)
+        if not isinstance(setting, SettingLookup.Found):
+            return None
+
+        value = setting.value
 
         if value is None:
-            error_message = f"Setting value for key '{key}' is None"
-            raise ValueError(error_message)
+            return None
 
         raw_value: object = value
         typed_value_type = TypedType.from_type(value_type)
@@ -196,18 +193,23 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         return cast("TField", TypeAdapter(value_type).validate_python(raw_value))
 
     @override
-    def get_value[TField = str](
+    def get_required_value[TField = str](
         self,
         key: str,
         value_type: type[TField] | type[str] = str,
-    ) -> TField | None:
-        value = self._try_get_setting(key)
+    ) -> TField:
+        """Get a setting value by its key or raise an error if the key is not found or the value is `None`. Optionally, validate the setting value against the specified type."""
+        setting = self._try_get_setting(key)
 
-        if isinstance(value, WirioUndefined):
-            return None
+        if not isinstance(setting, SettingLookup.Found):
+            error_message = f"Missing setting value for key '{key}'"
+            raise KeyError(error_message)
+
+        value = setting.value
 
         if value is None:
-            return None
+            error_message = f"Setting value for key '{key}' is None"
+            raise ValueError(error_message)
 
         raw_value: object = value
         typed_value_type = TypedType.from_type(value_type)

@@ -5,6 +5,7 @@ from typing import final, override
 import pytest
 from pydantic import BaseModel, Field
 from pytest_mock import MockerFixture
+from wirio_settings._wirio_settings import SettingLookup, SettingsProvider
 from wirio_settings.aws_secrets_manager.aws_secrets_manager_settings_source import (
     AwsSecretsManagerSettingsSource,
 )
@@ -12,7 +13,6 @@ from wirio_settings.azure_key_vault.azure_key_vault_settings_source import (
     AzureKeyVaultSettingsSource,
 )
 from wirio_settings.core.settings_builder import SettingsBuilder
-from wirio_settings.core.settings_provider import SettingsProvider
 from wirio_settings.core.settings_source import SettingsSource
 from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_source import (
     GcpSecretManagerSettingsSource,
@@ -25,15 +25,28 @@ from wirio_settings.settings_manager import SettingsManager
 
 @final
 class _DictionarySettingsProvider(SettingsProvider):
-    _values: dict[str, str | None]
+    values: dict[str, str | None]
+
+    def __new__(cls, _values: dict[str, str | None]) -> SettingsProvider:
+        return super().__new__(cls)
 
     def __init__(self, values: dict[str, str | None]) -> None:
-        super().__init__()
-        self._values = values
+        self.values = values
+
+    @property
+    def data(self) -> dict[str, str | None]:
+        return self.values
 
     @override
-    def load(self) -> None:
-        self._data = self._values
+    def try_get(self, key: str) -> SettingLookup:
+        if key in self.values:
+            return SettingLookup.Found(value=self.values[key])
+
+        return SettingLookup.Missing()
+
+    @override
+    def load_sync(self) -> None:
+        pass
 
 
 @final
@@ -598,52 +611,6 @@ class TestSettingsManager:
             ],
             "not_found_service_list": expected_not_found_service_list,
         }
-
-    def test_bind_value_from_settings(self) -> None:
-        expected_setting_value = 42
-        settings_manager = SettingsManager(
-            content_root_path="", add_default_providers=False
-        )
-        settings_manager.add(
-            _DictionarySettingsSource({"service.port": str(expected_setting_value)})
-        )
-
-        setting_value = settings_manager._bind_value(  # noqa: SLF001
-            "service.port", int
-        )
-
-        assert setting_value == expected_setting_value
-
-    def test_bind_required_value_from_settings(self) -> None:
-        expected_setting_value = 42
-        settings_manager = SettingsManager(
-            content_root_path="", add_default_providers=False
-        )
-        settings_manager.add(
-            _DictionarySettingsSource({"service.port": str(expected_setting_value)})
-        )
-
-        setting_value = settings_manager._bind_required_value(  # noqa: SLF001
-            "service.port", int
-        )
-
-        assert setting_value == expected_setting_value
-
-    def test_fail_when_binding_missing_required_value_from_settings(self) -> None:
-        settings_manager = SettingsManager(
-            content_root_path="", add_default_providers=False
-        )
-        settings_manager.add(_DictionarySettingsSource({"app_name": "wirio"}))
-
-        with pytest.raises(KeyError) as exception_info:
-            settings_manager._bind_required_value(  # noqa: SLF001
-                "service.port", int
-            )
-
-        assert (
-            exception_info.value.args[0]
-            == "Missing setting value for key 'service.port'"
-        )
 
     def test_get_model_from_section(self) -> None:
         class ServiceSettings(BaseModel):

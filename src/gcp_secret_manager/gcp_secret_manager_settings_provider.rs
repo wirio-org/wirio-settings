@@ -1,4 +1,4 @@
-use crate::core::SettingsProvider;
+use crate::core::{PythonSettingsProvider, SettingLookup, SettingsProvider};
 use google_cloud_auth::credentials::Credentials as GoogleCredentials;
 use google_cloud_auth::credentials::service_account::Builder as ServiceAccountCredentialsBuilder;
 use google_cloud_gax::paginator::ItemPaginator;
@@ -9,46 +9,41 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fmt;
 
-#[pyclass(str)]
-pub struct PythonGcpSecretManagerSettingsProvider {
-    provider: GcpSecretManagerSettingsProvider,
-}
-
-#[pymethods]
-impl PythonGcpSecretManagerSettingsProvider {
-    #[new]
-    #[pyo3(signature = (project_id, credentials_json=None))]
-    fn new(project_id: String, credentials_json: Option<String>) -> Self {
-        Self {
-            provider: GcpSecretManagerSettingsProvider::new(project_id, credentials_json),
-        }
-    }
-
-    #[getter]
-    fn data(&self) -> &BTreeMap<String, Option<String>> {
-        &self.provider.data
-    }
-
-    pub fn load(&mut self) -> PyResult<()> {
-        let runtime = pyo3_async_runtimes::tokio::get_runtime();
-        runtime.block_on(self.provider.load())
-    }
-}
-
-impl fmt::Display for PythonGcpSecretManagerSettingsProvider {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("GcpSecretManagerSettingsProvider")
-    }
-}
-
-struct GcpSecretManagerSettingsProvider {
+#[pyclass(extends = PythonSettingsProvider, str)]
+pub struct GcpSecretManagerSettingsProvider {
     data: BTreeMap<String, Option<String>>,
     project_id: String,
     credentials_json: Option<String>,
 }
 
+#[pymethods]
 impl GcpSecretManagerSettingsProvider {
-    fn new(project_id: String, credentials_json: Option<String>) -> Self {
+    #[new]
+    #[pyo3(signature = (project_id, credentials_json=None))]
+    pub fn new_python(
+        project_id: String,
+        credentials_json: Option<String>,
+    ) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(PythonSettingsProvider::new())
+            .add_subclass(Self::new(project_id, credentials_json))
+    }
+
+    #[getter]
+    fn data(&self) -> &BTreeMap<String, Option<String>> {
+        SettingsProvider::data(self)
+    }
+
+    fn try_get(&self, key: &str) -> SettingLookup {
+        SettingsProvider::try_get(self, key)
+    }
+
+    pub fn load_sync(&mut self) -> PyResult<()> {
+        SettingsProvider::load_sync(self)
+    }
+}
+
+impl GcpSecretManagerSettingsProvider {
+    pub fn new(project_id: String, credentials_json: Option<String>) -> Self {
         Self {
             data: BTreeMap::new(),
             project_id,
@@ -182,6 +177,10 @@ impl GcpSecretManagerSettingsProvider {
 }
 
 impl SettingsProvider for GcpSecretManagerSettingsProvider {
+    fn data(&self) -> &BTreeMap<String, Option<String>> {
+        &self.data
+    }
+
     async fn load(&mut self) -> PyResult<()> {
         let secret_manager_client = self.create_secret_manager_client().await?;
         let secret_names = self.get_secret_names(&secret_manager_client).await?;

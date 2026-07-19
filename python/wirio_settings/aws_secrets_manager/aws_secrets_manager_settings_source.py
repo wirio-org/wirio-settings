@@ -1,10 +1,10 @@
 from typing import Final, final, override
 
-from wirio_settings.aws_secrets_manager.aws_secrets_manager_settings_provider import (
+from wirio_settings._wirio_settings import (
     AwsSecretsManagerSettingsProvider,
+    SettingsProvider,
 )
 from wirio_settings.core.settings_builder import SettingsBuilder
-from wirio_settings.core.settings_provider import SettingsProvider
 from wirio_settings.core.settings_source import SettingsSource
 
 

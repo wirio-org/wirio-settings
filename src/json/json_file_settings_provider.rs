@@ -6,45 +6,18 @@ use std::fmt;
 use std::path::PathBuf;
 use tokio::fs;
 
-use crate::core::{SerdeParser, SettingsProvider, file_provider};
+use crate::core::{
+    PythonSettingsProvider, SerdeParser, SettingLookup, SettingsProvider, file_provider,
+};
 
-#[pyclass(str)]
-pub struct PythonJsonFileSettingsProvider {
-    provider: JsonFileSettingsProvider,
-}
-
-#[pymethods]
-impl PythonJsonFileSettingsProvider {
-    #[new]
-    fn new(content_root_path: Option<&str>, path: &str, optional: bool) -> Self {
-        Self {
-            provider: JsonFileSettingsProvider::new(content_root_path, path, optional),
-        }
-    }
-
-    #[getter]
-    fn data(&self) -> &BTreeMap<String, Option<String>> {
-        &self.provider.data
-    }
-
-    pub fn load(&mut self) -> PyResult<()> {
-        let runtime = pyo3_async_runtimes::tokio::get_runtime();
-        runtime.block_on(self.provider.load())
-    }
-}
-
-impl fmt::Display for PythonJsonFileSettingsProvider {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("JsonSettingsProvider")
-    }
-}
-
-struct JsonFileSettingsProvider {
+#[pyclass(extends = PythonSettingsProvider, str)]
+pub struct JsonFileSettingsProvider {
     data: BTreeMap<String, Option<String>>,
     path: PathBuf,
     optional: bool,
 }
 
+#[pymethods]
 impl JsonFileSettingsProvider {
     /// Creates a JSON settings provider from a path.
     ///
@@ -54,7 +27,35 @@ impl JsonFileSettingsProvider {
     /// - An absolute path (for example, `/tmp/settings.json`).
     ///
     /// File names and relative paths are resolved against `content_root_path` when provided, otherwise against the current working directory.
-    fn new(content_root_path: Option<&str>, path: &str, optional: bool) -> Self {
+    #[new]
+    pub fn new_python(
+        content_root_path: Option<&str>,
+        path: &str,
+        optional: bool,
+    ) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new(
+            content_root_path,
+            path,
+            optional,
+        ))
+    }
+
+    #[getter]
+    fn data(&self) -> &BTreeMap<String, Option<String>> {
+        SettingsProvider::data(self)
+    }
+
+    fn try_get(&self, key: &str) -> SettingLookup {
+        SettingsProvider::try_get(self, key)
+    }
+
+    pub fn load_sync(&mut self) -> PyResult<()> {
+        SettingsProvider::load_sync(self)
+    }
+}
+
+impl JsonFileSettingsProvider {
+    pub fn new(content_root_path: Option<&str>, path: &str, optional: bool) -> Self {
         Self {
             data: BTreeMap::new(),
             path: file_provider::resolve_path(content_root_path, path),
@@ -90,6 +91,10 @@ impl JsonFileSettingsProvider {
 }
 
 impl SettingsProvider for JsonFileSettingsProvider {
+    fn data(&self) -> &BTreeMap<String, Option<String>> {
+        &self.data
+    }
+
     async fn load(&mut self) -> PyResult<()> {
         let file_exists = fs::try_exists(&self.path).await.map_err(|error| {
             PyRuntimeError::new_err(format!(
@@ -156,7 +161,7 @@ mod tests {
         fs::write(&file_path, json.to_string()).await.unwrap();
         let mut provider = JsonFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
 
-        provider.load().await.unwrap();
+        SettingsProvider::load(&mut provider).await.unwrap();
 
         assert_eq!(provider.data, expected_parsed_json);
     }
@@ -186,7 +191,7 @@ mod tests {
         fs::write(&file_path, json.to_string()).await.unwrap();
         let mut provider = JsonFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
 
-        provider.load().await.unwrap();
+        SettingsProvider::load(&mut provider).await.unwrap();
 
         assert_eq!(provider.data, expected_parsed_json);
     }
@@ -210,7 +215,7 @@ mod tests {
         fs::write(&file_path, json.to_string()).await.unwrap();
         let mut provider = JsonFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
 
-        provider.load().await.unwrap();
+        SettingsProvider::load(&mut provider).await.unwrap();
 
         assert_eq!(provider.data, expected_parsed_json);
     }
@@ -223,9 +228,16 @@ mod tests {
         let mut provider =
             JsonFileSettingsProvider::new(None, invalid_file_path.to_str().unwrap(), false);
 
-        let error = provider.load().await.unwrap_err();
+        let error = SettingsProvider::load(&mut provider).await.unwrap_err();
         let error_message = error.to_string();
 
         assert!(error_message.contains("RuntimeError: Failed to inspect"));
+    }
+
+    #[test]
+    fn test_display_returns_type_name() {
+        let display = JsonFileSettingsProvider::new(None, "settings.json", false).to_string();
+
+        assert_eq!(display, "JsonFileSettingsProvider");
     }
 }

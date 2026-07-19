@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
-from wirio_settings.core.settings_provider import SettingsProvider
+from wirio_settings._wirio_settings import SettingsProvider
 
 if TYPE_CHECKING:
     from wirio_settings.core.settings_builder import SettingsBuilder

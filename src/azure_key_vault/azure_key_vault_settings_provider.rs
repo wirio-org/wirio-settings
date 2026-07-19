@@ -10,46 +10,10 @@ use std::sync::Arc;
 
 use crate::azure_key_vault::default_azure_credential::DefaultAzureCredential;
 use crate::azure_key_vault::remove_user_agent::RemoveUserAgent;
-use crate::core::SettingsProvider;
+use crate::core::{PythonSettingsProvider, SettingLookup, SettingsProvider};
 
-#[pyclass(str)]
-pub struct PythonAzureKeyVaultSettingsProvider {
-    provider: AzureKeyVaultSettingsProvider,
-}
-
-#[pymethods]
-impl PythonAzureKeyVaultSettingsProvider {
-    #[new]
-    #[pyo3(signature = (url, client_id=None, client_secret=None, tenant_id=None))]
-    fn new(
-        url: String,
-        client_id: Option<String>,
-        client_secret: Option<String>,
-        tenant_id: Option<String>,
-    ) -> Self {
-        Self {
-            provider: AzureKeyVaultSettingsProvider::new(url, client_id, client_secret, tenant_id),
-        }
-    }
-
-    #[getter]
-    fn data(&self) -> &BTreeMap<String, Option<String>> {
-        &self.provider.data
-    }
-
-    pub fn load(&mut self) -> PyResult<()> {
-        let runtime = pyo3_async_runtimes::tokio::get_runtime();
-        runtime.block_on(self.provider.load())
-    }
-}
-
-impl fmt::Display for PythonAzureKeyVaultSettingsProvider {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("AzureKeyVaultSettingsProvider")
-    }
-}
-
-struct AzureKeyVaultSettingsProvider {
+#[pyclass(extends = PythonSettingsProvider, str)]
+pub struct AzureKeyVaultSettingsProvider {
     data: BTreeMap<String, Option<String>>,
     url: String,
     client_id: Option<String>,
@@ -57,8 +21,40 @@ struct AzureKeyVaultSettingsProvider {
     tenant_id: Option<String>,
 }
 
+#[pymethods]
 impl AzureKeyVaultSettingsProvider {
-    fn new(
+    #[new]
+    #[pyo3(signature = (url, client_id=None, client_secret=None, tenant_id=None))]
+    pub fn new_python(
+        url: String,
+        client_id: Option<String>,
+        client_secret: Option<String>,
+        tenant_id: Option<String>,
+    ) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new(
+            url,
+            client_id,
+            client_secret,
+            tenant_id,
+        ))
+    }
+
+    #[getter]
+    fn data(&self) -> &BTreeMap<String, Option<String>> {
+        SettingsProvider::data(self)
+    }
+
+    fn try_get(&self, key: &str) -> SettingLookup {
+        SettingsProvider::try_get(self, key)
+    }
+
+    pub fn load_sync(&mut self) -> PyResult<()> {
+        SettingsProvider::load_sync(self)
+    }
+}
+
+impl AzureKeyVaultSettingsProvider {
+    pub fn new(
         url: String,
         client_id: Option<String>,
         client_secret: Option<String>,
@@ -162,6 +158,10 @@ impl AzureKeyVaultSettingsProvider {
 }
 
 impl SettingsProvider for AzureKeyVaultSettingsProvider {
+    fn data(&self) -> &BTreeMap<String, Option<String>> {
+        &self.data
+    }
+
     async fn load(&mut self) -> PyResult<()> {
         let secret_client = self.create_secret_client()?;
         let mut secret_properties_pager =

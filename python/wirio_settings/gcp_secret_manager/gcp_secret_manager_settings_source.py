@@ -1,11 +1,11 @@
 from typing import Final, final, override
 
-from wirio_settings.core.settings_builder import SettingsBuilder
-from wirio_settings.core.settings_provider import SettingsProvider
-from wirio_settings.core.settings_source import SettingsSource
-from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_provider import (
+from wirio_settings._wirio_settings import (
     GcpSecretManagerSettingsProvider,
+    SettingsProvider,
 )
+from wirio_settings.core.settings_builder import SettingsBuilder
+from wirio_settings.core.settings_source import SettingsSource
 
 
 @final

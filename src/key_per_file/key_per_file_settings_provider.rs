@@ -5,48 +5,40 @@ use std::fmt;
 use std::path::PathBuf;
 use tokio::fs;
 
-use crate::core::SettingsProvider;
+use crate::core::{PythonSettingsProvider, SettingLookup, SettingsProvider};
 
-#[pyclass(str)]
-pub struct PythonKeyPerFileSettingsProvider {
-    provider: KeyPerFileSettingsProvider,
-}
-
-#[pymethods]
-impl PythonKeyPerFileSettingsProvider {
-    #[new]
-    fn new(directory_path: &str, optional: bool) -> Self {
-        Self {
-            provider: KeyPerFileSettingsProvider::new(directory_path, optional),
-        }
-    }
-
-    #[getter]
-    fn data(&self) -> &BTreeMap<String, Option<String>> {
-        &self.provider.data
-    }
-
-    pub fn load(&mut self) -> PyResult<()> {
-        let runtime = pyo3_async_runtimes::tokio::get_runtime();
-        runtime.block_on(self.provider.load())
-    }
-}
-
-impl fmt::Display for PythonKeyPerFileSettingsProvider {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("KeyPerFileSettingsProvider")
-    }
-}
-
-struct KeyPerFileSettingsProvider {
+#[pyclass(extends = PythonSettingsProvider, str)]
+pub struct KeyPerFileSettingsProvider {
     data: BTreeMap<String, Option<String>>,
     directory_path: PathBuf,
     optional: bool,
 }
 
+#[pymethods]
 impl KeyPerFileSettingsProvider {
     /// Adds settings using files from a directory. File names are used as the key, file contents are used as the value.
-    fn new(directory_path: &str, optional: bool) -> Self {
+    #[new]
+    pub fn new_python(directory_path: &str, optional: bool) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(PythonSettingsProvider::new())
+            .add_subclass(Self::new(directory_path, optional))
+    }
+
+    #[getter]
+    fn data(&self) -> &BTreeMap<String, Option<String>> {
+        SettingsProvider::data(self)
+    }
+
+    fn try_get(&self, key: &str) -> SettingLookup {
+        SettingsProvider::try_get(self, key)
+    }
+
+    pub fn load_sync(&mut self) -> PyResult<()> {
+        SettingsProvider::load_sync(self)
+    }
+}
+
+impl KeyPerFileSettingsProvider {
+    pub fn new(directory_path: &str, optional: bool) -> Self {
         Self {
             data: BTreeMap::new(),
             directory_path: PathBuf::from(directory_path),
@@ -68,6 +60,10 @@ impl KeyPerFileSettingsProvider {
 }
 
 impl SettingsProvider for KeyPerFileSettingsProvider {
+    fn data(&self) -> &BTreeMap<String, Option<String>> {
+        &self.data
+    }
+
     async fn load(&mut self) -> PyResult<()> {
         let directory_exists = fs::try_exists(&self.directory_path)
             .await
@@ -209,7 +205,7 @@ mod tests {
         let mut provider =
             KeyPerFileSettingsProvider::new(temporary_directory.path().to_str().unwrap(), false);
 
-        provider.load().await.unwrap();
+        SettingsProvider::load(&mut provider).await.unwrap();
 
         assert_eq!(
             provider.data,
@@ -234,7 +230,7 @@ mod tests {
         let mut provider =
             KeyPerFileSettingsProvider::new(missing_directory_path.to_str().unwrap(), true);
 
-        provider.load().await.unwrap();
+        SettingsProvider::load(&mut provider).await.unwrap();
 
         assert_eq!(provider.data, BTreeMap::new());
     }
@@ -248,7 +244,7 @@ mod tests {
         let mut provider =
             KeyPerFileSettingsProvider::new(missing_directory_path.to_str().unwrap(), false);
 
-        let error = provider.load().await.unwrap_err();
+        let error = SettingsProvider::load(&mut provider).await.unwrap_err();
 
         let error_message = error.to_string();
         assert_eq!(
@@ -269,7 +265,7 @@ mod tests {
         fs::write(&file_path, "value").await.unwrap();
         let mut provider = KeyPerFileSettingsProvider::new(file_path.to_str().unwrap(), false);
 
-        let error = provider.load().await.unwrap_err();
+        let error = SettingsProvider::load(&mut provider).await.unwrap_err();
 
         let error_message = error.to_string();
         assert_eq!(
@@ -286,9 +282,16 @@ mod tests {
         let mut provider =
             KeyPerFileSettingsProvider::new(invalid_directory_path.to_str().unwrap(), false);
 
-        let error = provider.load().await.unwrap_err();
+        let error = SettingsProvider::load(&mut provider).await.unwrap_err();
 
         let error_message = error.to_string();
         assert!(error_message.contains("RuntimeError: Failed to inspect"));
+    }
+
+    #[test]
+    fn test_display_returns_type_name() {
+        let display = KeyPerFileSettingsProvider::new("settings", false).to_string();
+
+        assert_eq!(display, "KeyPerFileSettingsProvider");
     }
 }

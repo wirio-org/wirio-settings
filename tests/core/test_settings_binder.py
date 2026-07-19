@@ -4,9 +4,9 @@ from typing import final, override
 
 import pytest
 from pydantic import BaseModel, Field
+from wirio_settings._wirio_settings import SettingLookup, SettingsProvider
 from wirio_settings.core.settings_binder import SettingsBinder
 from wirio_settings.core.settings_builder import SettingsBuilder
-from wirio_settings.core.settings_provider import SettingLookup, SettingsProvider
 from wirio_settings.core.settings_source import SettingsSource
 from wirio_settings.settings_manager import SettingsManager
 

@@ -1,13 +1,12 @@
 from typing import Final, final, override
 
-from wirio_settings._wirio_settings import JsonFileSettingsProvider
+from wirio_settings._wirio_settings import JsonFileSettingsProvider, SettingsProvider
 from wirio_settings.core.settings_builder import SettingsBuilder
-from wirio_settings.core.settings_provider import SettingsProvider
 from wirio_settings.core.settings_source import SettingsSource
 
 
 @final
-class JsonSettingsSource(SettingsSource):
+class JsonFileSettingsSource(SettingsSource):
     _content_root_path: Final[str | None]
     _path: Final[str]
     _optional: Final[bool]

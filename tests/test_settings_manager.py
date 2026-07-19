@@ -5,6 +5,7 @@ from typing import final, override
 import pytest
 from pydantic import BaseModel, Field
 from pytest_mock import MockerFixture
+from wirio_settings._wirio_settings import SettingLookup, SettingsProvider
 from wirio_settings.aws_secrets_manager.aws_secrets_manager_settings_source import (
     AwsSecretsManagerSettingsSource,
 )
@@ -12,7 +13,6 @@ from wirio_settings.azure_key_vault.azure_key_vault_settings_source import (
     AzureKeyVaultSettingsSource,
 )
 from wirio_settings.core.settings_builder import SettingsBuilder
-from wirio_settings.core.settings_provider import SettingLookup, SettingsProvider
 from wirio_settings.core.settings_source import SettingsSource
 from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_source import (
     GcpSecretManagerSettingsSource,

@@ -3,7 +3,7 @@ from typing import Final, Self, cast, final, override
 
 from pydantic import TypeAdapter
 
-from wirio_settings._wirio_settings import SettingsPath
+from wirio_settings._wirio_settings import SettingLookup, SettingsPath, SettingsProvider
 from wirio_settings.aws_secrets_manager.aws_secrets_manager_settings_source import (
     AwsSecretsManagerSettingsSource,
 )
@@ -12,7 +12,6 @@ from wirio_settings.azure_key_vault.azure_key_vault_settings_source import (
 )
 from wirio_settings.core._typed_type import TypedType
 from wirio_settings.core.settings_builder import SettingsBuilder
-from wirio_settings.core.settings_provider import SettingLookup, SettingsProvider
 from wirio_settings.core.settings_root import SettingsRoot
 from wirio_settings.core.settings_section import SettingsSection
 from wirio_settings.core.settings_source import SettingsSource
@@ -22,11 +21,11 @@ from wirio_settings.environment_variables.environment_variables_settings_source 
 from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_source import (
     GcpSecretManagerSettingsSource,
 )
-from wirio_settings.json.json_file_settings_source import JsonSettingsSource
+from wirio_settings.json_file.json_file_settings_source import JsonFileSettingsSource
 from wirio_settings.key_per_file.key_per_file_settings_source import (
     KeyPerFileSettingsSource,
 )
-from wirio_settings.yaml.yaml_file_settings_source import YamlFileSettingsSource
+from wirio_settings.yaml_file.yaml_file_settings_source import YamlFileSettingsSource
 
 
 @final
@@ -97,7 +96,7 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
     def add_json_file(self, path: str, optional: bool = False) -> Self:
         """Add a settings provider that reads settings values from a JSON file."""
         self.add(
-            JsonSettingsSource(
+            JsonFileSettingsSource(
                 content_root_path=self._content_root_path, path=path, optional=optional
             )
         )

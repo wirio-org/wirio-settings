@@ -1,8 +1,7 @@
 from typing import Final, final, override
 
-from wirio_settings._wirio_settings import YamlFileSettingsProvider
+from wirio_settings._wirio_settings import SettingsProvider, YamlFileSettingsProvider
 from wirio_settings.core.settings_builder import SettingsBuilder
-from wirio_settings.core.settings_provider import SettingsProvider
 from wirio_settings.core.settings_source import SettingsSource
 
 

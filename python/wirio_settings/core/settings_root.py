@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
+from wirio_settings._wirio_settings import SettingLookup
 from wirio_settings.core.settings import Settings
-from wirio_settings.core.settings_provider import SettingLookup
 
 if TYPE_CHECKING:
-    from wirio_settings.core.settings_provider import SettingsProvider
+    from wirio_settings._wirio_settings import SettingsProvider
     from wirio_settings.core.settings_section import SettingsSection
 
 

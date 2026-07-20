@@ -1,3 +1,5 @@
 mod gcp_secret_manager_settings_provider;
+mod gcp_secret_manager_settings_source;
 
 pub use gcp_secret_manager_settings_provider::GcpSecretManagerSettingsProvider;
+pub use gcp_secret_manager_settings_source::GcpSecretManagerSettingsSource;

@@ -5,20 +5,14 @@ from typing import final, override
 import pytest
 from pydantic import BaseModel, Field
 from pytest_mock import MockerFixture
-from wirio_settings._wirio_settings import SettingLookup, SettingsProvider
-from wirio_settings.aws_secrets_manager.aws_secrets_manager_settings_source import (
+from wirio_settings._wirio_settings import (
     AwsSecretsManagerSettingsSource,
-)
-from wirio_settings.azure_key_vault.azure_key_vault_settings_source import (
     AzureKeyVaultSettingsSource,
-)
-from wirio_settings.core.settings_builder import SettingsBuilder
-from wirio_settings.core.settings_source import SettingsSource
-from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_source import (
     GcpSecretManagerSettingsSource,
-)
-from wirio_settings.key_per_file.key_per_file_settings_source import (
     KeyPerFileSettingsSource,
+    SettingLookup,
+    SettingsProvider,
+    SettingsSource,
 )
 from wirio_settings.settings_manager import SettingsManager
 
@@ -53,11 +47,14 @@ class _DictionarySettingsProvider(SettingsProvider):
 class _DictionarySettingsSource(SettingsSource):
     _values: dict[str, str | None]
 
+    def __new__(cls, _values: dict[str, str | None]) -> SettingsSource:
+        return super().__new__(cls)
+
     def __init__(self, values: dict[str, str | None]) -> None:
         self._values = values
 
     @override
-    def build(self, builder: SettingsBuilder) -> SettingsProvider:
+    def build(self) -> SettingsProvider:
         return _DictionarySettingsProvider(self._values)
 
 

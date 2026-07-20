@@ -80,12 +80,12 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         )
 
     def add_environment_variables(self) -> Self:
-        """Add a settings provider that reads settings values from environment variables."""
+        """Add a settings provider that reads setting values from environment variables."""
         self.add(EnvironmentVariablesSettingsSource())
         return self
 
     def add_yaml_file(self, path: str, optional: bool = False) -> Self:
-        """Add a settings provider that reads settings values from a YAML file."""
+        """Add a settings provider that reads setting values from a YAML file."""
         self.add(
             YamlFileSettingsSource(
                 content_root_path=self._content_root_path, path=path, optional=optional
@@ -94,7 +94,7 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         return self
 
     def add_json_file(self, path: str, optional: bool = False) -> Self:
-        """Add a settings provider that reads settings values from a JSON file."""
+        """Add a settings provider that reads setting values from a JSON file."""
         self.add(
             JsonFileSettingsSource(
                 content_root_path=self._content_root_path, path=path, optional=optional
@@ -119,7 +119,7 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         client_secret: str | None = None,
         tenant_id: str | None = None,
     ) -> Self:
-        """Add a settings provider that reads settings values from Azure Key Vault."""
+        """Add a settings provider that reads setting values from Azure Key Vault."""
         self.add(
             AzureKeyVaultSettingsSource(
                 url=url,
@@ -140,7 +140,7 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         session_token: str | None = None,
         profile: str | None = None,
     ) -> Self:
-        """Add a settings provider that reads settings values from AWS Secrets Manager."""
+        """Add a settings provider that reads setting values from AWS Secrets Manager."""
         self.add(
             AwsSecretsManagerSettingsSource(
                 secret_id=secret_id,
@@ -159,7 +159,7 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         project_id: str,
         credentials_json: str | None = None,
     ) -> Self:
-        """Add a settings provider that reads settings values from GCP Secret Manager."""
+        """Add a settings provider that reads setting values from GCP Secret Manager."""
         self.add(
             GcpSecretManagerSettingsSource(
                 project_id=project_id,
@@ -169,7 +169,7 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         return self
 
     @override
-    def get_value[TField = str](
+    def get_value[TField](
         self,
         key: str,
         value_type: type[TField] | type[str] = str,
@@ -184,7 +184,7 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         if value is None:
             return None
 
-        raw_value: object = value
+        raw_value = value
         typed_value_type = TypedType.from_type(value_type)
 
         if value == "" and typed_value_type.is_sequence:
@@ -193,7 +193,7 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
         return cast("TField", TypeAdapter(value_type).validate_python(raw_value))
 
     @override
-    def get_required_value[TField = str](
+    def get_required_value[TField](
         self,
         key: str,
         value_type: type[TField] | type[str] = str,
@@ -211,7 +211,7 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
             error_message = f"Setting value for key '{key}' is None"
             raise ValueError(error_message)
 
-        raw_value: object = value
+        raw_value = value
         typed_value_type = TypedType.from_type(value_type)
 
         if value == "" and typed_value_type.is_sequence:
@@ -221,7 +221,7 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
 
     @override
     def get_section(self, key: str) -> SettingsSection:
-        """Get a settings section for the specified key. A settings section represents a subsection of the settings values that share a common key prefix."""
+        """Get a settings section for the specified key."""
         if not self._is_section_key(key):
             error_message = f"Setting key '{key}' is not a section"
             raise KeyError(error_message)

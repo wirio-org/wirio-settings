@@ -86,6 +86,24 @@ class TestSettingsBinder:
         assert value == ""
         assert required_value == ""
 
+    def test_return_lookup_when_reading_setting_value(self) -> None:
+        key = "port"
+        expected_value = "8080"
+        settings_manager = SettingsManager(
+            content_root_path="", add_default_providers=False
+        )
+        settings_manager.add(_DictionarySettingsSource({key: expected_value}))
+
+        found_setting = SettingsBinder._try_get_setting_value(  # noqa: SLF001
+            settings=settings_manager, key=key
+        )
+        missing_setting = SettingsBinder._try_get_setting_value(  # noqa: SLF001
+            settings=settings_manager, key="missing"
+        )
+
+        assert found_setting == expected_value
+        assert isinstance(missing_setting, SettingLookup.Missing)
+
     def test_fail_when_getting_model_if_some_required_field_is_missing(self) -> None:
         class SubSettings(BaseModel):
             required_subfield_1: str
@@ -401,13 +419,13 @@ class TestSettingsBinder:
 
     def test_get_empty_sequence_when_empty_string_found(self) -> None:
         class Settings(BaseModel):
-            ports: list[int]
+            list_field: list[int]
 
         settings_manager = SettingsManager(
             content_root_path="", add_default_providers=False
         )
-        settings_manager.add(_DictionarySettingsSource({"ports": ""}))
+        settings_manager.add(_DictionarySettingsSource({"list_field": ""}))
 
         settings = settings_manager.get_model(Settings)
 
-        assert settings.ports == []
+        assert settings.list_field == []

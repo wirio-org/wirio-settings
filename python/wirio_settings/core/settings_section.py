@@ -7,7 +7,10 @@ from wirio_settings.core.settings_root import SettingsRoot
 
 @final
 class SettingsSection(Settings):
-    """Represent a section of settings values."""
+    """Section of the settings hierarchy.
+
+    Represents a group of setting values that share a common key prefix.
+    """
 
     _root: Final[SettingsRoot]
     _path: Final[str]
@@ -48,7 +51,7 @@ class SettingsSection(Settings):
         return self._root.get_children(path)
 
     @override
-    def get_value[TField = str](
+    def get_value[TField](
         self,
         key: str,
         value_type: type[TField] | type[str] = str,
@@ -58,7 +61,7 @@ class SettingsSection(Settings):
         return self._root.get_value(child_path, typed_value_type)
 
     @override
-    def get_required_value[TField = str](
+    def get_required_value[TField](
         self,
         key: str,
         value_type: type[TField] | type[str] = str,

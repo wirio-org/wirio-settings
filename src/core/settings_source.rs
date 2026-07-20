@@ -14,7 +14,8 @@ impl PythonSettingsSource {
     }
 
     #[allow(clippy::unused_self)]
-    fn build(&self, _py: Python<'_>) -> PyResult<Py<PythonSettingsProvider>> {
+    #[allow(unused_variables)]
+    fn build(&self, py: Python<'_>) -> PyResult<Py<PythonSettingsProvider>> {
         unimplemented!()
     }
 }

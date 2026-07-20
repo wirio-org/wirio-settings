@@ -22,7 +22,8 @@ impl PythonSettingsProvider {
     }
 
     #[allow(clippy::unused_self)]
-    fn try_get(&self, _key: &str) -> SettingLookup {
+    #[allow(unused_variables)]
+    fn try_get(&self, key: &str) -> SettingLookup {
         unimplemented!()
     }
 

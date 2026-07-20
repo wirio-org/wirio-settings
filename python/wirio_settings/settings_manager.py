@@ -3,33 +3,26 @@ from typing import Final, Self, cast, final, override
 
 from pydantic import TypeAdapter
 
-from wirio_settings._wirio_settings import SettingLookup, SettingsPath, SettingsProvider
-from wirio_settings.aws_secrets_manager.aws_secrets_manager_settings_source import (
+from wirio_settings._wirio_settings import (
     AwsSecretsManagerSettingsSource,
-)
-from wirio_settings.azure_key_vault.azure_key_vault_settings_source import (
     AzureKeyVaultSettingsSource,
+    EnvironmentVariablesSettingsSource,
+    GcpSecretManagerSettingsSource,
+    JsonFileSettingsSource,
+    KeyPerFileSettingsSource,
+    SettingLookup,
+    SettingsPath,
+    SettingsProvider,
+    SettingsSource,
+    YamlFileSettingsSource,
 )
 from wirio_settings.core._typed_type import TypedType
-from wirio_settings.core.settings_builder import SettingsBuilder
 from wirio_settings.core.settings_root import SettingsRoot
 from wirio_settings.core.settings_section import SettingsSection
-from wirio_settings.core.settings_source import SettingsSource
-from wirio_settings.environment_variables.environment_variables_settings_source import (
-    EnvironmentVariablesSettingsSource,
-)
-from wirio_settings.gcp_secret_manager.gcp_secret_manager_settings_source import (
-    GcpSecretManagerSettingsSource,
-)
-from wirio_settings.json_file.json_file_settings_source import JsonFileSettingsSource
-from wirio_settings.key_per_file.key_per_file_settings_source import (
-    KeyPerFileSettingsSource,
-)
-from wirio_settings.yaml_file.yaml_file_settings_source import YamlFileSettingsSource
 
 
 @final
-class SettingsManager(SettingsBuilder, SettingsRoot):
+class SettingsManager(SettingsRoot):
     _content_root_path: Final[str | None]
     _sources: Final[list[SettingsSource]]
     _providers: Final[list[SettingsProvider]]
@@ -63,7 +56,7 @@ class SettingsManager(SettingsBuilder, SettingsRoot):
 
     def add(self, source: SettingsSource) -> None:
         self._sources.append(source)
-        provider = source.build(self)
+        provider = source.build()
         provider.load_sync()
         self._providers.append(provider)
 

@@ -4,10 +4,12 @@ from typing import final, override
 
 import pytest
 from pydantic import BaseModel, Field
-from wirio_settings._wirio_settings import SettingLookup, SettingsProvider
+from wirio_settings._wirio_settings import (
+    SettingLookup,
+    SettingsProvider,
+    SettingsSource,
+)
 from wirio_settings.core.settings_binder import SettingsBinder
-from wirio_settings.core.settings_builder import SettingsBuilder
-from wirio_settings.core.settings_source import SettingsSource
 from wirio_settings.settings_manager import SettingsManager
 
 
@@ -41,11 +43,14 @@ class _DictionarySettingsProvider(SettingsProvider):
 class _DictionarySettingsSource(SettingsSource):
     _values: dict[str, str | None]
 
+    def __new__(cls, _values: dict[str, str | None]) -> SettingsSource:
+        return super().__new__(cls)
+
     def __init__(self, values: dict[str, str | None]) -> None:
         self._values = values
 
     @override
-    def build(self, builder: SettingsBuilder) -> SettingsProvider:
+    def build(self) -> SettingsProvider:
         return _DictionarySettingsProvider(self._values)
 
 

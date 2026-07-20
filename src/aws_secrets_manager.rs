@@ -1,3 +1,5 @@
 mod aws_secrets_manager_settings_provider;
+mod aws_secrets_manager_settings_source;
 
 pub use aws_secrets_manager_settings_provider::AwsSecretsManagerSettingsProvider;
+pub use aws_secrets_manager_settings_source::AwsSecretsManagerSettingsSource;

@@ -1,3 +1,5 @@
 mod key_per_file_settings_provider;
+mod key_per_file_settings_source;
 
 pub use key_per_file_settings_provider::KeyPerFileSettingsProvider;
+pub use key_per_file_settings_source::KeyPerFileSettingsSource;

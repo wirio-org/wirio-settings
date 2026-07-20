@@ -92,6 +92,9 @@ class SettingsPath:
         """
 
 class SettingsProvider:
+    """
+    Provides setting values
+    """
     def __new__(cls, /) -> SettingsProvider: ...
     @property
     def data(self, /) -> dict[str, str |None]: ...

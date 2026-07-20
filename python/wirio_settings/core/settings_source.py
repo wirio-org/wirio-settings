@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
 
 class SettingsSource(ABC):
-    """Represent a source of key/values settings for an application."""
+    """Source of setting values."""
 
     @abstractmethod
     def build(self, builder: "SettingsBuilder") -> SettingsProvider: ...

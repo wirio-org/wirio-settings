@@ -4,6 +4,7 @@ use std::{collections::BTreeMap, fmt, mem};
 
 use super::SettingLookup;
 
+/// Provides setting values
 #[pyclass(subclass, name = "SettingsProvider")]
 pub struct PythonSettingsProvider;
 

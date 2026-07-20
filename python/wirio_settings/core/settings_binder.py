@@ -10,9 +10,8 @@ from typing import (
 from pydantic import BaseModel, TypeAdapter
 from pydantic.fields import FieldInfo
 
-from wirio_settings._wirio_settings import SettingsPath
+from wirio_settings._wirio_settings import SettingLookup, SettingsPath
 from wirio_settings.core._typed_type import TypedType
-from wirio_settings.core.wirio_undefined import WirioUndefined
 
 if TYPE_CHECKING:
     from wirio_settings.core.settings import Settings
@@ -25,6 +24,7 @@ class SettingsBinder:
         settings: "Settings",
         model_type: type[TModel],
     ) -> TModel:
+        """Binds setting values to Pydantic models."""
         return cls._bind_instance(
             model_type=model_type,
             settings=settings,
@@ -99,7 +99,7 @@ class SettingsBinder:
                 field_type=field_type,
             )
 
-            if not isinstance(collection_value, WirioUndefined):
+            if not isinstance(collection_value, SettingLookup.Missing):
                 return collection_value
 
         if field_type.is_mapping:
@@ -109,23 +109,23 @@ class SettingsBinder:
                 field_type=field_type,
             )
 
-            if not isinstance(mapping_value, WirioUndefined):
+            if not isinstance(mapping_value, SettingLookup.Missing):
                 return mapping_value
 
-        raw_value = cls._try_get_setting_value(settings, key, field_type.annotation)
+        typed_value = settings.get_value(key, field_type.annotation)
 
-        if isinstance(raw_value, WirioUndefined):
+        if typed_value is None:
             return None
 
         return cast(
             "object | None",
-            TypeAdapter(field_type.annotation).validate_python(raw_value),
+            TypeAdapter(field_type.annotation).validate_python(typed_value),
         )
 
     @classmethod
     def _read_collection_value(
         cls, settings: "Settings", key: str, field_type: TypedType
-    ) -> object | WirioUndefined:
+    ) -> object | SettingLookup.Missing:
         value_type = field_type.args[0]
         values: list[object] = []
         index = 0
@@ -140,14 +140,16 @@ class SettingsBinder:
                     key_prefix=indexed_key,
                 )
 
-                if isinstance(nested_values, WirioUndefined):
+                if isinstance(nested_values, SettingLookup.Missing):
                     break
 
                 values.append(value_type.model_validate(nested_values))
             else:
-                raw_value = cls._try_get_setting_value(settings, indexed_key)
+                raw_value: object | SettingLookup.Missing = cls._try_get_setting_value(
+                    settings, indexed_key
+                )
 
-                if isinstance(raw_value, WirioUndefined):
+                if isinstance(raw_value, SettingLookup.Missing):
                     break
 
                 typed_value: object = TypeAdapter(value_type).validate_python(raw_value)
@@ -156,7 +158,7 @@ class SettingsBinder:
             index += 1
 
         if len(values) == 0:
-            return WirioUndefined.INSTANCE
+            return SettingLookup.Missing()
 
         return TypeAdapter(field_type.annotation).validate_python(values)
 
@@ -166,7 +168,7 @@ class SettingsBinder:
         settings: "Settings",
         key: str,
         field_type: TypedType,
-    ) -> object | WirioUndefined:
+    ) -> object | SettingLookup.Missing:
         key_type = field_type.args[0]
         value_type = field_type.args[1]
         values: dict[object, object | None] = {}
@@ -174,7 +176,7 @@ class SettingsBinder:
         try:
             section = settings.get_section(key)
         except KeyError:
-            return WirioUndefined.INSTANCE
+            return SettingLookup.Missing()
 
         children = section.get_children()
 
@@ -191,16 +193,18 @@ class SettingsBinder:
                 continue
 
             value_key = cls._join_key(key, child_section.key)
-            raw_value = cls._try_get_setting_value(settings, value_key)
+            raw_value: object | SettingLookup.Missing = cls._try_get_setting_value(
+                settings, value_key
+            )
 
-            if isinstance(raw_value, WirioUndefined):
+            if isinstance(raw_value, SettingLookup.Missing):
                 continue
 
             typed_value = TypeAdapter(value_type).validate_python(raw_value)
             values[typed_key] = typed_value
 
         if len(values) == 0:
-            return WirioUndefined.INSTANCE
+            return SettingLookup.Missing()
 
         return TypeAdapter(field_type.annotation).validate_python(values)
 
@@ -210,7 +214,7 @@ class SettingsBinder:
         settings: "Settings",
         model_type: type[BaseModel],
         key_prefix: str,
-    ) -> object | WirioUndefined:
+    ) -> object | SettingLookup.Missing:
         values: dict[str, object] = {}
         has_any_value = False
 
@@ -233,7 +237,7 @@ class SettingsBinder:
             values[field_name] = value
 
         if not has_any_value:
-            return WirioUndefined.INSTANCE
+            return SettingLookup.Missing()
 
         return values
 
@@ -243,7 +247,7 @@ class SettingsBinder:
         settings: "Settings",
         key: str,
         value_type: type | None = None,
-    ) -> object | WirioUndefined:
+    ) -> object | SettingLookup.Missing:
         raw_value: object | None
 
         if value_type is None:
@@ -252,7 +256,7 @@ class SettingsBinder:
             raw_value = settings.get_value(key, value_type)
 
         if raw_value is None:
-            return WirioUndefined.INSTANCE
+            return SettingLookup.Missing()
 
         return raw_value
 

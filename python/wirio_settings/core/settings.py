@@ -10,17 +10,17 @@ if TYPE_CHECKING:
 
 
 class Settings(ABC):
-    """Represent a level in the settings hierarchy."""
+    """A level in the settings hierarchy."""
 
     @abstractmethod
-    def get_value[TField = str](
+    def get_value[TField](
         self,
         key: str,
         value_type: type[TField] | type[str] = str,
     ) -> TField | None: ...
 
     @abstractmethod
-    def get_required_value[TField = str](
+    def get_required_value[TField](
         self,
         key: str,
         value_type: type[TField] | type[str] = str,
@@ -36,5 +36,5 @@ class Settings(ABC):
     ) -> list["SettingsSection"]: ...
 
     def get_model[TModel: BaseModel](self, model_type: type[TModel]) -> TModel:
-        """Get a settings model of the specified type. The settings values will be mapped to the model fields by their names."""
+        """Get a settings model of the specified type. The settings will be mapped to the model fields by their names."""
         return SettingsBinder.bind_model(self, model_type)

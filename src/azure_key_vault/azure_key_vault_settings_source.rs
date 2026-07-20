@@ -1,10 +1,10 @@
 use crate::{
     azure_key_vault::AzureKeyVaultSettingsProvider,
-    core::{PythonSettingsProvider, SettingsSource},
+    core::{PythonSettingsProvider, PythonSettingsSource, SettingsSource},
 };
 use pyo3::prelude::*;
 
-#[pyclass(extends = SettingsSource)]
+#[pyclass(extends = PythonSettingsSource)]
 pub struct AzureKeyVaultSettingsSource {
     url: String,
     client_id: Option<String>,
@@ -22,7 +22,7 @@ impl AzureKeyVaultSettingsSource {
         client_secret: Option<String>,
         tenant_id: Option<String>,
     ) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(SettingsSource::new()).add_subclass(Self {
+        PyClassInitializer::from(PythonSettingsSource::new()).add_subclass(Self {
             url,
             client_id,
             client_secret,
@@ -30,6 +30,12 @@ impl AzureKeyVaultSettingsSource {
         })
     }
 
+    fn build(&self, py: Python<'_>) -> PyResult<Py<PythonSettingsProvider>> {
+        <Self as SettingsSource>::build(self, py)
+    }
+}
+
+impl SettingsSource for AzureKeyVaultSettingsSource {
     fn build(&self, py: Python<'_>) -> PyResult<Py<PythonSettingsProvider>> {
         Py::new(
             py,

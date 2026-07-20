@@ -1,20 +1,26 @@
 use crate::{
-    core::{PythonSettingsProvider, SettingsSource},
+    core::{PythonSettingsProvider, PythonSettingsSource, SettingsSource},
     environment_variables::EnvironmentVariablesSettingsProvider,
 };
 use pyo3::prelude::*;
 
-#[pyclass(extends = SettingsSource)]
+#[pyclass(extends = PythonSettingsSource)]
 pub struct EnvironmentVariablesSettingsSource;
 
 #[pymethods]
 impl EnvironmentVariablesSettingsSource {
     #[new]
     pub fn new_python() -> PyClassInitializer<Self> {
-        PyClassInitializer::from(SettingsSource::new()).add_subclass(Self)
+        PyClassInitializer::from(PythonSettingsSource::new()).add_subclass(Self)
     }
 
     #[allow(clippy::unused_self)]
+    fn build(&self, py: Python<'_>) -> PyResult<Py<PythonSettingsProvider>> {
+        <Self as SettingsSource>::build(self, py)
+    }
+}
+
+impl SettingsSource for EnvironmentVariablesSettingsSource {
     fn build(&self, py: Python<'_>) -> PyResult<Py<PythonSettingsProvider>> {
         Py::new(
             py,

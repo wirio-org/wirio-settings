@@ -1,10 +1,10 @@
 use crate::{
-    core::{PythonSettingsProvider, SettingsSource},
+    core::{PythonSettingsProvider, PythonSettingsSource, SettingsSource},
     json_file::JsonFileSettingsProvider,
 };
 use pyo3::prelude::*;
 
-#[pyclass(extends = SettingsSource)]
+#[pyclass(extends = PythonSettingsSource)]
 pub struct JsonFileSettingsSource {
     content_root_path: Option<String>,
     path: String,
@@ -19,13 +19,19 @@ impl JsonFileSettingsSource {
         path: String,
         optional: bool,
     ) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(SettingsSource::new()).add_subclass(Self {
+        PyClassInitializer::from(PythonSettingsSource::new()).add_subclass(Self {
             content_root_path,
             path,
             optional,
         })
     }
 
+    fn build(&self, py: Python<'_>) -> PyResult<Py<PythonSettingsProvider>> {
+        <Self as SettingsSource>::build(self, py)
+    }
+}
+
+impl SettingsSource for JsonFileSettingsSource {
     fn build(&self, py: Python<'_>) -> PyResult<Py<PythonSettingsProvider>> {
         Py::new(
             py,

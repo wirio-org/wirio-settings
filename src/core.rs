@@ -11,4 +11,4 @@ pub use serde_parser::SerdeParser;
 pub use setting_lookup::SettingLookup;
 pub use settings_path::SettingsPath;
 pub use settings_provider::{PythonSettingsProvider, SettingsProvider};
-pub use settings_source::SettingsSource;
+pub use settings_source::{PythonSettingsSource, SettingsSource};

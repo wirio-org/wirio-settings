@@ -1,10 +1,10 @@
 use crate::{
     aws_secrets_manager::AwsSecretsManagerSettingsProvider,
-    core::{PythonSettingsProvider, SettingsSource},
+    core::{PythonSettingsProvider, PythonSettingsSource, SettingsSource},
 };
 use pyo3::prelude::*;
 
-#[pyclass(extends = SettingsSource)]
+#[pyclass(extends = PythonSettingsSource)]
 pub struct AwsSecretsManagerSettingsSource {
     secret_id: String,
     region: Option<String>,
@@ -29,7 +29,7 @@ impl AwsSecretsManagerSettingsSource {
         session_token: Option<String>,
         profile: Option<String>,
     ) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(SettingsSource::new()).add_subclass(Self {
+        PyClassInitializer::from(PythonSettingsSource::new()).add_subclass(Self {
             secret_id,
             region,
             url,
@@ -40,6 +40,12 @@ impl AwsSecretsManagerSettingsSource {
         })
     }
 
+    fn build(&self, py: Python<'_>) -> PyResult<Py<PythonSettingsProvider>> {
+        <Self as SettingsSource>::build(self, py)
+    }
+}
+
+impl SettingsSource for AwsSecretsManagerSettingsSource {
     fn build(&self, py: Python<'_>) -> PyResult<Py<PythonSettingsProvider>> {
         Py::new(
             py,

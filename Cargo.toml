@@ -21,7 +21,7 @@ google-cloud-secretmanager-v1 = "1.10.0"
 pyo3 = { version = "0.29.0", features = ["experimental-inspect"] }
 pyo3-async-runtimes = { version = "0.29.0", features = ["tokio-runtime"] }
 regex = "1.12.4"
-serde-saphyr = { version = "0.0.28", default-features = false, features = [
+serde-saphyr = { version = "0.0.29", default-features = false, features = [
     "deserialize",
 ] }
 serde_json = "1.0.150"

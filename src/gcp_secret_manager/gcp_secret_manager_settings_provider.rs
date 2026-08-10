@@ -1,4 +1,5 @@
 use crate::core::{PythonSettingsProvider, SettingLookup, SettingsProvider};
+use arc_swap::ArcSwap;
 use google_cloud_auth::credentials::Credentials as GoogleCredentials;
 use google_cloud_auth::credentials::service_account::Builder as ServiceAccountCredentialsBuilder;
 use google_cloud_gax::paginator::ItemPaginator;
@@ -9,10 +10,11 @@ use pyo3::types::PyDict;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::Arc;
 
-#[pyclass(extends = PythonSettingsProvider, str)]
+#[pyclass(extends = PythonSettingsProvider, frozen, str)]
 pub struct GcpSecretManagerSettingsProvider {
-    data: Py<PyDict>,
+    data: ArcSwap<Py<PyDict>>,
     project_id: String,
     credentials_json: Option<String>,
 }
@@ -42,7 +44,7 @@ impl GcpSecretManagerSettingsProvider {
         SettingsProvider::try_get(self, py, key)
     }
 
-    pub fn load_sync(&mut self) -> PyResult<()> {
+    pub fn load_sync(&self) -> PyResult<()> {
         SettingsProvider::load_sync(self)
     }
 }
@@ -50,7 +52,7 @@ impl GcpSecretManagerSettingsProvider {
 impl GcpSecretManagerSettingsProvider {
     pub fn new(py: Python<'_>, project_id: String, credentials_json: Option<String>) -> Self {
         Self {
-            data: PyDict::new(py).unbind(),
+            data: ArcSwap::from_pointee(PyDict::new(py).unbind()),
             project_id,
             credentials_json,
         }
@@ -183,17 +185,19 @@ impl GcpSecretManagerSettingsProvider {
 
 impl SettingsProvider for GcpSecretManagerSettingsProvider {
     fn data(&self, py: Python<'_>) -> Py<PyDict> {
-        self.data.clone_ref(py)
+        let data = self.data.load();
+        data.clone_ref(py)
     }
 
-    async fn load(&mut self) -> PyResult<()> {
+    async fn load(&self) -> PyResult<()> {
         let secret_manager_client = self.create_secret_manager_client().await?;
         let secret_names = self.get_secret_names(&secret_manager_client).await?;
         let mut secret_values = self
             .get_secret_values(&secret_manager_client, secret_names)
             .await?;
         self.normalize_keys(&mut secret_values);
-        self.data = Python::attach(|py| Self::create_data(py, secret_values))?;
+        let data = Python::attach(|py| Self::create_data(py, secret_values))?;
+        self.data.store(Arc::new(data));
         Ok(())
     }
 

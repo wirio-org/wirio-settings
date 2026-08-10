@@ -1,15 +1,17 @@
+use arc_swap::ArcSwap;
 use pyo3::prelude::*;
 use pyo3::{exceptions::PyRuntimeError, types::PyDict};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::fs;
 
 use crate::core::{PythonSettingsProvider, SettingLookup, SettingsProvider};
 
-#[pyclass(extends = PythonSettingsProvider, str)]
+#[pyclass(extends = PythonSettingsProvider, frozen, str)]
 pub struct KeyPerFileSettingsProvider {
-    data: Py<PyDict>,
+    data: ArcSwap<Py<PyDict>>,
     directory_path: PathBuf,
     optional: bool,
 }
@@ -39,7 +41,7 @@ impl KeyPerFileSettingsProvider {
         SettingsProvider::try_get(self, py, key)
     }
 
-    pub fn load_sync(&mut self) -> PyResult<()> {
+    pub fn load_sync(&self) -> PyResult<()> {
         SettingsProvider::load_sync(self)
     }
 }
@@ -47,7 +49,7 @@ impl KeyPerFileSettingsProvider {
 impl KeyPerFileSettingsProvider {
     pub fn new(py: Python<'_>, directory_path: &str, optional: bool) -> Self {
         Self {
-            data: PyDict::new(py).unbind(),
+            data: ArcSwap::from_pointee(PyDict::new(py).unbind()),
             directory_path: PathBuf::from(directory_path),
             optional,
         }
@@ -68,10 +70,11 @@ impl KeyPerFileSettingsProvider {
 
 impl SettingsProvider for KeyPerFileSettingsProvider {
     fn data(&self, py: Python<'_>) -> Py<PyDict> {
-        self.data.clone_ref(py)
+        let data = self.data.load();
+        data.clone_ref(py)
     }
 
-    async fn load(&mut self) -> PyResult<()> {
+    async fn load(&self) -> PyResult<()> {
         let directory_exists = fs::try_exists(&self.directory_path)
             .await
             .map_err(|error| {
@@ -169,7 +172,8 @@ impl SettingsProvider for KeyPerFileSettingsProvider {
         }
 
         self.normalize_keys(&mut parsed_data);
-        self.data = Python::attach(|py| Self::create_data(py, parsed_data))?;
+        let data = Python::attach(|py| Self::create_data(py, parsed_data))?;
+        self.data.store(Arc::new(data));
         Ok(())
     }
 }
@@ -224,11 +228,11 @@ mod tests {
         )
         .await
         .unwrap();
-        let mut provider = Python::attach(|py| {
+        let provider = Python::attach(|py| {
             KeyPerFileSettingsProvider::new(py, temporary_directory.path().to_str().unwrap(), false)
         });
 
-        SettingsProvider::load(&mut provider).await.unwrap();
+        SettingsProvider::load(&provider).await.unwrap();
 
         assert_data(
             &provider,
@@ -250,11 +254,11 @@ mod tests {
     async fn test_return_empty_data_when_optional_directory_is_missing() {
         let temporary_directory = tempdir().unwrap();
         let missing_directory_path = temporary_directory.path().join("missing");
-        let mut provider = Python::attach(|py| {
+        let provider = Python::attach(|py| {
             KeyPerFileSettingsProvider::new(py, missing_directory_path.to_str().unwrap(), true)
         });
 
-        SettingsProvider::load(&mut provider).await.unwrap();
+        SettingsProvider::load(&provider).await.unwrap();
 
         assert_data(&provider, &BTreeMap::new());
     }
@@ -265,11 +269,11 @@ mod tests {
 
         let temporary_directory = tempdir().unwrap();
         let missing_directory_path = temporary_directory.path().join("missing");
-        let mut provider = Python::attach(|py| {
+        let provider = Python::attach(|py| {
             KeyPerFileSettingsProvider::new(py, missing_directory_path.to_str().unwrap(), false)
         });
 
-        let error = SettingsProvider::load(&mut provider).await.unwrap_err();
+        let error = SettingsProvider::load(&provider).await.unwrap_err();
 
         let error_message = error.to_string();
         assert_eq!(
@@ -288,11 +292,11 @@ mod tests {
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("not-a-directory");
         fs::write(&file_path, "value").await.unwrap();
-        let mut provider = Python::attach(|py| {
+        let provider = Python::attach(|py| {
             KeyPerFileSettingsProvider::new(py, file_path.to_str().unwrap(), false)
         });
 
-        let error = SettingsProvider::load(&mut provider).await.unwrap_err();
+        let error = SettingsProvider::load(&provider).await.unwrap_err();
 
         let error_message = error.to_string();
         assert_eq!(
@@ -306,11 +310,11 @@ mod tests {
         Python::initialize();
 
         let invalid_directory_path = PathBuf::from("\0invalid");
-        let mut provider = Python::attach(|py| {
+        let provider = Python::attach(|py| {
             KeyPerFileSettingsProvider::new(py, invalid_directory_path.to_str().unwrap(), false)
         });
 
-        let error = SettingsProvider::load(&mut provider).await.unwrap_err();
+        let error = SettingsProvider::load(&provider).await.unwrap_err();
 
         let error_message = error.to_string();
         assert!(error_message.contains("RuntimeError: Failed to inspect"));

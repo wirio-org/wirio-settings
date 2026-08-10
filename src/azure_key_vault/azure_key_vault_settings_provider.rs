@@ -15,7 +15,7 @@ use crate::azure_key_vault::default_azure_credential::DefaultAzureCredential;
 use crate::azure_key_vault::remove_user_agent::RemoveUserAgent;
 use crate::core::{PythonSettingsProvider, SettingLookup, SettingsProvider};
 
-#[pyclass(extends = PythonSettingsProvider, str)]
+#[pyclass(extends = PythonSettingsProvider, frozen, str)]
 pub struct AzureKeyVaultSettingsProvider {
     data: ArcSwap<Py<PyDict>>,
     // internal_data: RwLock<BTreeMap<String, Option<String>>>,
@@ -58,7 +58,7 @@ impl AzureKeyVaultSettingsProvider {
         SettingsProvider::try_get(self, py, key)
     }
 
-    pub fn load_sync(&mut self) -> PyResult<()> {
+    pub fn load_sync(&self) -> PyResult<()> {
         SettingsProvider::load_sync(self)
     }
 }
@@ -176,7 +176,7 @@ impl SettingsProvider for AzureKeyVaultSettingsProvider {
         data.clone_ref(py)
     }
 
-    async fn load(&mut self) -> PyResult<()> {
+    async fn load(&self) -> PyResult<()> {
         let secret_client = self.create_secret_client()?;
         let mut secret_properties_pager =
             secret_client

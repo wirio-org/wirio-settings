@@ -8,7 +8,7 @@ use std::{collections::BTreeMap, fmt, mem};
 use super::SettingLookup;
 
 /// Provides setting values
-#[pyclass(name = "SettingsProvider", subclass)]
+#[pyclass(name = "SettingsProvider", subclass, frozen)]
 pub struct PythonSettingsProvider;
 
 #[pymethods]
@@ -31,7 +31,7 @@ impl PythonSettingsProvider {
     }
 
     #[allow(clippy::unused_self)]
-    fn load_sync(&mut self) {
+    fn load_sync(&self) {
         unimplemented!()
     }
 }
@@ -44,9 +44,11 @@ pub trait SettingsProvider: fmt::Display {
         source: BTreeMap<String, Option<String>>,
     ) -> PyResult<Py<PyDict>> {
         let data = PyDict::new(py);
+
         for (key, value) in source {
             data.set_item(key, value)?;
         }
+
         Ok(data.unbind())
     }
 
@@ -61,9 +63,9 @@ pub trait SettingsProvider: fmt::Display {
         }
     }
 
-    async fn load(&mut self) -> PyResult<()>;
+    async fn load(&self) -> PyResult<()>;
 
-    fn load_sync(&mut self) -> PyResult<()> {
+    fn load_sync(&self) -> PyResult<()> {
         // TODO: Detach Python GIL before anything
         let runtime = pyo3_async_runtimes::tokio::get_runtime();
         runtime.block_on(self.load())
@@ -108,13 +110,20 @@ pub trait SettingsProvider: fmt::Display {
 
 #[cfg(test)]
 mod tests {
+    use super::PythonSettingsProvider;
+
     use super::{SettingLookup, SettingsProvider};
     use pyo3::{prelude::*, types::PyDict};
-    use std::{collections::BTreeMap, fmt};
+    use std::{
+        collections::BTreeMap,
+        fmt,
+        sync::atomic::{AtomicBool, Ordering},
+    };
 
+    #[pyclass(extends = PythonSettingsProvider, frozen, str)]
     struct MockSettingsProvider {
         data: Py<PyDict>,
-        is_loaded: bool,
+        is_loaded: AtomicBool,
     }
 
     impl MockSettingsProvider {
@@ -122,7 +131,7 @@ mod tests {
             let _ = py;
             Self {
                 data,
-                is_loaded: false,
+                is_loaded: AtomicBool::new(false),
             }
         }
     }
@@ -132,8 +141,8 @@ mod tests {
             self.data.clone_ref(py)
         }
 
-        async fn load(&mut self) -> PyResult<()> {
-            self.is_loaded = true;
+        async fn load(&self) -> PyResult<()> {
+            self.is_loaded.store(true, Ordering::SeqCst);
             Ok(())
         }
     }
@@ -232,12 +241,12 @@ mod tests {
 
     #[test]
     fn test_load_synchronously() {
-        let mut settings_provider =
+        let settings_provider =
             Python::attach(|py| MockSettingsProvider::new(py, PyDict::new(py).unbind()));
 
         settings_provider.load_sync().unwrap();
 
-        assert!(settings_provider.is_loaded);
+        assert!(settings_provider.is_loaded.load(Ordering::SeqCst));
     }
 
     #[test]

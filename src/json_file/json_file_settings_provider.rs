@@ -1,3 +1,4 @@
+use arc_swap::ArcSwap;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -5,15 +6,16 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::fs;
 
 use crate::core::{
     PythonSettingsProvider, SerdeParser, SettingLookup, SettingsProvider, file_provider,
 };
 
-#[pyclass(extends = PythonSettingsProvider, str)]
+#[pyclass(extends = PythonSettingsProvider, frozen, str)]
 pub struct JsonFileSettingsProvider {
-    data: Py<PyDict>,
+    data: ArcSwap<Py<PyDict>>,
     path: PathBuf,
     optional: bool,
 }
@@ -52,7 +54,7 @@ impl JsonFileSettingsProvider {
         SettingsProvider::try_get(self, py, key)
     }
 
-    pub fn load_sync(&mut self) -> PyResult<()> {
+    pub fn load_sync(&self) -> PyResult<()> {
         SettingsProvider::load_sync(self)
     }
 }
@@ -65,7 +67,7 @@ impl JsonFileSettingsProvider {
         optional: bool,
     ) -> Self {
         Self {
-            data: PyDict::new(py).unbind(),
+            data: ArcSwap::from_pointee(PyDict::new(py).unbind()),
             path: file_provider::resolve_path(content_root_path, path),
             optional,
         }
@@ -100,10 +102,11 @@ impl JsonFileSettingsProvider {
 
 impl SettingsProvider for JsonFileSettingsProvider {
     fn data(&self, py: Python<'_>) -> Py<PyDict> {
-        self.data.clone_ref(py)
+        let data = self.data.load();
+        data.clone_ref(py)
     }
 
-    async fn load(&mut self) -> PyResult<()> {
+    async fn load(&self) -> PyResult<()> {
         let file_exists = fs::try_exists(&self.path).await.map_err(|error| {
             PyRuntimeError::new_err(format!(
                 "Failed to inspect '{}': {}",
@@ -126,7 +129,8 @@ impl SettingsProvider for JsonFileSettingsProvider {
         let raw_json = self.read_json_file().await?;
         let mut parsed_data = self.parse_raw_json(&raw_json)?;
         self.normalize_keys(&mut parsed_data);
-        self.data = Python::attach(|py| Self::create_data(py, parsed_data))?;
+        let data = Python::attach(|py| Self::create_data(py, parsed_data))?;
+        self.data.store(Arc::new(data));
         Ok(())
     }
 }
@@ -182,11 +186,11 @@ mod tests {
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.json");
         fs::write(&file_path, json.to_string()).await.unwrap();
-        let mut provider = Python::attach(|py| {
+        let provider = Python::attach(|py| {
             JsonFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
         });
 
-        SettingsProvider::load(&mut provider).await.unwrap();
+        SettingsProvider::load(&provider).await.unwrap();
 
         assert_data(&provider, &expected_parsed_json);
     }
@@ -214,11 +218,11 @@ mod tests {
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.json");
         fs::write(&file_path, json.to_string()).await.unwrap();
-        let mut provider = Python::attach(|py| {
+        let provider = Python::attach(|py| {
             JsonFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
         });
 
-        SettingsProvider::load(&mut provider).await.unwrap();
+        SettingsProvider::load(&provider).await.unwrap();
 
         assert_data(&provider, &expected_parsed_json);
     }
@@ -240,11 +244,11 @@ mod tests {
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.json");
         fs::write(&file_path, json.to_string()).await.unwrap();
-        let mut provider = Python::attach(|py| {
+        let provider = Python::attach(|py| {
             JsonFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
         });
 
-        SettingsProvider::load(&mut provider).await.unwrap();
+        SettingsProvider::load(&provider).await.unwrap();
 
         assert_data(&provider, &expected_parsed_json);
     }
@@ -254,11 +258,11 @@ mod tests {
         Python::initialize();
 
         let invalid_file_path = PathBuf::from("\0invalid.json");
-        let mut provider = Python::attach(|py| {
+        let provider = Python::attach(|py| {
             JsonFileSettingsProvider::new(py, None, invalid_file_path.to_str().unwrap(), false)
         });
 
-        let error = SettingsProvider::load(&mut provider).await.unwrap_err();
+        let error = SettingsProvider::load(&provider).await.unwrap_err();
         let error_message = error.to_string();
 
         assert!(error_message.contains("RuntimeError: Failed to inspect"));

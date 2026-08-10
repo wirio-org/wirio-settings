@@ -5,7 +5,7 @@ use crate::{
 use pyo3::prelude::*;
 use std::time::Duration;
 
-#[pyclass(extends = PythonSettingsSource)]
+#[pyclass(extends = PythonSettingsSource, frozen)]
 pub struct AzureKeyVaultSettingsSource {
     url: String,
     client_id: Option<String>,

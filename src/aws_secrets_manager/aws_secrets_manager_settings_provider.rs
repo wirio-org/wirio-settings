@@ -1,3 +1,4 @@
+use arc_swap::ArcSwap;
 use aws_config::{BehaviorVersion, Region};
 use aws_sdk_secretsmanager::Client;
 use aws_sdk_secretsmanager::config::{Builder as SecretsManagerConfigBuilder, Credentials};
@@ -7,12 +8,13 @@ use pyo3::types::PyDict;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::Arc;
 
 use crate::core::{PythonSettingsProvider, SerdeParser, SettingLookup, SettingsProvider};
 
-#[pyclass(extends = PythonSettingsProvider, str)]
+#[pyclass(extends = PythonSettingsProvider, frozen, str)]
 pub struct AwsSecretsManagerSettingsProvider {
-    data: Py<PyDict>,
+    data: ArcSwap<Py<PyDict>>,
     secret_id: String,
     region: Option<String>,
     url: Option<String>,
@@ -58,7 +60,7 @@ impl AwsSecretsManagerSettingsProvider {
         SettingsProvider::try_get(self, py, key)
     }
 
-    pub fn load_sync(&mut self) -> PyResult<()> {
+    pub fn load_sync(&self) -> PyResult<()> {
         SettingsProvider::load_sync(self)
     }
 }
@@ -76,7 +78,7 @@ impl AwsSecretsManagerSettingsProvider {
         profile: Option<String>,
     ) -> Self {
         Self {
-            data: PyDict::new(py).unbind(),
+            data: ArcSwap::from_pointee(PyDict::new(py).unbind()),
             secret_id,
             region,
             url,
@@ -163,10 +165,11 @@ impl AwsSecretsManagerSettingsProvider {
 
 impl SettingsProvider for AwsSecretsManagerSettingsProvider {
     fn data(&self, py: Python<'_>) -> Py<PyDict> {
-        self.data.clone_ref(py)
+        let data = self.data.load();
+        data.clone_ref(py)
     }
 
-    async fn load(&mut self) -> PyResult<()> {
+    async fn load(&self) -> PyResult<()> {
         let secrets_manager_client = self.create_secrets_manager_client().await?;
         let get_secret_value_response = secrets_manager_client
             .get_secret_value()
@@ -187,7 +190,8 @@ impl SettingsProvider for AwsSecretsManagerSettingsProvider {
         })?;
         let mut parsed_data = Self::parse_secret_string(secret_string)?;
         self.normalize_keys(&mut parsed_data);
-        self.data = Python::attach(|py| Self::create_data(py, parsed_data))?;
+        let data = Python::attach(|py| Self::create_data(py, parsed_data))?;
+        self.data.store(Arc::new(data));
         Ok(())
     }
 }
@@ -357,7 +361,7 @@ mod tests {
     async fn test_fail_when_loading_secret_and_request_fails() {
         Python::initialize();
 
-        let mut provider = Python::attach(|py| {
+        let provider = Python::attach(|py| {
             AwsSecretsManagerSettingsProvider::new(
                 py,
                 String::from("dev/secret-id"),
@@ -370,7 +374,7 @@ mod tests {
             )
         });
 
-        let error = SettingsProvider::load(&mut provider).await.unwrap_err();
+        let error = SettingsProvider::load(&provider).await.unwrap_err();
 
         assert!(error.to_string().starts_with(
             "RuntimeError: Failed to read AWS secret 'dev/secret-id' from AWS Secrets Manager:"

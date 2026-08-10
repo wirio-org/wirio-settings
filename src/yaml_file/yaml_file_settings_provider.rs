@@ -1,18 +1,20 @@
+use arc_swap::ArcSwap;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use serde_json::Value;
 use std::fmt;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::fs;
 
 use crate::core::{
     PythonSettingsProvider, SerdeParser, SettingLookup, SettingsProvider, file_provider,
 };
 
-#[pyclass(extends = PythonSettingsProvider, str)]
+#[pyclass(extends = PythonSettingsProvider, frozen, str)]
 pub struct YamlFileSettingsProvider {
-    data: Py<PyDict>,
+    data: ArcSwap<Py<PyDict>>,
     path: PathBuf,
     optional: bool,
 }
@@ -51,7 +53,7 @@ impl YamlFileSettingsProvider {
         SettingsProvider::try_get(self, py, key)
     }
 
-    pub fn load_sync(&mut self) -> PyResult<()> {
+    pub fn load_sync(&self) -> PyResult<()> {
         SettingsProvider::load_sync(self)
     }
 }
@@ -64,7 +66,7 @@ impl YamlFileSettingsProvider {
         optional: bool,
     ) -> Self {
         Self {
-            data: PyDict::new(py).unbind(),
+            data: ArcSwap::from_pointee(PyDict::new(py).unbind()),
             path: file_provider::resolve_path(content_root_path, path),
             optional,
         }
@@ -83,10 +85,11 @@ impl YamlFileSettingsProvider {
 
 impl SettingsProvider for YamlFileSettingsProvider {
     fn data(&self, py: Python<'_>) -> Py<PyDict> {
-        self.data.clone_ref(py)
+        let data = self.data.load();
+        data.clone_ref(py)
     }
 
-    async fn load(&mut self) -> PyResult<()> {
+    async fn load(&self) -> PyResult<()> {
         let file_exists = fs::try_exists(&self.path).await.map_err(|error| {
             PyRuntimeError::new_err(format!(
                 "Failed to inspect '{}': {}",
@@ -109,7 +112,8 @@ impl SettingsProvider for YamlFileSettingsProvider {
         let raw_yaml = self.read_yaml_file().await?;
 
         if raw_yaml.trim().is_empty() {
-            self.data = Python::attach(|py| PyDict::new(py).unbind());
+            let data = Python::attach(|py| PyDict::new(py).unbind());
+            self.data.store(Arc::new(data));
             return Ok(());
         }
 
@@ -122,7 +126,8 @@ impl SettingsProvider for YamlFileSettingsProvider {
         })?;
 
         if parsed_yaml.is_null() {
-            self.data = Python::attach(|py| PyDict::new(py).unbind());
+            let data = Python::attach(|py| PyDict::new(py).unbind());
+            self.data.store(Arc::new(data));
             return Ok(());
         }
 
@@ -132,7 +137,8 @@ impl SettingsProvider for YamlFileSettingsProvider {
 
         let mut parsed_data = SerdeParser::new().parse(yaml_object)?;
         self.normalize_keys(&mut parsed_data);
-        self.data = Python::attach(|py| Self::create_data(py, parsed_data))?;
+        let data = Python::attach(|py| Self::create_data(py, parsed_data))?;
+        self.data.store(Arc::new(data));
         Ok(())
     }
 }
@@ -198,10 +204,10 @@ logging:
         .await
         .unwrap();
 
-        let mut provider = Python::attach(|py| {
+        let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
         });
-        SettingsProvider::load(&mut provider).await.unwrap();
+        SettingsProvider::load(&provider).await.unwrap();
 
         assert_data(
             &provider,
@@ -240,10 +246,10 @@ port: 8080
         .await
         .unwrap();
 
-        let mut provider = Python::attach(|py| {
+        let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
         });
-        SettingsProvider::load(&mut provider).await.unwrap();
+        SettingsProvider::load(&provider).await.unwrap();
 
         assert_data(
             &provider,
@@ -260,10 +266,10 @@ port: 8080
         let file_path = temporary_directory.path().join("settings.yaml");
         fs::write(&file_path, "").await.unwrap();
 
-        let mut provider = Python::attach(|py| {
+        let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
         });
-        SettingsProvider::load(&mut provider).await.unwrap();
+        SettingsProvider::load(&provider).await.unwrap();
 
         assert_data(&provider, &BTreeMap::new());
     }
@@ -281,10 +287,10 @@ port: 8080
         .await
         .unwrap();
 
-        let mut provider = Python::attach(|py| {
+        let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
         });
-        SettingsProvider::load(&mut provider).await.unwrap();
+        SettingsProvider::load(&provider).await.unwrap();
 
         assert_data(&provider, &BTreeMap::new());
     }
@@ -294,10 +300,10 @@ port: 8080
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("missing.yaml");
 
-        let mut provider = Python::attach(|py| {
+        let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), true)
         });
-        SettingsProvider::load(&mut provider).await.unwrap();
+        SettingsProvider::load(&provider).await.unwrap();
 
         assert_data(&provider, &BTreeMap::new());
     }
@@ -309,11 +315,11 @@ port: 8080
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("missing.yaml");
 
-        let mut provider = Python::attach(|py| {
+        let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
         });
 
-        let error = SettingsProvider::load(&mut provider).await.unwrap_err();
+        let error = SettingsProvider::load(&provider).await.unwrap_err();
         let error_message = error.to_string();
 
         assert_eq!(
@@ -330,7 +336,7 @@ port: 8080
         Python::initialize();
 
         let temporary_directory = tempdir().unwrap();
-        let mut provider = Python::attach(|py| {
+        let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(
                 py,
                 None,
@@ -339,7 +345,7 @@ port: 8080
             )
         });
 
-        let error = SettingsProvider::load(&mut provider).await.unwrap_err();
+        let error = SettingsProvider::load(&provider).await.unwrap_err();
         let error_message = error.to_string();
 
         assert!(error_message.contains("Failed to read YAML settings file"));
@@ -353,11 +359,11 @@ port: 8080
         let file_path = temporary_directory.path().join("settings.yaml");
         fs::write(&file_path, "appName: [wirio").await.unwrap();
 
-        let mut provider = Python::attach(|py| {
+        let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
         });
 
-        let error = SettingsProvider::load(&mut provider).await.unwrap_err();
+        let error = SettingsProvider::load(&provider).await.unwrap_err();
         let error_message = error.to_string();
 
         assert!(error_message.contains("Could not parse"));
@@ -372,11 +378,11 @@ port: 8080
         let file_path = temporary_directory.path().join("settings.yaml");
         fs::write(&file_path, "- wirio\n- config").await.unwrap();
 
-        let mut provider = Python::attach(|py| {
+        let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
         });
 
-        let error = SettingsProvider::load(&mut provider).await.unwrap_err();
+        let error = SettingsProvider::load(&provider).await.unwrap_err();
         let error_message = error.to_string();
 
         assert!(error_message.contains("Could not parse the YAML file"));
@@ -398,11 +404,11 @@ port: 8080
         Python::initialize();
 
         let invalid_file_path = PathBuf::from("\0invalid.yaml");
-        let mut provider = Python::attach(|py| {
+        let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(py, None, invalid_file_path.to_str().unwrap(), false)
         });
 
-        let error = SettingsProvider::load(&mut provider).await.unwrap_err();
+        let error = SettingsProvider::load(&provider).await.unwrap_err();
         let error_message = error.to_string();
 
         assert!(error_message.contains("RuntimeError: Failed to inspect"));
@@ -421,11 +427,11 @@ port: 8080
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.yaml");
         fs::write(&file_path, raw_yaml).await.unwrap();
-        let mut provider = Python::attach(|py| {
+        let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
         });
 
-        SettingsProvider::load(&mut provider).await.unwrap();
+        SettingsProvider::load(&provider).await.unwrap();
 
         assert_data(&provider, &expected_parsed_yaml);
     }

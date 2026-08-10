@@ -23,7 +23,6 @@ class _DictionarySettingsProvider(SettingsProvider):
     def __init__(self, values: dict[str, str | None]) -> None:
         self.values = values
 
-    @property
     def data(self) -> dict[str, str | None]:
         return self.values
 

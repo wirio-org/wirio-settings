@@ -36,7 +36,7 @@ impl PythonSettingsProvider {
     }
 }
 
-pub trait SettingsProvider: fmt::Display {
+pub trait SettingsProvider: Sync + fmt::Display {
     fn data(&self, py: Python<'_>) -> Py<PyDict>;
 
     fn create_data(
@@ -65,10 +65,9 @@ pub trait SettingsProvider: fmt::Display {
 
     async fn load(&self) -> PyResult<()>;
 
-    fn load_sync(&self) -> PyResult<()> {
-        // TODO: Detach Python GIL before anything
+    fn load_sync(&self, py: Python<'_>) -> PyResult<()> {
         let runtime = pyo3_async_runtimes::tokio::get_runtime();
-        runtime.block_on(self.load())
+        py.detach(|| runtime.block_on(self.load()))
     }
 
     fn normalize_keys(&self, data: &mut BTreeMap<String, Option<String>>) {
@@ -142,6 +141,13 @@ mod tests {
         }
 
         async fn load(&self) -> PyResult<()> {
+            tokio::task::spawn_blocking(|| {
+                Python::attach(|py| {
+                    let _ = PyDict::new(py);
+                });
+            })
+            .await
+            .unwrap();
             self.is_loaded.store(true, Ordering::SeqCst);
             Ok(())
         }
@@ -241,10 +247,11 @@ mod tests {
 
     #[test]
     fn test_load_synchronously() {
+        Python::initialize();
         let settings_provider =
             Python::attach(|py| MockSettingsProvider::new(py, PyDict::new(py).unbind()));
 
-        settings_provider.load_sync().unwrap();
+        Python::attach(|py| settings_provider.load_sync(py)).unwrap();
 
         assert!(settings_provider.is_loaded.load(Ordering::SeqCst));
     }

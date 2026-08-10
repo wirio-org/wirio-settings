@@ -41,8 +41,8 @@ impl KeyPerFileSettingsProvider {
         SettingsProvider::try_get(self, py, key)
     }
 
-    pub fn load_sync(&self) -> PyResult<()> {
-        SettingsProvider::load_sync(self)
+    pub fn load_sync(&self, py: Python<'_>) -> PyResult<()> {
+        SettingsProvider::load_sync(self, py)
     }
 }
 

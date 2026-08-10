@@ -37,6 +37,7 @@ impl SettingsSource for YamlFileSettingsSource {
             py,
             PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(
                 YamlFileSettingsProvider::new(
+                    py,
                     self.content_root_path.as_deref(),
                     &self.path,
                     self.optional,

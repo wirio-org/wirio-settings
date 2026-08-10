@@ -25,7 +25,7 @@ impl SettingsSource for EnvironmentVariablesSettingsSource {
         Py::new(
             py,
             PyClassInitializer::from(PythonSettingsProvider::new())
-                .add_subclass(EnvironmentVariablesSettingsProvider::new()),
+                .add_subclass(EnvironmentVariablesSettingsProvider::new(py)),
         )
         .map(|provider| provider.into_bound(py).into_super().unbind())
     }

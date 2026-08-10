@@ -1,5 +1,5 @@
-use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
+use pyo3::{exceptions::PyRuntimeError, types::PyDict};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
@@ -9,7 +9,7 @@ use crate::core::{PythonSettingsProvider, SettingLookup, SettingsProvider};
 
 #[pyclass(extends = PythonSettingsProvider, str)]
 pub struct KeyPerFileSettingsProvider {
-    data: BTreeMap<String, Option<String>>,
+    data: Py<PyDict>,
     directory_path: PathBuf,
     optional: bool,
 }
@@ -18,18 +18,25 @@ pub struct KeyPerFileSettingsProvider {
 impl KeyPerFileSettingsProvider {
     /// Adds settings using files from a directory. File names are used as the key, file contents are used as the value.
     #[new]
-    pub fn new_python(directory_path: &str, optional: bool) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(PythonSettingsProvider::new())
-            .add_subclass(Self::new(directory_path, optional))
+    pub fn new_python(
+        py: Python<'_>,
+        directory_path: &str,
+        optional: bool,
+    ) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new(
+            py,
+            directory_path,
+            optional,
+        ))
     }
 
-    #[getter]
-    fn data(&self) -> &BTreeMap<String, Option<String>> {
-        SettingsProvider::data(self)
+    #[pyo3(signature = () -> "dict[str, str | None]")]
+    fn data(&self, py: Python<'_>) -> Py<PyDict> {
+        SettingsProvider::data(self, py)
     }
 
-    fn try_get(&self, key: &str) -> SettingLookup {
-        SettingsProvider::try_get(self, key)
+    fn try_get(&self, py: Python<'_>, key: &str) -> PyResult<SettingLookup> {
+        SettingsProvider::try_get(self, py, key)
     }
 
     pub fn load_sync(&mut self) -> PyResult<()> {
@@ -38,9 +45,9 @@ impl KeyPerFileSettingsProvider {
 }
 
 impl KeyPerFileSettingsProvider {
-    pub fn new(directory_path: &str, optional: bool) -> Self {
+    pub fn new(py: Python<'_>, directory_path: &str, optional: bool) -> Self {
         Self {
-            data: BTreeMap::new(),
+            data: PyDict::new(py).unbind(),
             directory_path: PathBuf::from(directory_path),
             optional,
         }
@@ -60,8 +67,8 @@ impl KeyPerFileSettingsProvider {
 }
 
 impl SettingsProvider for KeyPerFileSettingsProvider {
-    fn data(&self) -> &BTreeMap<String, Option<String>> {
-        &self.data
+    fn data(&self, py: Python<'_>) -> Py<PyDict> {
+        self.data.clone_ref(py)
     }
 
     async fn load(&mut self) -> PyResult<()> {
@@ -162,7 +169,7 @@ impl SettingsProvider for KeyPerFileSettingsProvider {
         }
 
         self.normalize_keys(&mut parsed_data);
-        self.data = parsed_data;
+        self.data = Python::attach(|py| Self::create_data(py, parsed_data))?;
         Ok(())
     }
 }
@@ -178,9 +185,24 @@ mod tests {
     use super::KeyPerFileSettingsProvider;
     use crate::core::SettingsProvider;
     use pyo3::Python;
+    use pyo3::types::PyAnyMethods;
     use std::{collections::BTreeMap, path::PathBuf};
     use tempfile::tempdir;
     use tokio::fs;
+
+    fn assert_data(
+        provider: &KeyPerFileSettingsProvider,
+        expected_data: &BTreeMap<String, Option<String>>,
+    ) {
+        Python::attach(|py| {
+            let data = SettingsProvider::data(provider, py);
+            let actual_data = data
+                .bind(py)
+                .extract::<BTreeMap<String, Option<String>>>()
+                .unwrap();
+            assert_eq!(&actual_data, expected_data);
+        });
+    }
 
     #[tokio::test]
     async fn test_load_values_from_directory_files() {
@@ -202,14 +224,15 @@ mod tests {
         )
         .await
         .unwrap();
-        let mut provider =
-            KeyPerFileSettingsProvider::new(temporary_directory.path().to_str().unwrap(), false);
+        let mut provider = Python::attach(|py| {
+            KeyPerFileSettingsProvider::new(py, temporary_directory.path().to_str().unwrap(), false)
+        });
 
         SettingsProvider::load(&mut provider).await.unwrap();
 
-        assert_eq!(
-            provider.data,
-            BTreeMap::from([
+        assert_data(
+            &provider,
+            &BTreeMap::from([
                 (String::from("app_name"), Some(String::from("wirio"))),
                 (
                     String::from("database_password"),
@@ -219,7 +242,7 @@ mod tests {
                     String::from("logging__log_level__default"),
                     Some(String::from("WARNING")),
                 ),
-            ])
+            ]),
         );
     }
 
@@ -227,12 +250,13 @@ mod tests {
     async fn test_return_empty_data_when_optional_directory_is_missing() {
         let temporary_directory = tempdir().unwrap();
         let missing_directory_path = temporary_directory.path().join("missing");
-        let mut provider =
-            KeyPerFileSettingsProvider::new(missing_directory_path.to_str().unwrap(), true);
+        let mut provider = Python::attach(|py| {
+            KeyPerFileSettingsProvider::new(py, missing_directory_path.to_str().unwrap(), true)
+        });
 
         SettingsProvider::load(&mut provider).await.unwrap();
 
-        assert_eq!(provider.data, BTreeMap::new());
+        assert_data(&provider, &BTreeMap::new());
     }
 
     #[tokio::test]
@@ -241,8 +265,9 @@ mod tests {
 
         let temporary_directory = tempdir().unwrap();
         let missing_directory_path = temporary_directory.path().join("missing");
-        let mut provider =
-            KeyPerFileSettingsProvider::new(missing_directory_path.to_str().unwrap(), false);
+        let mut provider = Python::attach(|py| {
+            KeyPerFileSettingsProvider::new(py, missing_directory_path.to_str().unwrap(), false)
+        });
 
         let error = SettingsProvider::load(&mut provider).await.unwrap_err();
 
@@ -263,7 +288,9 @@ mod tests {
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("not-a-directory");
         fs::write(&file_path, "value").await.unwrap();
-        let mut provider = KeyPerFileSettingsProvider::new(file_path.to_str().unwrap(), false);
+        let mut provider = Python::attach(|py| {
+            KeyPerFileSettingsProvider::new(py, file_path.to_str().unwrap(), false)
+        });
 
         let error = SettingsProvider::load(&mut provider).await.unwrap_err();
 
@@ -279,8 +306,9 @@ mod tests {
         Python::initialize();
 
         let invalid_directory_path = PathBuf::from("\0invalid");
-        let mut provider =
-            KeyPerFileSettingsProvider::new(invalid_directory_path.to_str().unwrap(), false);
+        let mut provider = Python::attach(|py| {
+            KeyPerFileSettingsProvider::new(py, invalid_directory_path.to_str().unwrap(), false)
+        });
 
         let error = SettingsProvider::load(&mut provider).await.unwrap_err();
 
@@ -290,7 +318,10 @@ mod tests {
 
     #[test]
     fn test_display_returns_type_name() {
-        let display = KeyPerFileSettingsProvider::new("settings", false).to_string();
+        Python::initialize();
+
+        let display =
+            Python::attach(|py| KeyPerFileSettingsProvider::new(py, "settings", false).to_string());
 
         assert_eq!(display, "KeyPerFileSettingsProvider");
     }

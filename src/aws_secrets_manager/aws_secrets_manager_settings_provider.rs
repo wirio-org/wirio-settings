@@ -3,6 +3,7 @@ use aws_sdk_secretsmanager::Client;
 use aws_sdk_secretsmanager::config::{Builder as SecretsManagerConfigBuilder, Credentials};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fmt;
@@ -11,7 +12,7 @@ use crate::core::{PythonSettingsProvider, SerdeParser, SettingLookup, SettingsPr
 
 #[pyclass(extends = PythonSettingsProvider, str)]
 pub struct AwsSecretsManagerSettingsProvider {
-    data: BTreeMap<String, Option<String>>,
+    data: Py<PyDict>,
     secret_id: String,
     region: Option<String>,
     url: Option<String>,
@@ -27,6 +28,7 @@ impl AwsSecretsManagerSettingsProvider {
     #[pyo3(signature = (secret_id, region=None, url=None, access_key_id=None, secret_access_key=None, session_token=None, profile=None))]
     #[allow(clippy::too_many_arguments)]
     pub fn new_python(
+        py: Python<'_>,
         secret_id: String,
         region: Option<String>,
         url: Option<String>,
@@ -36,6 +38,7 @@ impl AwsSecretsManagerSettingsProvider {
         profile: Option<String>,
     ) -> PyClassInitializer<Self> {
         PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new(
+            py,
             secret_id,
             region,
             url,
@@ -46,13 +49,13 @@ impl AwsSecretsManagerSettingsProvider {
         ))
     }
 
-    #[getter]
-    fn data(&self) -> &BTreeMap<String, Option<String>> {
-        SettingsProvider::data(self)
+    #[pyo3(signature = () -> "dict[str, str | None]")]
+    fn data(&self, py: Python<'_>) -> Py<PyDict> {
+        SettingsProvider::data(self, py)
     }
 
-    fn try_get(&self, key: &str) -> SettingLookup {
-        SettingsProvider::try_get(self, key)
+    fn try_get(&self, py: Python<'_>, key: &str) -> PyResult<SettingLookup> {
+        SettingsProvider::try_get(self, py, key)
     }
 
     pub fn load_sync(&mut self) -> PyResult<()> {
@@ -61,7 +64,9 @@ impl AwsSecretsManagerSettingsProvider {
 }
 
 impl AwsSecretsManagerSettingsProvider {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
+        py: Python<'_>,
         secret_id: String,
         region: Option<String>,
         url: Option<String>,
@@ -71,7 +76,7 @@ impl AwsSecretsManagerSettingsProvider {
         profile: Option<String>,
     ) -> Self {
         Self {
-            data: BTreeMap::new(),
+            data: PyDict::new(py).unbind(),
             secret_id,
             region,
             url,
@@ -157,8 +162,8 @@ impl AwsSecretsManagerSettingsProvider {
 }
 
 impl SettingsProvider for AwsSecretsManagerSettingsProvider {
-    fn data(&self) -> &BTreeMap<String, Option<String>> {
-        &self.data
+    fn data(&self, py: Python<'_>) -> Py<PyDict> {
+        self.data.clone_ref(py)
     }
 
     async fn load(&mut self) -> PyResult<()> {
@@ -182,7 +187,7 @@ impl SettingsProvider for AwsSecretsManagerSettingsProvider {
         })?;
         let mut parsed_data = Self::parse_secret_string(secret_string)?;
         self.normalize_keys(&mut parsed_data);
-        self.data = parsed_data;
+        self.data = Python::attach(|py| Self::create_data(py, parsed_data))?;
         Ok(())
     }
 }
@@ -244,15 +249,18 @@ mod tests {
     fn test_validate_explicit_credentials_require_access_key_and_secret() {
         Python::initialize();
 
-        let provider = AwsSecretsManagerSettingsProvider::new(
-            String::from("dev/secret-id"),
-            None,
-            None,
-            Some(String::from("access-key")),
-            None,
-            None,
-            None,
-        );
+        let provider = Python::attach(|py| {
+            AwsSecretsManagerSettingsProvider::new(
+                py,
+                String::from("dev/secret-id"),
+                None,
+                None,
+                Some(String::from("access-key")),
+                None,
+                None,
+                None,
+            )
+        });
 
         let error = provider.validate_explicit_credentials().unwrap_err();
 
@@ -280,15 +288,18 @@ mod tests {
     fn test_fail_when_session_token_is_provided_without_access_key_and_secret() {
         Python::initialize();
 
-        let provider = AwsSecretsManagerSettingsProvider::new(
-            String::from("dev/secret-id"),
-            None,
-            None,
-            None,
-            None,
-            Some(String::from("session-token")),
-            None,
-        );
+        let provider = Python::attach(|py| {
+            AwsSecretsManagerSettingsProvider::new(
+                py,
+                String::from("dev/secret-id"),
+                None,
+                None,
+                None,
+                None,
+                Some(String::from("session-token")),
+                None,
+            )
+        });
 
         let error = provider.validate_explicit_credentials().unwrap_err();
 
@@ -300,15 +311,20 @@ mod tests {
 
     #[test]
     fn test_not_validate_explicit_credentials_when_no_explicit_credentials_are_provided() {
-        let provider = AwsSecretsManagerSettingsProvider::new(
-            String::from("dev/secret-id"),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        );
+        Python::initialize();
+
+        let provider = Python::attach(|py| {
+            AwsSecretsManagerSettingsProvider::new(
+                py,
+                String::from("dev/secret-id"),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+        });
 
         let result = provider.validate_explicit_credentials();
 
@@ -319,15 +335,18 @@ mod tests {
     async fn test_create_secrets_manager_client_with_region_profile_url_and_credentials() {
         Python::initialize();
 
-        let provider = AwsSecretsManagerSettingsProvider::new(
-            String::from("dev/secret-id"),
-            Some(String::from("eu-west-1")),
-            Some(String::from("http://127.0.0.1:9")),
-            Some(String::from("access-key")),
-            Some(String::from("secret-key")),
-            Some(String::from("session-token")),
-            Some(String::from("integration")),
-        );
+        let provider = Python::attach(|py| {
+            AwsSecretsManagerSettingsProvider::new(
+                py,
+                String::from("dev/secret-id"),
+                Some(String::from("eu-west-1")),
+                Some(String::from("http://127.0.0.1:9")),
+                Some(String::from("access-key")),
+                Some(String::from("secret-key")),
+                Some(String::from("session-token")),
+                Some(String::from("integration")),
+            )
+        });
 
         let secrets_manager_client_result = provider.create_secrets_manager_client().await;
 
@@ -338,15 +357,18 @@ mod tests {
     async fn test_fail_when_loading_secret_and_request_fails() {
         Python::initialize();
 
-        let mut provider = AwsSecretsManagerSettingsProvider::new(
-            String::from("dev/secret-id"),
-            Some(String::from("eu-west-1")),
-            Some(String::from("http://127.0.0.1:9")),
-            Some(String::from("access-key")),
-            Some(String::from("secret-key")),
-            None,
-            None,
-        );
+        let mut provider = Python::attach(|py| {
+            AwsSecretsManagerSettingsProvider::new(
+                py,
+                String::from("dev/secret-id"),
+                Some(String::from("eu-west-1")),
+                Some(String::from("http://127.0.0.1:9")),
+                Some(String::from("access-key")),
+                Some(String::from("secret-key")),
+                None,
+                None,
+            )
+        });
 
         let error = SettingsProvider::load(&mut provider).await.unwrap_err();
 
@@ -357,16 +379,21 @@ mod tests {
 
     #[test]
     fn test_display_returns_type_name() {
-        let display = AwsSecretsManagerSettingsProvider::new(
-            String::from("dev/secret-id"),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .to_string();
+        Python::initialize();
+
+        let display = Python::attach(|py| {
+            AwsSecretsManagerSettingsProvider::new(
+                py,
+                String::from("dev/secret-id"),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .to_string()
+        });
 
         assert_eq!(display, "AwsSecretsManagerSettingsProvider");
     }

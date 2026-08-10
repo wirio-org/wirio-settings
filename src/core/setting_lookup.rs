@@ -1,7 +1,7 @@
-use pyo3::prelude::*;
+use pyo3::{prelude::*, types::PyString};
 
 #[pyclass]
 pub enum SettingLookup {
     Missing(),
-    Found { value: Option<String> },
+    Found { value: Option<Py<PyString>> },
 }

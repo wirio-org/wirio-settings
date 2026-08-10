@@ -1,27 +1,28 @@
 use crate::core::{PythonSettingsProvider, SettingLookup, SettingsProvider};
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use std::collections::BTreeMap;
 use std::fmt;
 
 #[pyclass(extends = PythonSettingsProvider, str)]
 pub struct EnvironmentVariablesSettingsProvider {
-    data: BTreeMap<String, Option<String>>,
+    data: Py<PyDict>,
 }
 
 #[pymethods]
 impl EnvironmentVariablesSettingsProvider {
     #[new]
-    pub fn new_python() -> PyClassInitializer<Self> {
-        PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new())
+    pub fn new_python(py: Python<'_>) -> PyClassInitializer<Self> {
+        PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new(py))
     }
 
-    #[getter]
-    fn data(&self) -> &BTreeMap<String, Option<String>> {
-        SettingsProvider::data(self)
+    #[pyo3(signature = () -> "dict[str, str | None]")]
+    fn data(&self, py: Python<'_>) -> Py<PyDict> {
+        SettingsProvider::data(self, py)
     }
 
-    fn try_get(&self, key: &str) -> SettingLookup {
-        SettingsProvider::try_get(self, key)
+    fn try_get(&self, py: Python<'_>, key: &str) -> PyResult<SettingLookup> {
+        SettingsProvider::try_get(self, py, key)
     }
 
     pub fn load_sync(&mut self) -> PyResult<()> {
@@ -30,9 +31,9 @@ impl EnvironmentVariablesSettingsProvider {
 }
 
 impl EnvironmentVariablesSettingsProvider {
-    pub fn new() -> Self {
+    pub fn new(py: Python<'_>) -> Self {
         Self {
-            data: BTreeMap::new(),
+            data: PyDict::new(py).unbind(),
         }
     }
 
@@ -49,14 +50,14 @@ impl EnvironmentVariablesSettingsProvider {
 }
 
 impl SettingsProvider for EnvironmentVariablesSettingsProvider {
-    fn data(&self) -> &BTreeMap<String, Option<String>> {
-        &self.data
+    fn data(&self, py: Python<'_>) -> Py<PyDict> {
+        self.data.clone_ref(py)
     }
 
     async fn load(&mut self) -> PyResult<()> {
         let mut environment_variables = Self::get_environment_variables();
         self.normalize_keys(&mut environment_variables);
-        self.data = environment_variables;
+        self.data = Python::attach(|py| Self::create_data(py, environment_variables))?;
         Ok(())
     }
 
@@ -75,6 +76,7 @@ impl fmt::Display for EnvironmentVariablesSettingsProvider {
 mod tests {
     use super::EnvironmentVariablesSettingsProvider;
     use crate::core::SettingsProvider;
+    use pyo3::Python;
 
     #[test]
     fn test_replace_double_underscore_with_dot_in_environment_variable_name() {
@@ -98,7 +100,10 @@ mod tests {
     fn test_display_returns_type_name() {
         let expected_display = "EnvironmentVariablesSettingsProvider";
 
-        let display = EnvironmentVariablesSettingsProvider::new().to_string();
+        Python::initialize();
+
+        let display =
+            Python::attach(|py| EnvironmentVariablesSettingsProvider::new(py).to_string());
 
         assert_eq!(display, expected_display);
     }

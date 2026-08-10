@@ -30,7 +30,7 @@ impl SettingsSource for KeyPerFileSettingsSource {
         Py::new(
             py,
             PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(
-                KeyPerFileSettingsProvider::new(&self.directory_path, self.optional),
+                KeyPerFileSettingsProvider::new(py, &self.directory_path, self.optional),
             ),
         )
         .map(|provider| provider.into_bound(py).into_super().unbind())

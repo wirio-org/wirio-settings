@@ -1,12 +1,15 @@
+use arc_swap::ArcSwap;
 use azure_identity::ClientSecretCredential;
 use azure_security_keyvault_secrets::SecretClientOptions;
 use azure_security_keyvault_secrets::{ResourceExt, SecretClient, models::SecretProperties};
 use futures::TryStreamExt;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::azure_key_vault::default_azure_credential::DefaultAzureCredential;
 use crate::azure_key_vault::remove_user_agent::RemoveUserAgent;
@@ -14,38 +17,45 @@ use crate::core::{PythonSettingsProvider, SettingLookup, SettingsProvider};
 
 #[pyclass(extends = PythonSettingsProvider, str)]
 pub struct AzureKeyVaultSettingsProvider {
-    data: BTreeMap<String, Option<String>>,
+    data: ArcSwap<Py<PyDict>>,
+    // internal_data: RwLock<BTreeMap<String, Option<String>>>,
     url: String,
     client_id: Option<String>,
     client_secret: Option<String>,
     tenant_id: Option<String>,
+    #[allow(dead_code)]
+    reload_interval: Option<Duration>,
 }
 
 #[pymethods]
 impl AzureKeyVaultSettingsProvider {
     #[new]
-    #[pyo3(signature = (url, client_id=None, client_secret=None, tenant_id=None))]
+    #[pyo3(signature = (url, client_id=None, client_secret=None, tenant_id=None, reload_interval=None))]
     pub fn new_python(
+        py: Python<'_>,
         url: String,
         client_id: Option<String>,
         client_secret: Option<String>,
         tenant_id: Option<String>,
+        reload_interval: Option<Duration>,
     ) -> PyClassInitializer<Self> {
         PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new(
+            py,
             url,
             client_id,
             client_secret,
             tenant_id,
+            reload_interval,
         ))
     }
 
-    #[getter]
-    fn data(&self) -> &BTreeMap<String, Option<String>> {
-        SettingsProvider::data(self)
+    #[pyo3(signature = () -> "dict[str, str | None]")]
+    fn data(&self, py: Python<'_>) -> Py<PyDict> {
+        SettingsProvider::data(self, py)
     }
 
-    fn try_get(&self, key: &str) -> SettingLookup {
-        SettingsProvider::try_get(self, key)
+    fn try_get(&self, py: Python<'_>, key: &str) -> PyResult<SettingLookup> {
+        SettingsProvider::try_get(self, py, key)
     }
 
     pub fn load_sync(&mut self) -> PyResult<()> {
@@ -55,17 +65,20 @@ impl AzureKeyVaultSettingsProvider {
 
 impl AzureKeyVaultSettingsProvider {
     pub fn new(
+        py: Python<'_>,
         url: String,
         client_id: Option<String>,
         client_secret: Option<String>,
         tenant_id: Option<String>,
+        reload_interval: Option<Duration>,
     ) -> Self {
         Self {
-            data: BTreeMap::new(),
+            data: ArcSwap::from_pointee(PyDict::new(py).unbind()),
             url,
             client_id,
             client_secret,
             tenant_id,
+            reload_interval,
         }
     }
 
@@ -158,8 +171,9 @@ impl AzureKeyVaultSettingsProvider {
 }
 
 impl SettingsProvider for AzureKeyVaultSettingsProvider {
-    fn data(&self) -> &BTreeMap<String, Option<String>> {
-        &self.data
+    fn data(&self, py: Python<'_>) -> Py<PyDict> {
+        let data = self.data.load();
+        data.clone_ref(py)
     }
 
     async fn load(&mut self) -> PyResult<()> {
@@ -210,7 +224,16 @@ impl SettingsProvider for AzureKeyVaultSettingsProvider {
         }
 
         self.normalize_keys(&mut secret_values);
-        self.data = secret_values;
+        Python::attach(|py| -> PyResult<()> {
+            let data = PyDict::new(py);
+
+            for (secret_name, secret_value) in secret_values {
+                data.set_item(secret_name, secret_value)?;
+            }
+
+            self.data.store(Arc::new(data.unbind()));
+            Ok(())
+        })?;
         Ok(())
     }
 
@@ -221,7 +244,7 @@ impl SettingsProvider for AzureKeyVaultSettingsProvider {
 
 impl fmt::Display for AzureKeyVaultSettingsProvider {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.get_type_name())
+        write!(f, "{} {{url: {}}}", self.get_type_name(), self.url)
     }
 }
 
@@ -242,35 +265,40 @@ mod tests {
     }
 
     #[test]
-    fn test_display_returns_type_name() {
-        let display = AzureKeyVaultSettingsProvider::new(
-            String::from("https://example.vault.azure.net"),
-            None,
-            None,
-            None,
-        )
-        .to_string();
+    fn test_display_type() {
+        Python::initialize();
 
-        assert_eq!(display, "AzureKeyVaultSettingsProvider");
+        Python::attach(|py| {
+            let url = String::from("https://example.vault.azure.net");
+            let expected_display = format!("AzureKeyVaultSettingsProvider {{url: {url}}}");
+            let display =
+                AzureKeyVaultSettingsProvider::new(py, url, None, None, None, None).to_string();
+
+            assert_eq!(display, expected_display);
+        });
     }
 
     #[test]
     fn test_validate_explicit_credentials_require_all_fields() {
         Python::initialize();
 
-        let provider = AzureKeyVaultSettingsProvider::new(
-            String::from("https://example.vault.azure.net"),
-            Some(String::from("client-id")),
-            None,
-            Some(String::from("tenant-id")),
-        );
+        Python::attach(|py| {
+            let provider = AzureKeyVaultSettingsProvider::new(
+                py,
+                String::from("https://example.vault.azure.net"),
+                Some(String::from("client-id")),
+                None,
+                Some(String::from("tenant-id")),
+                None,
+            );
 
-        let error = provider.validate_explicit_credentials().unwrap_err();
+            let error = provider.validate_explicit_credentials().unwrap_err();
 
-        assert_eq!(
-            error.to_string(),
-            "RuntimeError: 'tenant_id', 'client_id', and 'client_secret' must all be provided when using explicit Azure credentials"
-        );
+            assert_eq!(
+                error.to_string(),
+                "RuntimeError: 'tenant_id', 'client_id', and 'client_secret' must all be provided when using explicit Azure credentials"
+            );
+        });
     }
 
     #[test]

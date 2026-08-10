@@ -8,6 +8,7 @@ name = "_wirio_settings"
 crate-type = ["cdylib"]
 
 [dependencies]
+arc-swap = "1.9.2"
 async-trait = "0.1.89"
 aws-config = { version = "1.8.18", features = ["credentials-login"] }
 aws-sdk-secretsmanager = "1.108.0"
@@ -35,4 +36,5 @@ tempfile = "3.27.0"
 python-source = "python"
 
 [lints.clippy]
-pedantic = "warn"
+all = "deny"
+pedantic = "deny"

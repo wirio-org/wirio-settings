@@ -37,6 +37,7 @@ impl SettingsSource for JsonFileSettingsSource {
             py,
             PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(
                 JsonFileSettingsProvider::new(
+                    py,
                     self.content_root_path.as_deref(),
                     &self.path,
                     self.optional,

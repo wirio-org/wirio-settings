@@ -24,7 +24,9 @@ keywords = [
     "Kubernetes CSI",
 ]
 requires-python = ">=3.13"
-dependencies = ["pydantic>=2.13.4"]
+dependencies = [
+    "pydantic>=2.13.4",
+]
 
 [project.urls]
 Homepage = "https://github.com/wirio-org/wirio-settings"
@@ -49,7 +51,14 @@ requires = ["maturin>=1.12,<2.0"]
 build-backend = "maturin"
 
 [tool.uv]
-required-version = ">=0.11.0,<0.12.0"
+required-version = ">=0.12.0,<0.13.0"
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "uv.lock" },
+    { file = "Cargo.toml" },
+    { file = "Cargo.lock" },
+    { file = "**/*.rs" },
+]
 
 [tool.maturin]
 python-source = "python"

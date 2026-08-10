@@ -243,7 +243,20 @@ settings_manager.add_azure_key_vault(
 
 When using explicit credentials, `tenant_id`, `client_id`, and `client_secret` must all be provided.
 
-**Azure permissions:** Usually, the `Key Vault Secrets User` role is used to read secrets.
+> [!NOTE]
+> **Azure permissions:** Usually, the `Key Vault Secrets User` role is used to read secrets.
+
+To periodically refresh the loaded secrets, use the `reload_interval` parameter. The provider keeps serving the most recent successful values when a refresh fails. Omit the interval to load secrets only once.
+
+```python
+from datetime import timedelta
+
+
+settings_manager.add_azure_key_vault(
+    "https://example.vault.azure.net",
+    reload_interval=timedelta(minutes=5),
+)
+```
 
 ### AWS Secrets Manager
 

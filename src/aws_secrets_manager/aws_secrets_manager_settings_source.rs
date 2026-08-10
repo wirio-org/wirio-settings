@@ -51,6 +51,7 @@ impl SettingsSource for AwsSecretsManagerSettingsSource {
             py,
             PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(
                 AwsSecretsManagerSettingsProvider::new(
+                    py,
                     self.secret_id.clone(),
                     self.region.clone(),
                     self.url.clone(),

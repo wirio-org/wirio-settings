@@ -1,3 +1,4 @@
+from datetime import timedelta
 from os import environ
 from typing import Final, Self, cast, final, override
 
@@ -111,14 +112,25 @@ class SettingsManager(SettingsRoot):
         client_id: str | None = None,
         client_secret: str | None = None,
         tenant_id: str | None = None,
+        reload_interval: timedelta | None = None,
     ) -> Self:
-        """Add a settings provider that reads setting values from Azure Key Vault."""
+        """Add a settings provider that reads setting values from Azure Key Vault.
+
+        Args:
+            url: Azure Key Vault URL.
+            client_id: Azure client ID.
+            client_secret: Azure client secret.
+            tenant_id: Azure tenant ID.
+            reload_interval: Time between background refresh attempts. If omitted, settings are loaded once.
+
+        """
         self.add(
             AzureKeyVaultSettingsSource(
                 url=url,
                 client_id=client_id,
                 client_secret=client_secret,
                 tenant_id=tenant_id,
+                reload_interval=reload_interval,
             )
         )
         return self
@@ -227,7 +239,7 @@ class SettingsManager(SettingsRoot):
         child_keys: list[str] = []
 
         for provider in reversed(self.providers):
-            for item_key in provider.data:
+            for item_key in provider.data():
                 candidate = ""
 
                 if path is None:

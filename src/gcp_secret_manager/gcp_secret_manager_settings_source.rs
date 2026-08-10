@@ -35,6 +35,7 @@ impl SettingsSource for GcpSecretManagerSettingsSource {
             py,
             PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(
                 GcpSecretManagerSettingsProvider::new(
+                    py,
                     self.project_id.clone(),
                     self.credentials_json.clone(),
                 ),

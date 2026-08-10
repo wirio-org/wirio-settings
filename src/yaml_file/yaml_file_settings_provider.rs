@@ -1,7 +1,7 @@
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use serde_json::Value;
-use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
 use tokio::fs;
@@ -12,7 +12,7 @@ use crate::core::{
 
 #[pyclass(extends = PythonSettingsProvider, str)]
 pub struct YamlFileSettingsProvider {
-    data: BTreeMap<String, Option<String>>,
+    data: Py<PyDict>,
     path: PathBuf,
     optional: bool,
 }
@@ -29,24 +29,26 @@ impl YamlFileSettingsProvider {
     /// File names and relative paths are resolved against `content_root_path` when provided, otherwise against the current working directory.
     #[new]
     pub fn new_python(
+        py: Python<'_>,
         content_root_path: Option<&str>,
         path: &str,
         optional: bool,
     ) -> PyClassInitializer<Self> {
         PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new(
+            py,
             content_root_path,
             path,
             optional,
         ))
     }
 
-    #[getter]
-    fn data(&self) -> &BTreeMap<String, Option<String>> {
-        SettingsProvider::data(self)
+    #[pyo3(signature = () -> "dict[str, str | None]")]
+    fn data(&self, py: Python<'_>) -> Py<PyDict> {
+        SettingsProvider::data(self, py)
     }
 
-    fn try_get(&self, key: &str) -> SettingLookup {
-        SettingsProvider::try_get(self, key)
+    fn try_get(&self, py: Python<'_>, key: &str) -> PyResult<SettingLookup> {
+        SettingsProvider::try_get(self, py, key)
     }
 
     pub fn load_sync(&mut self) -> PyResult<()> {
@@ -55,9 +57,14 @@ impl YamlFileSettingsProvider {
 }
 
 impl YamlFileSettingsProvider {
-    pub fn new(content_root_path: Option<&str>, path: &str, optional: bool) -> Self {
+    pub fn new(
+        py: Python<'_>,
+        content_root_path: Option<&str>,
+        path: &str,
+        optional: bool,
+    ) -> Self {
         Self {
-            data: BTreeMap::new(),
+            data: PyDict::new(py).unbind(),
             path: file_provider::resolve_path(content_root_path, path),
             optional,
         }
@@ -75,8 +82,8 @@ impl YamlFileSettingsProvider {
 }
 
 impl SettingsProvider for YamlFileSettingsProvider {
-    fn data(&self) -> &BTreeMap<String, Option<String>> {
-        &self.data
+    fn data(&self, py: Python<'_>) -> Py<PyDict> {
+        self.data.clone_ref(py)
     }
 
     async fn load(&mut self) -> PyResult<()> {
@@ -102,7 +109,7 @@ impl SettingsProvider for YamlFileSettingsProvider {
         let raw_yaml = self.read_yaml_file().await?;
 
         if raw_yaml.trim().is_empty() {
-            self.data = BTreeMap::new();
+            self.data = Python::attach(|py| PyDict::new(py).unbind());
             return Ok(());
         }
 
@@ -115,7 +122,7 @@ impl SettingsProvider for YamlFileSettingsProvider {
         })?;
 
         if parsed_yaml.is_null() {
-            self.data = BTreeMap::new();
+            self.data = Python::attach(|py| PyDict::new(py).unbind());
             return Ok(());
         }
 
@@ -125,7 +132,7 @@ impl SettingsProvider for YamlFileSettingsProvider {
 
         let mut parsed_data = SerdeParser::new().parse(yaml_object)?;
         self.normalize_keys(&mut parsed_data);
-        self.data = parsed_data;
+        self.data = Python::attach(|py| Self::create_data(py, parsed_data))?;
         Ok(())
     }
 }
@@ -141,10 +148,25 @@ mod tests {
     use super::YamlFileSettingsProvider;
     use crate::core::SettingsProvider;
     use pyo3::Python;
+    use pyo3::types::PyAnyMethods;
     use std::collections::BTreeMap;
     use std::path::PathBuf;
     use tempfile::tempdir;
     use tokio::fs;
+
+    fn assert_data(
+        provider: &YamlFileSettingsProvider,
+        expected_data: &BTreeMap<String, Option<String>>,
+    ) {
+        Python::attach(|py| {
+            let data = SettingsProvider::data(provider, py);
+            let actual_data = data
+                .bind(py)
+                .extract::<BTreeMap<String, Option<String>>>()
+                .unwrap();
+            assert_eq!(&actual_data, expected_data);
+        });
+    }
 
     #[tokio::test]
     async fn test_load_values_from_yaml_file() {
@@ -176,12 +198,14 @@ logging:
         .await
         .unwrap();
 
-        let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+        let mut provider = Python::attach(|py| {
+            YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
+        });
         SettingsProvider::load(&mut provider).await.unwrap();
 
-        assert_eq!(
-            provider.data,
-            BTreeMap::from([
+        assert_data(
+            &provider,
+            &BTreeMap::from([
                 (String::from("app_name"), Some(String::from("wirio"))),
                 (String::from("port"), Some(String::from("8080"))),
                 (String::from("price"), Some(String::from("19.99"))),
@@ -194,10 +218,10 @@ logging:
                 (String::from("logging.enabled"), Some(String::from("true"))),
                 (
                     String::from("logging.log_level.default"),
-                    Some(String::from("warning"))
+                    Some(String::from("warning")),
                 ),
                 (String::from("logging.log_level.notes"), None),
-            ])
+            ]),
         );
     }
 
@@ -216,15 +240,17 @@ port: 8080
         .await
         .unwrap();
 
-        let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+        let mut provider = Python::attach(|py| {
+            YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
+        });
         SettingsProvider::load(&mut provider).await.unwrap();
 
-        assert_eq!(
-            provider.data,
-            BTreeMap::from([
+        assert_data(
+            &provider,
+            &BTreeMap::from([
                 (String::from("app_name"), Some(String::from("wirio"))),
                 (String::from("port"), Some(String::from("8080"))),
-            ])
+            ]),
         );
     }
 
@@ -234,10 +260,12 @@ port: 8080
         let file_path = temporary_directory.path().join("settings.yaml");
         fs::write(&file_path, "").await.unwrap();
 
-        let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+        let mut provider = Python::attach(|py| {
+            YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
+        });
         SettingsProvider::load(&mut provider).await.unwrap();
 
-        assert_eq!(provider.data, BTreeMap::new());
+        assert_data(&provider, &BTreeMap::new());
     }
 
     #[tokio::test]
@@ -253,10 +281,12 @@ port: 8080
         .await
         .unwrap();
 
-        let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+        let mut provider = Python::attach(|py| {
+            YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
+        });
         SettingsProvider::load(&mut provider).await.unwrap();
 
-        assert_eq!(provider.data, BTreeMap::new());
+        assert_data(&provider, &BTreeMap::new());
     }
 
     #[tokio::test]
@@ -264,10 +294,12 @@ port: 8080
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("missing.yaml");
 
-        let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), true);
+        let mut provider = Python::attach(|py| {
+            YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), true)
+        });
         SettingsProvider::load(&mut provider).await.unwrap();
 
-        assert_eq!(provider.data, BTreeMap::new());
+        assert_data(&provider, &BTreeMap::new());
     }
 
     #[tokio::test]
@@ -277,7 +309,9 @@ port: 8080
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("missing.yaml");
 
-        let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+        let mut provider = Python::attach(|py| {
+            YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
+        });
 
         let error = SettingsProvider::load(&mut provider).await.unwrap_err();
         let error_message = error.to_string();
@@ -296,11 +330,14 @@ port: 8080
         Python::initialize();
 
         let temporary_directory = tempdir().unwrap();
-        let mut provider = YamlFileSettingsProvider::new(
-            None,
-            temporary_directory.path().to_str().unwrap(),
-            false,
-        );
+        let mut provider = Python::attach(|py| {
+            YamlFileSettingsProvider::new(
+                py,
+                None,
+                temporary_directory.path().to_str().unwrap(),
+                false,
+            )
+        });
 
         let error = SettingsProvider::load(&mut provider).await.unwrap_err();
         let error_message = error.to_string();
@@ -316,7 +353,9 @@ port: 8080
         let file_path = temporary_directory.path().join("settings.yaml");
         fs::write(&file_path, "appName: [wirio").await.unwrap();
 
-        let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+        let mut provider = Python::attach(|py| {
+            YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
+        });
 
         let error = SettingsProvider::load(&mut provider).await.unwrap_err();
         let error_message = error.to_string();
@@ -333,7 +372,9 @@ port: 8080
         let file_path = temporary_directory.path().join("settings.yaml");
         fs::write(&file_path, "- wirio\n- config").await.unwrap();
 
-        let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+        let mut provider = Python::attach(|py| {
+            YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
+        });
 
         let error = SettingsProvider::load(&mut provider).await.unwrap_err();
         let error_message = error.to_string();
@@ -343,7 +384,11 @@ port: 8080
 
     #[test]
     fn test_display_returns_type_name() {
-        let display = YamlFileSettingsProvider::new(None, "settings.yaml", false).to_string();
+        Python::initialize();
+
+        let display = Python::attach(|py| {
+            YamlFileSettingsProvider::new(py, None, "settings.yaml", false).to_string()
+        });
 
         assert_eq!(display, "YamlFileSettingsProvider");
     }
@@ -353,8 +398,9 @@ port: 8080
         Python::initialize();
 
         let invalid_file_path = PathBuf::from("\0invalid.yaml");
-        let mut provider =
-            YamlFileSettingsProvider::new(None, invalid_file_path.to_str().unwrap(), false);
+        let mut provider = Python::attach(|py| {
+            YamlFileSettingsProvider::new(py, None, invalid_file_path.to_str().unwrap(), false)
+        });
 
         let error = SettingsProvider::load(&mut provider).await.unwrap_err();
         let error_message = error.to_string();
@@ -375,10 +421,12 @@ port: 8080
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.yaml");
         fs::write(&file_path, raw_yaml).await.unwrap();
-        let mut provider = YamlFileSettingsProvider::new(None, file_path.to_str().unwrap(), false);
+        let mut provider = Python::attach(|py| {
+            YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
+        });
 
         SettingsProvider::load(&mut provider).await.unwrap();
 
-        assert_eq!(provider.data, expected_parsed_yaml);
+        assert_data(&provider, &expected_parsed_yaml);
     }
 }

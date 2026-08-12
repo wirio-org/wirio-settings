@@ -38,15 +38,17 @@ impl AzureKeyVaultSettingsProvider {
         client_secret: Option<String>,
         tenant_id: Option<String>,
         reload_interval: Option<Duration>,
-    ) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new(
-            py,
-            url,
-            client_id,
-            client_secret,
-            tenant_id,
-            reload_interval,
-        ))
+    ) -> PyResult<PyClassInitializer<Self>> {
+        Ok(
+            PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new(
+                py,
+                url,
+                client_id,
+                client_secret,
+                tenant_id,
+                reload_interval,
+            )?),
+        )
     }
 
     #[pyo3(signature = () -> "dict[str, str | None]")]
@@ -71,15 +73,23 @@ impl AzureKeyVaultSettingsProvider {
         client_secret: Option<String>,
         tenant_id: Option<String>,
         reload_interval: Option<Duration>,
-    ) -> Self {
-        Self {
+    ) -> PyResult<Self> {
+        if let Some(reload_interval) = reload_interval
+            && reload_interval.is_zero()
+        {
+            return Err(PyRuntimeError::new_err(
+                "'reload_interval' must be greater than zero",
+            ));
+        }
+
+        Ok(Self {
             data: ArcSwap::from_pointee(PyDict::new(py).unbind()),
             url,
             client_id,
             client_secret,
             tenant_id,
             reload_interval,
-        }
+        })
     }
 
     fn create_secret_client(&self) -> PyResult<SecretClient> {
@@ -254,6 +264,7 @@ mod tests {
     use crate::core::SettingsProvider;
     use azure_security_keyvault_secrets::models::{SecretAttributes, SecretProperties};
     use pyo3::Python;
+    use std::time::Duration;
 
     #[test]
     fn test_replace_double_dash_with_dot_in_secret_name() {
@@ -271,8 +282,9 @@ mod tests {
         Python::attach(|py| {
             let url = String::from("https://example.vault.azure.net");
             let expected_display = format!("AzureKeyVaultSettingsProvider {{url: {url}}}");
-            let display =
-                AzureKeyVaultSettingsProvider::new(py, url, None, None, None, None).to_string();
+            let display = AzureKeyVaultSettingsProvider::new(py, url, None, None, None, None)
+                .unwrap()
+                .to_string();
 
             assert_eq!(display, expected_display);
         });
@@ -290,7 +302,8 @@ mod tests {
                 None,
                 Some(String::from("tenant-id")),
                 None,
-            );
+            )
+            .unwrap();
 
             let error = provider.validate_explicit_credentials().unwrap_err();
 
@@ -334,5 +347,45 @@ mod tests {
         assert!(!AzureKeyVaultSettingsProvider::is_secret_enabled(
             &secret_properties
         ));
+    }
+
+    #[test]
+    fn test_fail_creating_provider_when_reload_interval_is_zero() {
+        Python::initialize();
+
+        Python::attach(|py| {
+            let result = AzureKeyVaultSettingsProvider::new(
+                py,
+                String::from("https://example.vault.azure.net"),
+                None,
+                None,
+                None,
+                Some(Duration::ZERO),
+            );
+
+            assert!(result.is_err());
+            assert_eq!(
+                result.err().unwrap().to_string(),
+                "RuntimeError: 'reload_interval' must be greater than zero"
+            );
+        });
+    }
+
+    #[test]
+    fn test_allow_creating_provider_when_reload_interval_is_positive() {
+        Python::initialize();
+
+        let result = Python::attach(|py| {
+            AzureKeyVaultSettingsProvider::new(
+                py,
+                String::from("https://example.vault.azure.net"),
+                None,
+                None,
+                None,
+                Some(Duration::from_secs(1)),
+            )
+        });
+
+        assert!(result.is_ok());
     }
 }

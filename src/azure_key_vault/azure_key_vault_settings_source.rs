@@ -51,7 +51,7 @@ impl SettingsSource for AzureKeyVaultSettingsSource {
                     self.client_secret.clone(),
                     self.tenant_id.clone(),
                     self.reload_interval,
-                ),
+                )?,
             ),
         )
         .map(|provider| provider.into_bound(py).into_super().unbind())

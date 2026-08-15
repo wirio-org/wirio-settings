@@ -34,7 +34,7 @@ class _DictionarySettingsProvider(SettingsProvider):
         return SettingLookup.Missing()
 
     @override
-    def load_sync(self) -> None:
+    def load(self) -> None:
         pass
 
 
@@ -98,10 +98,10 @@ class TestSettingsBinder:
         )
         settings_manager.add(_DictionarySettingsSource({key: expected_value}))
 
-        found_setting = SettingsBinder._try_get_setting_value(  # noqa: SLF001
+        found_setting = SettingsBinder._try_get_setting_value(
             settings=settings_manager, key=key
         )
-        missing_setting = SettingsBinder._try_get_setting_value(  # noqa: SLF001
+        missing_setting = SettingsBinder._try_get_setting_value(
             settings=settings_manager, key="missing"
         )
 
@@ -398,9 +398,7 @@ class TestSettingsBinder:
     def test_return_parent_when_child_key_is_empty_when_joining_keys(self) -> None:
         parent_key = "ports"
 
-        result = SettingsBinder._join_key(  # noqa: SLF001
-            parent=parent_key, child=""
-        )
+        result = SettingsBinder._join_key(parent=parent_key, child="")
 
         assert result == parent_key
 

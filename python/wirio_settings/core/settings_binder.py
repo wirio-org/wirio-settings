@@ -273,8 +273,8 @@ class SettingsBinder:
     @classmethod
     def _extract_field_annotation(
         cls,
-        field_annotation: Any,  # noqa: ANN401
-    ) -> Any:  # noqa: ANN401
+        field_annotation: Any,
+    ) -> Any:
         assert field_annotation is not None
         origin = typing.get_origin(field_annotation)
 

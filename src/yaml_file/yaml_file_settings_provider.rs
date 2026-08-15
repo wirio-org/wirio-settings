@@ -53,8 +53,8 @@ impl YamlFileSettingsProvider {
         SettingsProvider::try_get(self, py, key)
     }
 
-    pub fn load_sync(&self, py: Python<'_>) -> PyResult<()> {
-        SettingsProvider::load_sync(self, py)
+    pub fn load(&self, py: Python<'_>) -> PyResult<()> {
+        SettingsProvider::load(self, py)
     }
 }
 
@@ -89,7 +89,7 @@ impl SettingsProvider for YamlFileSettingsProvider {
         data.clone_ref(py)
     }
 
-    async fn load(&self) -> PyResult<()> {
+    async fn reload(&self) -> PyResult<()> {
         let file_exists = fs::try_exists(&self.path).await.map_err(|error| {
             PyRuntimeError::new_err(format!(
                 "Failed to inspect '{}': {}",
@@ -207,7 +207,7 @@ logging:
         let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
         });
-        SettingsProvider::load(&provider).await.unwrap();
+        SettingsProvider::reload(&provider).await.unwrap();
 
         assert_data(
             &provider,
@@ -249,7 +249,7 @@ port: 8080
         let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
         });
-        SettingsProvider::load(&provider).await.unwrap();
+        SettingsProvider::reload(&provider).await.unwrap();
 
         assert_data(
             &provider,
@@ -269,7 +269,7 @@ port: 8080
         let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
         });
-        SettingsProvider::load(&provider).await.unwrap();
+        SettingsProvider::reload(&provider).await.unwrap();
 
         assert_data(&provider, &BTreeMap::new());
     }
@@ -290,7 +290,7 @@ port: 8080
         let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
         });
-        SettingsProvider::load(&provider).await.unwrap();
+        SettingsProvider::reload(&provider).await.unwrap();
 
         assert_data(&provider, &BTreeMap::new());
     }
@@ -303,7 +303,7 @@ port: 8080
         let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), true)
         });
-        SettingsProvider::load(&provider).await.unwrap();
+        SettingsProvider::reload(&provider).await.unwrap();
 
         assert_data(&provider, &BTreeMap::new());
     }
@@ -319,7 +319,7 @@ port: 8080
             YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
         });
 
-        let error = SettingsProvider::load(&provider).await.unwrap_err();
+        let error = SettingsProvider::reload(&provider).await.unwrap_err();
         let error_message = error.to_string();
 
         assert_eq!(
@@ -345,7 +345,7 @@ port: 8080
             )
         });
 
-        let error = SettingsProvider::load(&provider).await.unwrap_err();
+        let error = SettingsProvider::reload(&provider).await.unwrap_err();
         let error_message = error.to_string();
 
         assert!(error_message.contains("Failed to read YAML settings file"));
@@ -363,7 +363,7 @@ port: 8080
             YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
         });
 
-        let error = SettingsProvider::load(&provider).await.unwrap_err();
+        let error = SettingsProvider::reload(&provider).await.unwrap_err();
         let error_message = error.to_string();
 
         assert!(error_message.contains("Could not parse"));
@@ -382,7 +382,7 @@ port: 8080
             YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
         });
 
-        let error = SettingsProvider::load(&provider).await.unwrap_err();
+        let error = SettingsProvider::reload(&provider).await.unwrap_err();
         let error_message = error.to_string();
 
         assert!(error_message.contains("Could not parse the YAML file"));
@@ -408,7 +408,7 @@ port: 8080
             YamlFileSettingsProvider::new(py, None, invalid_file_path.to_str().unwrap(), false)
         });
 
-        let error = SettingsProvider::load(&provider).await.unwrap_err();
+        let error = SettingsProvider::reload(&provider).await.unwrap_err();
         let error_message = error.to_string();
 
         assert!(error_message.contains("RuntimeError: Failed to inspect"));
@@ -431,7 +431,7 @@ port: 8080
             YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
         });
 
-        SettingsProvider::load(&provider).await.unwrap();
+        SettingsProvider::reload(&provider).await.unwrap();
 
         assert_data(&provider, &expected_parsed_yaml);
     }

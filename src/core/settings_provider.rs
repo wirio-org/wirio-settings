@@ -31,7 +31,7 @@ impl PythonSettingsProvider {
     }
 
     #[allow(clippy::unused_self)]
-    fn load_sync(&self) {
+    fn load(&self) {
         unimplemented!()
     }
 }
@@ -63,11 +63,17 @@ pub trait SettingsProvider: Sync + fmt::Display {
         }
     }
 
-    async fn load(&self) -> PyResult<()>;
+    /// Reloads the provider's settings data, or loads it for the first time if it hasn't been loaded yet.
+    async fn reload(&self) -> PyResult<()>;
 
-    fn load_sync(&self, py: Python<'_>) -> PyResult<()> {
-        let runtime = pyo3_async_runtimes::tokio::get_runtime();
-        py.detach(|| runtime.block_on(self.load()))
+    /// Loads the provider's settings data for the first time and waits for completion.
+    ///
+    /// This uses [`Self::reload`], so the same loading implementation is shared.
+    fn load(&self, py: Python<'_>) -> PyResult<()> {
+        py.detach(|| {
+            let runtime = pyo3_async_runtimes::tokio::get_runtime();
+            runtime.block_on(self.reload())
+        })
     }
 
     fn normalize_keys(&self, data: &mut BTreeMap<String, Option<String>>) {
@@ -140,7 +146,7 @@ mod tests {
             self.data.clone_ref(py)
         }
 
-        async fn load(&self) -> PyResult<()> {
+        async fn reload(&self) -> PyResult<()> {
             tokio::task::spawn_blocking(|| {
                 Python::attach(|py| {
                     let _ = PyDict::new(py);
@@ -246,12 +252,12 @@ mod tests {
     }
 
     #[test]
-    fn test_load_synchronously() {
+    fn test_load_settings() {
         Python::initialize();
         let settings_provider =
             Python::attach(|py| MockSettingsProvider::new(py, PyDict::new(py).unbind()));
 
-        Python::attach(|py| settings_provider.load_sync(py)).unwrap();
+        Python::attach(|py| settings_provider.load(py)).unwrap();
 
         assert!(settings_provider.is_loaded.load(Ordering::SeqCst));
     }

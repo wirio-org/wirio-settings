@@ -17,7 +17,7 @@ class TypedType(Hashable):
 
     def __init__(
         self,
-        annotation: Any,  # noqa: ANN401
+        annotation: Any,
     ) -> None:
         self._annotation = annotation
         origin = typing.get_origin(annotation)
@@ -38,7 +38,7 @@ class TypedType(Hashable):
     @property
     def annotation(
         self,
-    ) -> Any:  # noqa: ANN401
+    ) -> Any:
         """Get the original type annotation from which this `TypedType` was created."""
         return self._annotation
 
@@ -65,7 +65,7 @@ class TypedType(Hashable):
 
     def _create_representation(
         self,
-        origin: Any,  # noqa: ANN401
+        origin: Any,
         args: tuple[Any, ...],
     ) -> str:
         args_representation = ""

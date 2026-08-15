@@ -60,8 +60,8 @@ impl AwsSecretsManagerSettingsProvider {
         SettingsProvider::try_get(self, py, key)
     }
 
-    pub fn load_sync(&self, py: Python<'_>) -> PyResult<()> {
-        SettingsProvider::load_sync(self, py)
+    pub fn load(&self, py: Python<'_>) -> PyResult<()> {
+        SettingsProvider::load(self, py)
     }
 }
 
@@ -169,7 +169,7 @@ impl SettingsProvider for AwsSecretsManagerSettingsProvider {
         data.clone_ref(py)
     }
 
-    async fn load(&self) -> PyResult<()> {
+    async fn reload(&self) -> PyResult<()> {
         let secrets_manager_client = self.create_secrets_manager_client().await?;
         let get_secret_value_response = secrets_manager_client
             .get_secret_value()
@@ -374,7 +374,7 @@ mod tests {
             )
         });
 
-        let error = SettingsProvider::load(&provider).await.unwrap_err();
+        let error = SettingsProvider::reload(&provider).await.unwrap_err();
 
         assert!(error.to_string().starts_with(
             "RuntimeError: Failed to read AWS secret 'dev/secret-id' from AWS Secrets Manager:"

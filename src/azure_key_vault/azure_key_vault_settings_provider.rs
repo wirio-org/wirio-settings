@@ -60,8 +60,8 @@ impl AzureKeyVaultSettingsProvider {
         SettingsProvider::try_get(self, py, key)
     }
 
-    pub fn load_sync(&self, py: Python<'_>) -> PyResult<()> {
-        SettingsProvider::load_sync(self, py)
+    pub fn load(&self, py: Python<'_>) -> PyResult<()> {
+        SettingsProvider::load(self, py)
     }
 }
 
@@ -186,7 +186,7 @@ impl SettingsProvider for AzureKeyVaultSettingsProvider {
         data.clone_ref(py)
     }
 
-    async fn load(&self) -> PyResult<()> {
+    async fn reload(&self) -> PyResult<()> {
         let secret_client = self.create_secret_client()?;
         let mut secret_properties_pager =
             secret_client

@@ -58,7 +58,7 @@ class SettingsManager(SettingsRoot):
     def add(self, source: SettingsSource) -> None:
         self._sources.append(source)
         provider = source.build()
-        provider.load_sync()
+        provider.load()
         self._providers.append(provider)
 
     def add_default_providers(self) -> Self:
@@ -135,7 +135,7 @@ class SettingsManager(SettingsRoot):
         )
         return self
 
-    def add_aws_secrets_manager(  # noqa: PLR0913
+    def add_aws_secrets_manager(
         self,
         secret_id: str,
         region: str | None = None,

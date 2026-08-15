@@ -41,8 +41,8 @@ impl KeyPerFileSettingsProvider {
         SettingsProvider::try_get(self, py, key)
     }
 
-    pub fn load_sync(&self, py: Python<'_>) -> PyResult<()> {
-        SettingsProvider::load_sync(self, py)
+    pub fn load(&self, py: Python<'_>) -> PyResult<()> {
+        SettingsProvider::load(self, py)
     }
 }
 
@@ -74,7 +74,7 @@ impl SettingsProvider for KeyPerFileSettingsProvider {
         data.clone_ref(py)
     }
 
-    async fn load(&self) -> PyResult<()> {
+    async fn reload(&self) -> PyResult<()> {
         let directory_exists = fs::try_exists(&self.directory_path)
             .await
             .map_err(|error| {
@@ -232,7 +232,7 @@ mod tests {
             KeyPerFileSettingsProvider::new(py, temporary_directory.path().to_str().unwrap(), false)
         });
 
-        SettingsProvider::load(&provider).await.unwrap();
+        SettingsProvider::reload(&provider).await.unwrap();
 
         assert_data(
             &provider,
@@ -258,7 +258,7 @@ mod tests {
             KeyPerFileSettingsProvider::new(py, missing_directory_path.to_str().unwrap(), true)
         });
 
-        SettingsProvider::load(&provider).await.unwrap();
+        SettingsProvider::reload(&provider).await.unwrap();
 
         assert_data(&provider, &BTreeMap::new());
     }
@@ -273,7 +273,7 @@ mod tests {
             KeyPerFileSettingsProvider::new(py, missing_directory_path.to_str().unwrap(), false)
         });
 
-        let error = SettingsProvider::load(&provider).await.unwrap_err();
+        let error = SettingsProvider::reload(&provider).await.unwrap_err();
 
         let error_message = error.to_string();
         assert_eq!(
@@ -296,7 +296,7 @@ mod tests {
             KeyPerFileSettingsProvider::new(py, file_path.to_str().unwrap(), false)
         });
 
-        let error = SettingsProvider::load(&provider).await.unwrap_err();
+        let error = SettingsProvider::reload(&provider).await.unwrap_err();
 
         let error_message = error.to_string();
         assert_eq!(
@@ -314,7 +314,7 @@ mod tests {
             KeyPerFileSettingsProvider::new(py, invalid_directory_path.to_str().unwrap(), false)
         });
 
-        let error = SettingsProvider::load(&provider).await.unwrap_err();
+        let error = SettingsProvider::reload(&provider).await.unwrap_err();
 
         let error_message = error.to_string();
         assert!(error_message.contains("RuntimeError: Failed to inspect"));

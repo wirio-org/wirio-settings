@@ -11,10 +11,10 @@ class TestIntegration:
         os.environ.get("INTEGRATION_TEST") is None, reason="Integration test"
     )
     def test_load_secrets_using_aws_secrets_manager(self) -> None:
-        secret_id = "dev/test-secret-id"  # noqa: S105
-        expected_secret_1 = "secret-value-1"  # noqa: S105
-        expected_secret_2 = "secret-value-2"  # noqa: S105
-        expected_nested_secret = "Nested-value"  # noqa: S105
+        secret_id = "dev/test-secret-id"
+        expected_secret_1 = "secret-value-1"
+        expected_secret_2 = "secret-value-2"
+        expected_nested_secret = "Nested-value"
         settings_manager = SettingsManager(
             content_root_path="",
             add_default_providers=False,
@@ -36,9 +36,9 @@ class TestIntegration:
     )
     def test_load_secrets_using_gcp_secret_manager(self) -> None:
         project_id = os.environ["GCP_PROJECT_ID"]
-        expected_secret_1 = "secret-value-1"  # noqa: S105
-        expected_secret_2 = "secret-value-2"  # noqa: S105
-        expected_nested_secret = "Nested-value"  # noqa: S105
+        expected_secret_1 = "secret-value-1"
+        expected_secret_2 = "secret-value-2"
+        expected_nested_secret = "Nested-value"
         settings_manager = SettingsManager(
             content_root_path="",
             add_default_providers=False,
@@ -60,9 +60,9 @@ class TestIntegration:
     )
     def test_load_secrets_using_azure_key_vault(self) -> None:
         key_vault_url = os.environ["AZURE_KEY_VAULT_URL"]
-        expected_secret_1 = "secret-value-1"  # noqa: S105
-        expected_secret_2 = "secret-value-2"  # noqa: S105
-        expected_nested_secret = "Nested-value"  # noqa: S105
+        expected_secret_1 = "secret-value-1"
+        expected_secret_2 = "secret-value-2"
+        expected_nested_secret = "Nested-value"
         settings_manager = SettingsManager(
             content_root_path="",
             add_default_providers=False,
@@ -102,7 +102,7 @@ class TestIntegration:
     def test_load_settings_using_key_per_file_directory(self, tmp_path: Path) -> None:
         expected_app_name = "wirio"
         expected_log_level = "WARNING"
-        expected_password = "secret-value"  # noqa: S105
+        expected_password = "secret-value"
         tmp_path.joinpath("app_name").write_text(expected_app_name)
         tmp_path.joinpath("logging__log_level__default").write_text(expected_log_level)
         tmp_path.joinpath("database_password").write_text(f"{expected_password}\n")

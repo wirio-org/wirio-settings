@@ -44,8 +44,8 @@ impl GcpSecretManagerSettingsProvider {
         SettingsProvider::try_get(self, py, key)
     }
 
-    pub fn load_sync(&self, py: Python<'_>) -> PyResult<()> {
-        SettingsProvider::load_sync(self, py)
+    pub fn load(&self, py: Python<'_>) -> PyResult<()> {
+        SettingsProvider::load(self, py)
     }
 }
 
@@ -189,7 +189,7 @@ impl SettingsProvider for GcpSecretManagerSettingsProvider {
         data.clone_ref(py)
     }
 
-    async fn load(&self) -> PyResult<()> {
+    async fn reload(&self) -> PyResult<()> {
         let secret_manager_client = self.create_secret_manager_client().await?;
         let secret_names = self.get_secret_names(&secret_manager_client).await?;
         let mut secret_values = self

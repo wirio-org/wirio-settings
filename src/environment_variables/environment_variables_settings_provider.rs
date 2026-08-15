@@ -27,8 +27,8 @@ impl EnvironmentVariablesSettingsProvider {
         SettingsProvider::try_get(self, py, key)
     }
 
-    pub fn load_sync(&self, py: Python<'_>) -> PyResult<()> {
-        SettingsProvider::load_sync(self, py)
+    pub fn load(&self, py: Python<'_>) -> PyResult<()> {
+        SettingsProvider::load(self, py)
     }
 }
 
@@ -57,7 +57,7 @@ impl SettingsProvider for EnvironmentVariablesSettingsProvider {
         data.clone_ref(py)
     }
 
-    async fn load(&self) -> PyResult<()> {
+    async fn reload(&self) -> PyResult<()> {
         let mut environment_variables = Self::get_environment_variables();
         self.normalize_keys(&mut environment_variables);
         let data = Python::attach(|py| Self::create_data(py, environment_variables))?;

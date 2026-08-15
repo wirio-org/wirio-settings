@@ -169,9 +169,7 @@ logging:
 ```
 
 ```python
-log_level = settings_manager.get_section("logging").get_required_value(
-    "log_level"
-)
+log_level = settings_manager.get_section("logging").get_required_value("log_level")
 ```
 
 `SettingsSection` supports:
@@ -283,9 +281,7 @@ settings_manager.add_aws_secrets_manager(
 ### GCP Secret Manager
 
 ```python
-settings_manager.add_gcp_secret_manager(
-    "project-id"
-)
+settings_manager.add_gcp_secret_manager("project-id")
 ```
 
 If no credentials are provided, [Application Default Credentials (ADC)](https://docs.cloud.google.com/docs/authentication/application-default-credentials) are used.

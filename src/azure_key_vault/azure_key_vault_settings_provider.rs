@@ -209,6 +209,64 @@ impl AzureKeyVaultSettingsProvider {
         Ok(secret_resource_id.name)
     }
 
+    /// Check if the loaded secret is up to date with the queried secret properties
+    fn is_secret_up_to_date(loaded_secret: &Secret, secret_properties: &SecretProperties) -> bool {
+        loaded_secret
+            .attributes
+            .as_ref()
+            .and_then(|attributes| attributes.updated)
+            == secret_properties
+                .attributes
+                .as_ref()
+                .and_then(|attributes| attributes.updated)
+    }
+
+    async fn add_secret(
+        secret_client: &SecretClient,
+        loaded_secrets: Option<&BTreeMap<String, Secret>>,
+        secret_properties: SecretProperties,
+        new_loaded_secrets: &mut BTreeMap<String, Secret>,
+        url: &str,
+    ) -> PyResult<()> {
+        if !Self::is_secret_enabled(&secret_properties) {
+            return Ok(());
+        }
+
+        let secret_name = Self::extract_secret_name(&secret_properties)?;
+        let loaded_secret =
+            loaded_secrets.and_then(|loaded_secrets| loaded_secrets.get(&secret_name));
+
+        if let Some(loaded_secret) = loaded_secret
+            && Self::is_secret_up_to_date(loaded_secret, &secret_properties)
+        {
+            new_loaded_secrets.insert(secret_name, loaded_secret.clone());
+            return Ok(());
+        }
+
+        let retrieved_secret = Self::retrieve_secret(secret_client, &secret_name, url).await?;
+        new_loaded_secrets.insert(secret_name, retrieved_secret);
+        Ok(())
+    }
+
+    async fn retrieve_secret(
+        secret_client: &SecretClient,
+        secret_name: &str,
+        url: &str,
+    ) -> PyResult<Secret> {
+        let secret_response = secret_client.get_secret(secret_name, None).await.map_err(
+            |error| {
+                PyRuntimeError::new_err(format!(
+                    "Failed to read secret '{secret_name}' from Azure Key Vault '{url}': {error}",
+                ))
+            },
+        )?;
+        secret_response.into_model().map_err(|error| {
+            PyRuntimeError::new_err(format!(
+                "Failed to deserialize Azure Key Vault secret '{secret_name}': {error}",
+            ))
+        })
+    }
+
     fn update_secrets(
         secrets_cache: &ArcSwap<SecretsCache>,
         new_loaded_secrets: BTreeMap<String, Secret>,
@@ -288,6 +346,8 @@ impl AzureKeyVaultSettingsProvider {
                     ))
                 })?;
         let mut new_loaded_secrets: BTreeMap<String, Secret> = BTreeMap::new();
+        let loaded_secrets_cache = secrets_cache.load_full();
+        let loaded_secrets = loaded_secrets_cache.loaded_secrets.as_ref();
 
         while let Some(secret_properties) =
             secret_properties_pager.try_next().await.map_err(|error| {
@@ -296,26 +356,14 @@ impl AzureKeyVaultSettingsProvider {
                 ))
             })?
         {
-            if !Self::is_secret_enabled(&secret_properties) {
-                continue;
-            }
-
-            let secret_name = Self::extract_secret_name(&secret_properties)?;
-            let secret_response =
-                secret_client
-                    .get_secret(&secret_name, None)
-                    .await
-                    .map_err(|error| {
-                        PyRuntimeError::new_err(format!(
-                            "Failed to read secret '{secret_name}' from Azure Key Vault '{url}': {error}",
-                        ))
-                    })?;
-            let secret = secret_response.into_model().map_err(|error| {
-                PyRuntimeError::new_err(format!(
-                    "Failed to deserialize Azure Key Vault secret '{secret_name}': {error}",
-                ))
-            })?;
-            new_loaded_secrets.insert(secret_name, secret);
+            Self::add_secret(
+                &secret_client,
+                loaded_secrets,
+                secret_properties,
+                &mut new_loaded_secrets,
+                url,
+            )
+            .await?;
         }
 
         Self::update_secrets(&secrets_cache, new_loaded_secrets)
@@ -365,7 +413,7 @@ impl fmt::Display for AzureKeyVaultSettingsProvider {
 mod tests {
     use super::AzureKeyVaultSettingsProvider;
     use crate::core::SettingsProvider;
-    use azure_security_keyvault_secrets::models::{SecretAttributes, SecretProperties};
+    use azure_security_keyvault_secrets::models::{Secret, SecretAttributes, SecretProperties};
     use pyo3::Python;
     use std::time::Duration;
 
@@ -535,5 +583,54 @@ mod tests {
 
             assert!(cancellation_token.is_cancelled());
         });
+    }
+
+    #[test]
+    fn test_consider_secret_up_to_date_when_update_times_match() {
+        let update_time = azure_core::time::OffsetDateTime::UNIX_EPOCH;
+        let mut secret = Secret::default();
+        secret.attributes = Some(SecretAttributes {
+            updated: Some(update_time),
+            ..Default::default()
+        });
+        let mut secret_properties = SecretProperties::default();
+        secret_properties.attributes = Some(SecretAttributes {
+            updated: Some(update_time),
+            ..Default::default()
+        });
+
+        assert!(AzureKeyVaultSettingsProvider::is_secret_up_to_date(
+            &secret,
+            &secret_properties
+        ));
+    }
+
+    #[test]
+    fn test_consider_secret_up_to_date_when_update_times_are_missing() {
+        let mut secret = Secret::default();
+        secret.attributes = Some(SecretAttributes::default());
+        let mut secret_properties = SecretProperties::default();
+        secret_properties.attributes = Some(SecretAttributes::default());
+
+        assert!(AzureKeyVaultSettingsProvider::is_secret_up_to_date(
+            &secret,
+            &secret_properties
+        ));
+    }
+
+    #[test]
+    fn test_consider_secret_outdated_when_update_times_differ() {
+        let mut secret = Secret::default();
+        secret.attributes = Some(SecretAttributes {
+            updated: Some(azure_core::time::OffsetDateTime::UNIX_EPOCH),
+            ..Default::default()
+        });
+        let mut secret_properties = SecretProperties::default();
+        secret_properties.attributes = Some(SecretAttributes::default());
+
+        assert!(!AzureKeyVaultSettingsProvider::is_secret_up_to_date(
+            &secret,
+            &secret_properties
+        ));
     }
 }

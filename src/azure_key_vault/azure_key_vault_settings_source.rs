@@ -27,9 +27,9 @@ impl AzureKeyVaultSettingsSource {
     ) -> PyClassInitializer<Self> {
         PyClassInitializer::from(PythonSettingsSource::new()).add_subclass(Self {
             url,
+            tenant_id,
             client_id,
             client_secret,
-            tenant_id,
             reload_interval,
         })
     }
@@ -47,9 +47,9 @@ impl SettingsSource for AzureKeyVaultSettingsSource {
                 AzureKeyVaultSettingsProvider::new(
                     py,
                     self.url.clone(),
+                    self.tenant_id.clone(),
                     self.client_id.clone(),
                     self.client_secret.clone(),
-                    self.tenant_id.clone(),
                     self.reload_interval,
                 )?,
             ),

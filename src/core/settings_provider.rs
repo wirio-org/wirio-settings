@@ -167,8 +167,6 @@ mod tests {
 
     #[test]
     fn test_convert_keys_to_snake_case_when_normalizing_keys() {
-        let settings_provider_mock =
-            Python::attach(|py| MockSettingsProvider::new(py, PyDict::new(py).unbind()));
         let mut data = BTreeMap::from([
             (
                 String::from("FeatureFlagEnabled"),
@@ -198,8 +196,6 @@ mod tests {
 
     #[test]
     fn test_keep_none_values_when_normalizing_keys() {
-        let settings_provider_mock =
-            Python::attach(|py| MockSettingsProvider::new(py, PyDict::new(py).unbind()));
         let expected_data = BTreeMap::from([(String::from("connection_string"), None)]);
         let mut data = BTreeMap::from([(String::from("ConnectionString"), None)]);
 
@@ -210,8 +206,6 @@ mod tests {
 
     #[test]
     fn test_normalize_loaded_data_keeps_empty_map_unchanged() {
-        let settings_provider_mock =
-            Python::attach(|py| MockSettingsProvider::new(py, PyDict::new(py).unbind()));
         let mut data: BTreeMap<String, Option<String>> = BTreeMap::new();
 
         MockSettingsProvider::normalize_keys(&mut data);

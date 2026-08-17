@@ -37,13 +37,13 @@ struct SecretsCache {
 #[pymethods]
 impl AzureKeyVaultSettingsProvider {
     #[new]
-    #[pyo3(signature = (url, client_id=None, client_secret=None, tenant_id=None, reload_interval=None))]
+    #[pyo3(signature = (url, tenant_id=None, client_id=None, client_secret=None, reload_interval=None))]
     pub fn new_python(
         py: Python<'_>,
         url: String,
+        tenant_id: Option<String>,
         client_id: Option<String>,
         client_secret: Option<String>,
-        tenant_id: Option<String>,
         reload_interval: Option<Duration>,
     ) -> PyResult<PyClassInitializer<Self>> {
         Ok(

@@ -413,9 +413,61 @@ impl fmt::Display for AzureKeyVaultSettingsProvider {
 mod tests {
     use super::AzureKeyVaultSettingsProvider;
     use crate::core::SettingsProvider;
+    use async_trait::async_trait;
+    use azure_core::credentials::{AccessToken, TokenCredential, TokenRequestOptions};
+    use azure_core::http::{
+        AsyncRawResponse, ClientOptions, HttpClient, Request, StatusCode, Transport,
+        headers::Headers,
+    };
+    use azure_security_keyvault_secrets::SecretClient;
+    use azure_security_keyvault_secrets::SecretClientOptions;
     use azure_security_keyvault_secrets::models::{Secret, SecretAttributes, SecretProperties};
     use pyo3::Python;
+    use std::collections::BTreeMap;
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
+
+    #[derive(Debug)]
+    struct CredentialMock;
+
+    #[async_trait]
+    impl TokenCredential for CredentialMock {
+        async fn get_token(
+            &self,
+            _scopes: &[&str],
+            _options: Option<TokenRequestOptions<'_>>,
+        ) -> azure_core::Result<AccessToken> {
+            Err(azure_core::Error::with_message(
+                azure_core::error::ErrorKind::Credential,
+                "Test credential must not acquire a token",
+            ))
+        }
+    }
+
+    #[derive(Debug)]
+    struct HttpClientMock {
+        requested_urls: Arc<Mutex<Vec<String>>>,
+    }
+
+    #[async_trait]
+    impl HttpClient for HttpClientMock {
+        async fn execute_request(&self, request: &Request) -> azure_core::Result<AsyncRawResponse> {
+            self.requested_urls
+                .lock()
+                .unwrap()
+                .push(request.url().to_string());
+
+            Ok(AsyncRawResponse::from_bytes(
+                StatusCode::Ok,
+                Headers::default(),
+                br#"{"value":"retrieved-value"}"#.to_vec(),
+            ))
+        }
+    }
+
+    fn create_secret_client_mock(url: &str) -> SecretClient {
+        SecretClient::new(url, Arc::new(CredentialMock), None).unwrap()
+    }
 
     #[test]
     fn test_replace_double_dash_with_dot_in_secret_name() {
@@ -632,5 +684,114 @@ mod tests {
             &secret,
             &secret_properties
         ));
+    }
+
+    #[tokio::test]
+    async fn test_skip_disabled_secret_when_adding_secret() {
+        let secret_client = create_secret_client_mock("https://example.vault.azure.net");
+        let mut secret_properties = SecretProperties::default();
+        secret_properties.attributes = Some(SecretAttributes {
+            enabled: Some(false),
+            ..Default::default()
+        });
+        let mut new_loaded_secrets = BTreeMap::new();
+
+        AzureKeyVaultSettingsProvider::add_secret(
+            &secret_client,
+            None,
+            secret_properties,
+            &mut new_loaded_secrets,
+            "https://example.vault.azure.net",
+        )
+        .await
+        .unwrap();
+
+        assert!(new_loaded_secrets.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_reuse_cached_secret_when_adding_up_to_date_secret() {
+        let expected_cache_value = "cached-value";
+        let secret_client = create_secret_client_mock("https://example.vault.azure.net");
+        let update_time = azure_core::time::OffsetDateTime::UNIX_EPOCH;
+        let secret_name: String = String::from("cached-secret");
+        let mut cached_secret = Secret::default();
+        cached_secret.value = Some(expected_cache_value.to_owned());
+        cached_secret.attributes = Some(SecretAttributes {
+            updated: Some(update_time),
+            ..Default::default()
+        });
+        let loaded_secrets = BTreeMap::from([(secret_name.clone(), cached_secret)]);
+        let mut secret_properties = SecretProperties::default();
+        secret_properties.id = Some(format!(
+            "https://example.vault.azure.net/secrets/{secret_name}/version"
+        ));
+        secret_properties.attributes = Some(SecretAttributes {
+            enabled: Some(true),
+            updated: Some(update_time),
+            ..Default::default()
+        });
+        let mut new_loaded_secrets = BTreeMap::new();
+
+        AzureKeyVaultSettingsProvider::add_secret(
+            &secret_client,
+            Some(&loaded_secrets),
+            secret_properties,
+            &mut new_loaded_secrets,
+            "https://example.vault.azure.net",
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            new_loaded_secrets
+                .get(&secret_name)
+                .and_then(|secret| secret.value.as_deref()),
+            Some(expected_cache_value)
+        );
+    }
+    #[tokio::test]
+    async fn test_retrieve_secret_when_cached_secret_is_missing() {
+        let expected_secret_name = "missing-secret";
+        let expected_secret_value = "retrieved-value";
+        let url = "https://example.vault.azure.net";
+        let secret_client_options = SecretClientOptions {
+            client_options: ClientOptions {
+                transport: Some(Transport::new(Arc::new(HttpClientMock {
+                    requested_urls: Arc::new(Mutex::new(Vec::new())),
+                }))),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let secret_client =
+            SecretClient::new(url, Arc::new(CredentialMock), Some(secret_client_options)).unwrap();
+
+        let mut secret_properties = SecretProperties::default();
+        secret_properties.id = Some(format!(
+            "https://example.vault.azure.net/secrets/{expected_secret_name}/version"
+        ));
+        secret_properties.attributes = Some(SecretAttributes {
+            enabled: Some(true),
+            ..Default::default()
+        });
+        let mut new_loaded_secrets = BTreeMap::new();
+
+        AzureKeyVaultSettingsProvider::add_secret(
+            &secret_client,
+            None,
+            secret_properties,
+            &mut new_loaded_secrets,
+            url,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            new_loaded_secrets
+                .get(expected_secret_name)
+                .and_then(|secret| secret.value.as_deref()),
+            Some(expected_secret_value)
+        );
     }
 }

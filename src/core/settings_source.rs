@@ -3,7 +3,7 @@ use pyo3::prelude::*;
 use super::PythonSettingsProvider;
 
 /// Source of setting values
-#[pyclass(subclass, name = "SettingsSource")]
+#[pyclass(name = "SettingsSource", subclass, frozen)]
 pub struct PythonSettingsSource;
 
 #[pymethods]

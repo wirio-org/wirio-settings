@@ -4,7 +4,7 @@ use crate::{
 };
 use pyo3::prelude::*;
 
-#[pyclass(extends = PythonSettingsSource)]
+#[pyclass(extends = PythonSettingsSource, frozen)]
 pub struct GcpSecretManagerSettingsSource {
     project_id: String,
     credentials_json: Option<String>,
@@ -35,6 +35,7 @@ impl SettingsSource for GcpSecretManagerSettingsSource {
             py,
             PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(
                 GcpSecretManagerSettingsProvider::new(
+                    py,
                     self.project_id.clone(),
                     self.credentials_json.clone(),
                 ),

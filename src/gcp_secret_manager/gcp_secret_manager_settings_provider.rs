@@ -1,17 +1,20 @@
 use crate::core::{PythonSettingsProvider, SettingLookup, SettingsProvider};
+use arc_swap::ArcSwap;
 use google_cloud_auth::credentials::Credentials as GoogleCredentials;
 use google_cloud_auth::credentials::service_account::Builder as ServiceAccountCredentialsBuilder;
 use google_cloud_gax::paginator::ItemPaginator;
 use google_cloud_secretmanager_v1::client::SecretManagerService;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::Arc;
 
-#[pyclass(extends = PythonSettingsProvider, str)]
+#[pyclass(extends = PythonSettingsProvider, frozen, str)]
 pub struct GcpSecretManagerSettingsProvider {
-    data: BTreeMap<String, Option<String>>,
+    data: ArcSwap<Py<PyDict>>,
     project_id: String,
     credentials_json: Option<String>,
 }
@@ -21,31 +24,35 @@ impl GcpSecretManagerSettingsProvider {
     #[new]
     #[pyo3(signature = (project_id, credentials_json=None))]
     pub fn new_python(
+        py: Python<'_>,
         project_id: String,
         credentials_json: Option<String>,
     ) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(PythonSettingsProvider::new())
-            .add_subclass(Self::new(project_id, credentials_json))
+        PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new(
+            py,
+            project_id,
+            credentials_json,
+        ))
     }
 
-    #[getter]
-    fn data(&self) -> &BTreeMap<String, Option<String>> {
-        SettingsProvider::data(self)
+    #[pyo3(signature = () -> "dict[str, str | None]")]
+    fn data(&self, py: Python<'_>) -> Py<PyDict> {
+        SettingsProvider::data(self, py)
     }
 
-    fn try_get(&self, key: &str) -> SettingLookup {
-        SettingsProvider::try_get(self, key)
+    fn try_get(&self, py: Python<'_>, key: &str) -> PyResult<SettingLookup> {
+        SettingsProvider::try_get(self, py, key)
     }
 
-    pub fn load_sync(&mut self) -> PyResult<()> {
-        SettingsProvider::load_sync(self)
+    pub fn load(&self, py: Python<'_>) -> PyResult<()> {
+        SettingsProvider::load(self, py)
     }
 }
 
 impl GcpSecretManagerSettingsProvider {
-    pub fn new(project_id: String, credentials_json: Option<String>) -> Self {
+    pub fn new(py: Python<'_>, project_id: String, credentials_json: Option<String>) -> Self {
         Self {
-            data: BTreeMap::new(),
+            data: ArcSwap::from_pointee(PyDict::new(py).unbind()),
             project_id,
             credentials_json,
         }
@@ -177,18 +184,20 @@ impl GcpSecretManagerSettingsProvider {
 }
 
 impl SettingsProvider for GcpSecretManagerSettingsProvider {
-    fn data(&self) -> &BTreeMap<String, Option<String>> {
-        &self.data
+    fn data(&self, py: Python<'_>) -> Py<PyDict> {
+        let data = self.data.load();
+        data.clone_ref(py)
     }
 
-    async fn load(&mut self) -> PyResult<()> {
+    async fn reload(&self) -> PyResult<()> {
         let secret_manager_client = self.create_secret_manager_client().await?;
         let secret_names = self.get_secret_names(&secret_manager_client).await?;
         let mut secret_values = self
             .get_secret_values(&secret_manager_client, secret_names)
             .await?;
-        self.normalize_keys(&mut secret_values);
-        self.data = secret_values;
+        Self::normalize_keys(&mut secret_values);
+        let data = Python::attach(|py| Self::create_data(py, secret_values))?;
+        self.data.store(Arc::new(data));
         Ok(())
     }
 
@@ -230,8 +239,12 @@ mod tests {
 
     #[test]
     fn test_display_returns_type_name() {
-        let display =
-            GcpSecretManagerSettingsProvider::new(String::from("my-project-id"), None).to_string();
+        Python::initialize();
+
+        let display = Python::attach(|py| {
+            GcpSecretManagerSettingsProvider::new(py, String::from("my-project-id"), None)
+                .to_string()
+        });
 
         assert_eq!(display, "GcpSecretManagerSettingsProvider");
     }

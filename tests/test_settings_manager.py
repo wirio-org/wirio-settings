@@ -27,7 +27,6 @@ class _DictionarySettingsProvider(SettingsProvider):
     def __init__(self, values: dict[str, str | None]) -> None:
         self.values = values
 
-    @property
     def data(self) -> dict[str, str | None]:
         return self.values
 
@@ -39,7 +38,7 @@ class _DictionarySettingsProvider(SettingsProvider):
         return SettingLookup.Missing()
 
     @override
-    def load_sync(self) -> None:
+    def load(self) -> None:
         pass
 
 
@@ -109,9 +108,7 @@ class TestSettingsManager:
         )
         settings_manager.add(_DictionarySettingsSource({"number": "not-a-number"}))
 
-        with pytest.raises(
-            ValueError  # noqa: PT011
-        ) as exception_info:
+        with pytest.raises(ValueError) as exception_info:
             settings_manager.get_required_value("number", int)
 
         assert "validation error" in str(exception_info.value)
@@ -122,9 +119,7 @@ class TestSettingsManager:
         )
         settings_manager.add(_DictionarySettingsSource({"app_name": None}))
 
-        with pytest.raises(
-            ValueError  # noqa: PT011
-        ) as exception_info:
+        with pytest.raises(ValueError) as exception_info:
             settings_manager.get_required_value("app_name")
 
         assert str(exception_info.value) == "Setting value for key 'app_name' is None"
@@ -203,9 +198,7 @@ class TestSettingsManager:
         )
         settings_manager.add(_DictionarySettingsSource({"number": "not-a-number"}))
 
-        with pytest.raises(
-            ValueError  # noqa: PT011
-        ) as exception_info:
+        with pytest.raises(ValueError) as exception_info:
             settings_manager.get_value("number", int)
 
         assert "validation error" in str(exception_info.value)
@@ -333,7 +326,7 @@ class TestSettingsManager:
     def test_add_azure_key_vault(self, mocker: MockerFixture) -> None:
         key_vault_url = "https://example.vault.azure.net"
         client_id = "client-id"
-        client_secret = "client-secret"  # noqa: S105
+        client_secret = "client-secret"
         tenant_id = "tenant-id"
         settings_manager = SettingsManager(
             content_root_path="", add_default_providers=False
@@ -356,12 +349,12 @@ class TestSettingsManager:
         assert isinstance(source, AzureKeyVaultSettingsSource)
 
     def test_add_aws_secrets_manager(self, mocker: MockerFixture) -> None:
-        expected_secret_id = "dev/TestApp"  # noqa: S105
+        expected_secret_id = "dev/TestApp"
         expected_region = "eu-west-1"
         expected_url = "https://secretsmanager.eu-west-1.amazonaws.com"
         expected_access_key_id = "access-key"
-        expected_secret_access_key = "secret-key"  # noqa: S105
-        expected_session_token = "session-token"  # noqa: S105
+        expected_secret_access_key = "secret-key"
+        expected_session_token = "session-token"
         expected_profile = "integration"
         settings_manager = SettingsManager(
             content_root_path="", add_default_providers=False

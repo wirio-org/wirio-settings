@@ -169,9 +169,7 @@ logging:
 ```
 
 ```python
-log_level = settings_manager.get_section("logging").get_required_value(
-    "log_level"
-)
+log_level = settings_manager.get_section("logging").get_required_value("log_level")
 ```
 
 `SettingsSection` supports:
@@ -243,7 +241,20 @@ settings_manager.add_azure_key_vault(
 
 When using explicit credentials, `tenant_id`, `client_id`, and `client_secret` must all be provided.
 
-**Azure permissions:** Usually, the `Key Vault Secrets User` role is used to read secrets.
+> [!NOTE]
+> **Azure permissions:** Usually, the `Key Vault Secrets User` role is used to read secrets.
+
+To periodically refresh the loaded secrets, use the `reload_interval` parameter. The provider waits that long between refresh attempts and keeps the last successfully loaded settings if a refresh fails.
+
+```python
+from datetime import timedelta
+
+
+settings_manager.add_azure_key_vault(
+    "https://example.vault.azure.net",
+    reload_interval=timedelta(minutes=5),
+)
+```
 
 ### AWS Secrets Manager
 
@@ -270,9 +281,7 @@ settings_manager.add_aws_secrets_manager(
 ### GCP Secret Manager
 
 ```python
-settings_manager.add_gcp_secret_manager(
-    "project-id"
-)
+settings_manager.add_gcp_secret_manager("project-id")
 ```
 
 If no credentials are provided, [Application Default Credentials (ADC)](https://docs.cloud.google.com/docs/authentication/application-default-credentials) are used.

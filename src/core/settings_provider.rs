@@ -1,11 +1,14 @@
 use crate::{_wirio_settings::SettingsPath, core::convention_changer};
-use pyo3::prelude::*;
+use pyo3::{
+    prelude::*,
+    types::{PyDict, PyString},
+};
 use std::{collections::BTreeMap, fmt, mem};
 
 use super::SettingLookup;
 
 /// Provides setting values
-#[pyclass(subclass, name = "SettingsProvider")]
+#[pyclass(name = "SettingsProvider", subclass, frozen)]
 pub struct PythonSettingsProvider;
 
 #[pymethods]
@@ -15,44 +18,65 @@ impl PythonSettingsProvider {
         Self
     }
 
-    #[getter]
+    #[pyo3(signature = () -> "dict[str, str | None]")]
     #[allow(clippy::unused_self)]
-    fn data(&self) -> &BTreeMap<String, Option<String>> {
+    fn data(&self) -> BTreeMap<String, Option<String>> {
         unimplemented!()
     }
 
     #[allow(clippy::unused_self)]
     #[allow(unused_variables)]
-    fn try_get(&self, key: &str) -> SettingLookup {
+    fn try_get(&self, key: &str) -> PyResult<SettingLookup> {
         unimplemented!()
     }
 
     #[allow(clippy::unused_self)]
-    fn load_sync(&mut self) {
+    fn load(&self) {
         unimplemented!()
     }
 }
 
-pub trait SettingsProvider: fmt::Display {
-    fn data(&self) -> &BTreeMap<String, Option<String>>;
+pub trait SettingsProvider: Sync + fmt::Display {
+    fn data(&self, py: Python<'_>) -> Py<PyDict>;
 
-    fn try_get(&self, key: &str) -> SettingLookup {
-        match self.data().get(key) {
-            Some(value) => SettingLookup::Found {
-                value: value.clone(),
-            },
-            None => SettingLookup::Missing(),
+    fn create_data(
+        py: Python<'_>,
+        source: BTreeMap<String, Option<String>>,
+    ) -> PyResult<Py<PyDict>> {
+        let data = PyDict::new(py);
+
+        for (key, value) in source {
+            data.set_item(key, value)?;
+        }
+
+        Ok(data.unbind())
+    }
+
+    fn try_get(&self, py: Python<'_>, key: &str) -> PyResult<SettingLookup> {
+        let data = self.data(py);
+
+        match data.bind(py).get_item(key)? {
+            Some(value) => Ok(SettingLookup::Found {
+                value: value.extract::<Option<Py<PyString>>>()?,
+            }),
+            None => Ok(SettingLookup::Missing()),
         }
     }
 
-    async fn load(&mut self) -> PyResult<()>;
+    /// Reloads the provider's settings data, or loads it for the first time if it hasn't been loaded yet.
+    async fn reload(&self) -> PyResult<()>;
 
-    fn load_sync(&mut self) -> PyResult<()> {
-        let runtime = pyo3_async_runtimes::tokio::get_runtime();
-        runtime.block_on(self.load())
+    /// Loads the provider's settings data for the first time and waits for completion.
+    ///
+    /// This uses [`Self::reload`], so the same loading implementation is shared.
+    fn load(&self, py: Python<'_>) -> PyResult<()> {
+        py.detach(|| {
+            let runtime = pyo3_async_runtimes::tokio::get_runtime();
+            runtime.block_on(self.reload())
+        })
     }
 
-    fn normalize_keys(&self, data: &mut BTreeMap<String, Option<String>>) {
+    fn normalize_keys(data: &mut BTreeMap<String, Option<String>>) {
         if data.is_empty() {
             return;
         }
@@ -91,51 +115,58 @@ pub trait SettingsProvider: fmt::Display {
 
 #[cfg(test)]
 mod tests {
+    use super::PythonSettingsProvider;
+
     use super::{SettingLookup, SettingsProvider};
-    use mockall::mock;
-    use pyo3::PyResult;
-    use std::{collections::BTreeMap, fmt};
+    use pyo3::{prelude::*, types::PyDict};
+    use std::{
+        collections::BTreeMap,
+        fmt,
+        sync::atomic::{AtomicBool, Ordering},
+    };
 
-    struct TestSettingsProvider {
-        data: BTreeMap<String, Option<String>>,
-        is_loaded: bool,
+    #[pyclass(extends = PythonSettingsProvider, frozen, str)]
+    struct MockSettingsProvider {
+        data: Py<PyDict>,
+        is_loaded: AtomicBool,
     }
 
-    impl SettingsProvider for TestSettingsProvider {
-        fn data(&self) -> &BTreeMap<String, Option<String>> {
-            &self.data
+    impl MockSettingsProvider {
+        fn new(py: Python<'_>, data: Py<PyDict>) -> Self {
+            let _ = py;
+            Self {
+                data,
+                is_loaded: AtomicBool::new(false),
+            }
+        }
+    }
+
+    impl SettingsProvider for MockSettingsProvider {
+        fn data(&self, py: Python<'_>) -> Py<PyDict> {
+            self.data.clone_ref(py)
         }
 
-        async fn load(&mut self) -> PyResult<()> {
-            self.is_loaded = true;
+        async fn reload(&self) -> PyResult<()> {
+            tokio::task::spawn_blocking(|| {
+                Python::attach(|py| {
+                    let _ = PyDict::new(py);
+                });
+            })
+            .await
+            .unwrap();
+            self.is_loaded.store(true, Ordering::SeqCst);
             Ok(())
-        }
-    }
-
-    impl fmt::Display for TestSettingsProvider {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            f.write_str("TestSettingsProvider")
-        }
-    }
-
-    mock! {
-        SettingsProvider {}
-
-        impl SettingsProvider for SettingsProvider {
-            async fn load(&mut self) -> PyResult<()>;
-            fn data(&self) -> &BTreeMap<String, Option<String>>;
         }
     }
 
     impl fmt::Display for MockSettingsProvider {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "{}", self.get_type_name())
+            f.write_str("TestSettingsProvider")
         }
     }
 
     #[test]
     fn test_convert_keys_to_snake_case_when_normalizing_keys() {
-        let settings_provider_mock = MockSettingsProvider::new();
         let mut data = BTreeMap::from([
             (
                 String::from("FeatureFlagEnabled"),
@@ -147,7 +178,7 @@ mod tests {
             ),
         ]);
 
-        settings_provider_mock.normalize_keys(&mut data);
+        MockSettingsProvider::normalize_keys(&mut data);
 
         let expected = BTreeMap::from([
             (
@@ -165,39 +196,49 @@ mod tests {
 
     #[test]
     fn test_keep_none_values_when_normalizing_keys() {
-        let settings_provider_mock = MockSettingsProvider::new();
         let expected_data = BTreeMap::from([(String::from("connection_string"), None)]);
         let mut data = BTreeMap::from([(String::from("ConnectionString"), None)]);
 
-        settings_provider_mock.normalize_keys(&mut data);
+        MockSettingsProvider::normalize_keys(&mut data);
 
         assert_eq!(data, expected_data);
     }
 
     #[test]
     fn test_normalize_loaded_data_keeps_empty_map_unchanged() {
-        let settings_provider_mock = MockSettingsProvider::new();
         let mut data: BTreeMap<String, Option<String>> = BTreeMap::new();
 
-        settings_provider_mock.normalize_keys(&mut data);
+        MockSettingsProvider::normalize_keys(&mut data);
 
         assert!(data.is_empty());
     }
 
     #[test]
     fn test_return_loaded_data() {
-        let data = BTreeMap::from([(String::from("setting"), Some(String::from("value")))]);
-        let settings_provider = TestSettingsProvider {
-            data: data.clone(),
-            is_loaded: false,
-        };
+        Python::attach(|py| -> PyResult<()> {
+            let data = PyDict::new(py);
+            data.set_item("setting", "value")?;
+            let settings_provider = MockSettingsProvider::new(py, data.unbind());
 
-        assert_eq!(SettingsProvider::data(&settings_provider), &data);
+            let returned_data = SettingsProvider::data(&settings_provider, py);
+
+            assert_eq!(
+                returned_data
+                    .bind(py)
+                    .get_item("setting")?
+                    .unwrap()
+                    .extract::<String>()?,
+                "value"
+            );
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn test_return_type_name() {
-        let settings_provider_mock = MockSettingsProvider::new();
+        let settings_provider_mock =
+            Python::attach(|py| MockSettingsProvider::new(py, PyDict::new(py).unbind()));
 
         let type_name = settings_provider_mock.get_type_name();
 
@@ -205,45 +246,48 @@ mod tests {
     }
 
     #[test]
-    fn test_load_synchronously() {
-        let mut settings_provider = TestSettingsProvider {
-            data: BTreeMap::new(),
-            is_loaded: false,
-        };
+    fn test_load_settings() {
+        Python::initialize();
+        let settings_provider =
+            Python::attach(|py| MockSettingsProvider::new(py, PyDict::new(py).unbind()));
 
-        settings_provider.load_sync().unwrap();
+        Python::attach(|py| settings_provider.load(py)).unwrap();
 
-        assert!(settings_provider.is_loaded);
+        assert!(settings_provider.is_loaded.load(Ordering::SeqCst));
     }
 
     #[test]
     fn test_return_found_value_when_key_exists() {
         let key = "setting_key";
         let expected_value = "setting_value";
-        let settings_provider = TestSettingsProvider {
-            data: BTreeMap::from([(String::from(key), Some(String::from(expected_value)))]),
-            is_loaded: false,
-        };
+        Python::attach(|py| -> PyResult<()> {
+            let data = PyDict::new(py);
+            data.set_item(key, expected_value)?;
+            let settings_provider = MockSettingsProvider::new(py, data.unbind());
 
-        let lookup = settings_provider.try_get(key);
+            let lookup = settings_provider.try_get(py, key)?;
 
-        assert!(matches!(
-            lookup,
-            SettingLookup::Found {
-                value: Some(value)
-            } if value == expected_value
-        ));
+            match lookup {
+                SettingLookup::Found { value: Some(value) } => {
+                    assert_eq!(value.bind(py).to_str()?, expected_value);
+                }
+                _ => panic!("Expected a found setting value"),
+            }
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn test_return_missing_value_when_key_does_not_exist() {
-        let settings_provider = TestSettingsProvider {
-            data: BTreeMap::new(),
-            is_loaded: false,
-        };
+        Python::attach(|py| -> PyResult<()> {
+            let settings_provider = MockSettingsProvider::new(py, PyDict::new(py).unbind());
 
-        let lookup = settings_provider.try_get("setting_key");
+            let lookup = settings_provider.try_get(py, "setting_key")?;
 
-        assert!(matches!(lookup, SettingLookup::Missing()));
+            assert!(matches!(lookup, SettingLookup::Missing()));
+            Ok(())
+        })
+        .unwrap();
     }
 }

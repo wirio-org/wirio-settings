@@ -49,7 +49,14 @@ requires = ["maturin>=1.12,<2.0"]
 build-backend = "maturin"
 
 [tool.uv]
-required-version = ">=0.11.0,<0.12.0"
+required-version = ">=0.12.0,<0.13.0"
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "uv.lock" },
+    { file = "Cargo.toml" },
+    { file = "Cargo.lock" },
+    { file = "**/*.rs" },
+]
 
 [tool.maturin]
 python-source = "python"
@@ -63,28 +70,6 @@ error-on-warning = true
 
 [tool.ruff]
 extend-exclude = ["python/wirio_settings/_wirio_settings.pyi"]
-
-[tool.ruff.lint]
-select = ["ALL"]
-ignore = [
-    "COM812", # missing-trailing-comma
-    "D100",   # undocumented-public-module
-    "D101",   # undocumented-public-class
-    "D102",   # undocumented-public-method
-    "D103",   # undocumented-public-function
-    "D104",   # undocumented-public-package
-    "D105",   # undocumented-magic-method
-    "D106",   # undocumented-public-nested-class
-    "D107",   # undocumented-public-init
-    "E501",   # line-too-long
-    "ICN",    # flake8-import-conventions
-    "S101",   # assert
-    "TRY003", # raise-vanilla-args
-    "FBT001", # boolean-type-hint-positional-argument
-    "FBT002", # boolean-default-value-positional-argument
-    "PT013",  #	pytest-incorrect-pytest-import,
-]
-
 
 [tool.pytest]
 strict = true

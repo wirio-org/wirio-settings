@@ -4,7 +4,7 @@ use crate::{
 };
 use pyo3::prelude::*;
 
-#[pyclass(extends = PythonSettingsSource)]
+#[pyclass(extends = PythonSettingsSource, frozen)]
 pub struct JsonFileSettingsSource {
     content_root_path: Option<String>,
     path: String,
@@ -37,6 +37,7 @@ impl SettingsSource for JsonFileSettingsSource {
             py,
             PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(
                 JsonFileSettingsProvider::new(
+                    py,
                     self.content_root_path.as_deref(),
                     &self.path,
                     self.optional,

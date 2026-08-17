@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 
-#[pyclass]
+#[pyclass(frozen)]
 pub struct SettingsPath;
 
 #[pymethods]

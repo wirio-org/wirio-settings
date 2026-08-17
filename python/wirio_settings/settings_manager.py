@@ -1,3 +1,4 @@
+from datetime import timedelta
 from os import environ
 from typing import Final, Self, cast, final, override
 
@@ -57,7 +58,7 @@ class SettingsManager(SettingsRoot):
     def add(self, source: SettingsSource) -> None:
         self._sources.append(source)
         provider = source.build()
-        provider.load_sync()
+        provider.load()
         self._providers.append(provider)
 
     def add_default_providers(self) -> Self:
@@ -108,22 +109,33 @@ class SettingsManager(SettingsRoot):
     def add_azure_key_vault(
         self,
         url: str,
+        tenant_id: str | None = None,
         client_id: str | None = None,
         client_secret: str | None = None,
-        tenant_id: str | None = None,
+        reload_interval: timedelta | None = None,
     ) -> Self:
-        """Add a settings provider that reads setting values from Azure Key Vault."""
+        """Add a settings provider that reads setting values from Azure Key Vault.
+
+        Args:
+            url: Azure Key Vault URL.
+            tenant_id: Azure tenant ID.
+            client_id: Azure client ID.
+            client_secret: Azure client secret.
+            reload_interval: Time between background refresh attempts. If omitted, settings are loaded once.
+
+        """
         self.add(
             AzureKeyVaultSettingsSource(
                 url=url,
+                tenant_id=tenant_id,
                 client_id=client_id,
                 client_secret=client_secret,
-                tenant_id=tenant_id,
+                reload_interval=reload_interval,
             )
         )
         return self
 
-    def add_aws_secrets_manager(  # noqa: PLR0913
+    def add_aws_secrets_manager(
         self,
         secret_id: str,
         region: str | None = None,
@@ -227,7 +239,7 @@ class SettingsManager(SettingsRoot):
         child_keys: list[str] = []
 
         for provider in reversed(self.providers):
-            for item_key in provider.data:
+            for item_key in provider.data():
                 candidate = ""
 
                 if path is None:

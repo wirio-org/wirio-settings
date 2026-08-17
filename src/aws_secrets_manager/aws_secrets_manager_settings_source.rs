@@ -4,7 +4,7 @@ use crate::{
 };
 use pyo3::prelude::*;
 
-#[pyclass(extends = PythonSettingsSource)]
+#[pyclass(extends = PythonSettingsSource, frozen)]
 pub struct AwsSecretsManagerSettingsSource {
     secret_id: String,
     region: Option<String>,
@@ -51,6 +51,7 @@ impl SettingsSource for AwsSecretsManagerSettingsSource {
             py,
             PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(
                 AwsSecretsManagerSettingsProvider::new(
+                    py,
                     self.secret_id.clone(),
                     self.region.clone(),
                     self.url.clone(),

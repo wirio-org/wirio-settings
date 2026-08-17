@@ -4,7 +4,7 @@ use crate::{
 };
 use pyo3::prelude::*;
 
-#[pyclass(extends = PythonSettingsSource)]
+#[pyclass(extends = PythonSettingsSource, frozen)]
 pub struct EnvironmentVariablesSettingsSource;
 
 #[pymethods]
@@ -25,7 +25,7 @@ impl SettingsSource for EnvironmentVariablesSettingsSource {
         Py::new(
             py,
             PyClassInitializer::from(PythonSettingsProvider::new())
-                .add_subclass(EnvironmentVariablesSettingsProvider::new()),
+                .add_subclass(EnvironmentVariablesSettingsProvider::new(py)),
         )
         .map(|provider| provider.into_bound(py).into_super().unbind())
     }

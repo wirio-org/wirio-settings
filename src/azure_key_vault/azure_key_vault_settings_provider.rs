@@ -411,8 +411,9 @@ impl fmt::Display for AzureKeyVaultSettingsProvider {
 
 #[cfg(test)]
 mod tests {
-    use super::AzureKeyVaultSettingsProvider;
+    use super::{AzureKeyVaultSettingsProvider, SecretsCache};
     use crate::core::SettingsProvider;
+    use arc_swap::ArcSwap;
     use async_trait::async_trait;
     use azure_core::credentials::{AccessToken, TokenCredential, TokenRequestOptions};
     use azure_core::http::{
@@ -423,8 +424,9 @@ mod tests {
     use azure_security_keyvault_secrets::SecretClientOptions;
     use azure_security_keyvault_secrets::models::{Secret, SecretAttributes, SecretProperties};
     use pyo3::Python;
+    use pyo3::types::PyDict;
     use std::collections::BTreeMap;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
     use std::time::Duration;
 
     #[derive(Debug)]
@@ -446,21 +448,19 @@ mod tests {
 
     #[derive(Debug)]
     struct HttpClientMock {
-        requested_urls: Arc<Mutex<Vec<String>>>,
+        response_body: Vec<u8>,
     }
 
     #[async_trait]
     impl HttpClient for HttpClientMock {
-        async fn execute_request(&self, request: &Request) -> azure_core::Result<AsyncRawResponse> {
-            self.requested_urls
-                .lock()
-                .unwrap()
-                .push(request.url().to_string());
-
+        async fn execute_request(
+            &self,
+            _request: &Request,
+        ) -> azure_core::Result<AsyncRawResponse> {
             Ok(AsyncRawResponse::from_bytes(
                 StatusCode::Ok,
                 Headers::default(),
-                br#"{"value":"retrieved-value"}"#.to_vec(),
+                self.response_body.clone(),
             ))
         }
     }
@@ -758,7 +758,7 @@ mod tests {
         let secret_client_options = SecretClientOptions {
             client_options: ClientOptions {
                 transport: Some(Transport::new(Arc::new(HttpClientMock {
-                    requested_urls: Arc::new(Mutex::new(Vec::new())),
+                    response_body: br#"{"value":"retrieved-value"}"#.to_vec(),
                 }))),
                 ..Default::default()
             },
@@ -792,6 +792,54 @@ mod tests {
                 .get(expected_secret_name)
                 .and_then(|secret| secret.value.as_deref()),
             Some(expected_secret_value)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_remove_cached_secret_when_is_missing() {
+        Python::initialize();
+
+        let cached_secret_name = String::from("deleted-secret");
+        let mut cached_secret_value = Secret::default();
+        cached_secret_value.value = Some(String::from("cached-value"));
+        let secrets_cache = Python::attach(|py| {
+            Arc::new(ArcSwap::from_pointee(SecretsCache {
+                data: PyDict::new(py).unbind(),
+                loaded_secrets: Some(BTreeMap::from([(
+                    cached_secret_name.clone(),
+                    cached_secret_value,
+                )])),
+            }))
+        });
+        let url = "https://example.vault.azure.net";
+        let secret_client_options = SecretClientOptions {
+            client_options: ClientOptions {
+                transport: Some(Transport::new(Arc::new(HttpClientMock {
+                    response_body: br#"{"value":[]}"#.to_vec(),
+                }))),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let secret_client = Arc::new(
+            SecretClient::new(url, Arc::new(CredentialMock), Some(secret_client_options)).unwrap(),
+        );
+
+        AzureKeyVaultSettingsProvider::reload_secrets(
+            secret_client,
+            Arc::clone(&secrets_cache),
+            url,
+        )
+        .await
+        .unwrap();
+
+        let reloaded_secrets = secrets_cache.load_full();
+        assert!(
+            !reloaded_secrets
+                .loaded_secrets
+                .as_ref()
+                .unwrap()
+                .contains_key(&cached_secret_name)
         );
     }
 }

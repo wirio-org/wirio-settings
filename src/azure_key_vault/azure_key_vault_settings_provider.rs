@@ -1,6 +1,7 @@
 use arc_swap::ArcSwap;
 use azure_identity::ClientSecretCredential;
 use azure_security_keyvault_secrets::SecretClientOptions;
+use azure_security_keyvault_secrets::models::Secret;
 use azure_security_keyvault_secrets::{ResourceExt, SecretClient, models::SecretProperties};
 use futures::TryStreamExt;
 use pyo3::exceptions::PyRuntimeError;
@@ -10,6 +11,9 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 
 use crate::azure_key_vault::default_azure_credential::DefaultAzureCredential;
 use crate::azure_key_vault::remove_user_agent::RemoveUserAgent;
@@ -17,14 +21,17 @@ use crate::core::{PythonSettingsProvider, SettingLookup, SettingsProvider};
 
 #[pyclass(extends = PythonSettingsProvider, frozen, str)]
 pub struct AzureKeyVaultSettingsProvider {
-    data: ArcSwap<Py<PyDict>>,
-    // internal_data: RwLock<BTreeMap<String, Option<String>>>,
+    secrets_cache: Arc<ArcSwap<SecretsCache>>,
     url: String,
-    client_id: Option<String>,
-    client_secret: Option<String>,
-    tenant_id: Option<String>,
-    #[allow(dead_code)]
+    secret_client: Arc<SecretClient>,
     reload_interval: Option<Duration>,
+    schedule_reload_cancellation_token: Mutex<Option<CancellationToken>>,
+    schedule_reload_handle: Mutex<Option<JoinHandle<()>>>,
+}
+
+struct SecretsCache {
+    data: Py<PyDict>,
+    loaded_secrets: Option<BTreeMap<String, Secret>>,
 }
 
 #[pymethods]
@@ -43,9 +50,9 @@ impl AzureKeyVaultSettingsProvider {
             PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new(
                 py,
                 url,
+                tenant_id,
                 client_id,
                 client_secret,
-                tenant_id,
                 reload_interval,
             )?),
         )
@@ -61,7 +68,9 @@ impl AzureKeyVaultSettingsProvider {
     }
 
     pub fn load(&self, py: Python<'_>) -> PyResult<()> {
-        SettingsProvider::load(self, py)
+        SettingsProvider::load(self, py)?;
+        self.schedule_reload(py, self.reload_interval);
+        Ok(())
     }
 }
 
@@ -69,9 +78,9 @@ impl AzureKeyVaultSettingsProvider {
     pub fn new(
         py: Python<'_>,
         url: String,
+        tenant_id: Option<String>,
         client_id: Option<String>,
         client_secret: Option<String>,
-        tenant_id: Option<String>,
         reload_interval: Option<Duration>,
     ) -> PyResult<Self> {
         if let Some(reload_interval) = reload_interval
@@ -82,27 +91,44 @@ impl AzureKeyVaultSettingsProvider {
             ));
         }
 
+        let secret_client = Self::create_secret_client(&url, tenant_id, client_id, client_secret)?;
         Ok(Self {
-            data: ArcSwap::from_pointee(PyDict::new(py).unbind()),
+            secrets_cache: Arc::new(ArcSwap::from_pointee(SecretsCache {
+                data: PyDict::new(py).unbind(),
+                loaded_secrets: None,
+            })),
             url,
-            client_id,
-            client_secret,
-            tenant_id,
+            secret_client: Arc::new(secret_client),
             reload_interval,
+            schedule_reload_cancellation_token: Mutex::new(None),
+            schedule_reload_handle: Mutex::new(None),
         })
     }
 
-    fn create_secret_client(&self) -> PyResult<SecretClient> {
-        self.validate_explicit_credentials()?;
+    fn create_secret_client(
+        url: &str,
+        tenant_id: Option<String>,
+        client_id: Option<String>,
+        client_secret: Option<String>,
+    ) -> PyResult<SecretClient> {
+        Self::validate_explicit_credentials(
+            tenant_id.as_deref(),
+            client_id.as_deref(),
+            client_secret.as_deref(),
+        )?;
 
-        if self.has_explicit_credentials() {
-            let tenant_id = self.tenant_id.clone().ok_or_else(|| {
+        if Self::has_explicit_credentials(
+            tenant_id.as_deref(),
+            client_id.as_deref(),
+            client_secret.as_deref(),
+        ) {
+            let tenant_id = tenant_id.ok_or_else(|| {
                 PyRuntimeError::new_err("Missing 'tenant_id' for explicit Azure credentials")
             })?;
-            let client_id = self.client_id.clone().ok_or_else(|| {
+            let client_id = client_id.ok_or_else(|| {
                 PyRuntimeError::new_err("Missing 'client_id' for explicit Azure credentials")
             })?;
-            let client_secret = self.client_secret.clone().ok_or_else(|| {
+            let client_secret = client_secret.ok_or_else(|| {
                 PyRuntimeError::new_err("Missing 'client_secret' for explicit Azure credentials")
             })?;
             let credential = ClientSecretCredential::new(
@@ -116,7 +142,6 @@ impl AzureKeyVaultSettingsProvider {
                     "Failed to create explicit Azure credential for Azure Key Vault: {error}"
                 ))
             })?;
-
             let remove_user_agent = Arc::new(RemoveUserAgent);
 
             // Construct client options with our policy, that runs after the built-in per-call UserAgentPolicy
@@ -126,28 +151,30 @@ impl AzureKeyVaultSettingsProvider {
                 .per_call_policies
                 .push(remove_user_agent);
 
-            return SecretClient::new(&self.url, credential, None).map_err(|error| {
-                PyRuntimeError::new_err(format!(
-                    "Failed to create Azure Key Vault client for '{}': {error}",
-                    self.url
-                ))
-            });
+            return SecretClient::new(url, credential, Some(secret_client_options)).map_err(
+                |error| {
+                    PyRuntimeError::new_err(format!(
+                        "Failed to create Azure Key Vault client for '{url}': {error}",
+                    ))
+                },
+            );
         }
 
         let credential = DefaultAzureCredential::new();
-        SecretClient::new(&self.url, credential, None).map_err(|error| {
+        SecretClient::new(url, credential, None).map_err(|error| {
             PyRuntimeError::new_err(format!(
-                "Failed to create Azure Key Vault client for '{}': {error}",
-                self.url
+                "Failed to create Azure Key Vault client for '{url}': {error}",
             ))
         })
     }
 
-    fn validate_explicit_credentials(&self) -> PyResult<()> {
-        if self.has_explicit_credentials()
-            && (self.tenant_id.is_none()
-                || self.client_id.is_none()
-                || self.client_secret.is_none())
+    fn validate_explicit_credentials(
+        tenant_id: Option<&str>,
+        client_id: Option<&str>,
+        client_secret: Option<&str>,
+    ) -> PyResult<()> {
+        if Self::has_explicit_credentials(tenant_id, client_id, client_secret)
+            && (tenant_id.is_none() || client_id.is_none() || client_secret.is_none())
         {
             return Err(PyRuntimeError::new_err(
                 "'tenant_id', 'client_id', and 'client_secret' must all be provided when using explicit Azure credentials",
@@ -157,8 +184,12 @@ impl AzureKeyVaultSettingsProvider {
         Ok(())
     }
 
-    fn has_explicit_credentials(&self) -> bool {
-        self.tenant_id.is_some() || self.client_id.is_some() || self.client_secret.is_some()
+    fn has_explicit_credentials(
+        tenant_id: Option<&str>,
+        client_id: Option<&str>,
+        client_secret: Option<&str>,
+    ) -> bool {
+        tenant_id.is_some() || client_id.is_some() || client_secret.is_some()
     }
 
     fn is_secret_enabled(secret_properties: &SecretProperties) -> bool {
@@ -175,35 +206,93 @@ impl AzureKeyVaultSettingsProvider {
                 "Invalid Azure Key Vault secret resource ID while listing secrets: {error}"
             ))
         })?;
-
         Ok(secret_resource_id.name)
     }
-}
 
-impl SettingsProvider for AzureKeyVaultSettingsProvider {
-    fn data(&self, py: Python<'_>) -> Py<PyDict> {
-        let data = self.data.load();
-        data.clone_ref(py)
+    fn update_secrets(
+        secrets_cache: &ArcSwap<SecretsCache>,
+        new_loaded_secrets: BTreeMap<String, Secret>,
+    ) -> PyResult<()> {
+        let mut secret_values = new_loaded_secrets
+            .iter()
+            .map(|(secret_name, secret)| (secret_name.clone(), secret.value.clone()))
+            .collect::<BTreeMap<String, Option<String>>>();
+        Self::normalize_keys(&mut secret_values);
+
+        Python::attach(|py| -> PyResult<()> {
+            let data = PyDict::new(py);
+
+            for (secret_name, secret_value) in secret_values {
+                data.set_item(secret_name, secret_value)?;
+            }
+
+            secrets_cache.store(Arc::new(SecretsCache {
+                data: data.unbind(),
+                loaded_secrets: Some(new_loaded_secrets),
+            }));
+            Ok(())
+        })
     }
 
-    async fn reload(&self) -> PyResult<()> {
-        let secret_client = self.create_secret_client()?;
+    fn schedule_reload(&self, py: Python<'_>, reload_interval: Option<Duration>) {
+        let Some(reload_interval) = reload_interval else {
+            return;
+        };
+
+        py.detach(|| {
+            let runtime = pyo3_async_runtimes::tokio::get_runtime();
+            let cancellation_token = CancellationToken::new();
+            self.schedule_reload_cancellation_token
+                .blocking_lock()
+                .replace(cancellation_token.clone());
+            let secret_client = Arc::clone(&self.secret_client);
+            let secrets_cache = Arc::clone(&self.secrets_cache);
+            let url = self.url.clone();
+
+            let schedule_reload_handle = runtime.spawn(async move {
+                loop {
+                    tokio::select! {
+                        () = cancellation_token.cancelled() => break,
+                        () = tokio::time::sleep(reload_interval) => {}
+                    };
+                    tokio::select! {
+                        () = cancellation_token.cancelled() => break,
+                        _ = Self::reload_secrets(
+                            Arc::clone(&secret_client),
+                            Arc::clone(&secrets_cache),
+                            &url,
+                        ) => {
+                            // Ignore errors during scheduled reloads
+                        }
+                    };
+                }
+            });
+
+            self.schedule_reload_handle
+                .blocking_lock()
+                .replace(schedule_reload_handle);
+        });
+    }
+
+    async fn reload_secrets(
+        secret_client: Arc<SecretClient>,
+        secrets_cache: Arc<ArcSwap<SecretsCache>>,
+        url: &str,
+    ) -> PyResult<()> {
         let mut secret_properties_pager =
             secret_client
                 .list_secret_properties(None)
                 .map_err(|error| {
                     PyRuntimeError::new_err(format!(
-                        "Failed to list secrets in Azure Key Vault '{}': {error}",
-                        self.url
+                        "Failed to list secrets in Azure Key Vault '{url}': {error}",
                     ))
                 })?;
-        let mut secret_values = BTreeMap::new();
+        let mut new_loaded_secrets: BTreeMap<String, Secret> = BTreeMap::new();
 
         while let Some(secret_properties) =
             secret_properties_pager.try_next().await.map_err(|error| {
                 PyRuntimeError::new_err(format!(
-                    "Failed to iterate secrets in Azure Key Vault '{}': {error}",
-                    self.url
+                    "Failed to iterate secrets in Azure Key Vault '{url}': {error}",
                 ))
             })?
         {
@@ -218,8 +307,7 @@ impl SettingsProvider for AzureKeyVaultSettingsProvider {
                     .await
                     .map_err(|error| {
                         PyRuntimeError::new_err(format!(
-                            "Failed to read secret '{}' from Azure Key Vault '{}': {error}",
-                            secret_name, self.url
+                            "Failed to read secret '{secret_name}' from Azure Key Vault '{url}': {error}",
                         ))
                     })?;
             let secret = secret_response.into_model().map_err(|error| {
@@ -227,24 +315,39 @@ impl SettingsProvider for AzureKeyVaultSettingsProvider {
                     "Failed to deserialize Azure Key Vault secret '{secret_name}': {error}",
                 ))
             })?;
-
-            if let Some(secret_value) = secret.value {
-                secret_values.insert(secret_name, Some(secret_value));
-            }
+            new_loaded_secrets.insert(secret_name, secret);
         }
 
-        self.normalize_keys(&mut secret_values);
-        Python::attach(|py| -> PyResult<()> {
-            let data = PyDict::new(py);
+        Self::update_secrets(&secrets_cache, new_loaded_secrets)
+    }
+}
 
-            for (secret_name, secret_value) in secret_values {
-                data.set_item(secret_name, secret_value)?;
-            }
+impl Drop for AzureKeyVaultSettingsProvider {
+    fn drop(&mut self) {
+        let schedule_reload_cancellation_token = self
+            .schedule_reload_cancellation_token
+            .blocking_lock()
+            .take();
 
-            self.data.store(Arc::new(data.unbind()));
-            Ok(())
-        })?;
-        Ok(())
+        if let Some(cancellation_token) = schedule_reload_cancellation_token {
+            cancellation_token.cancel();
+        }
+    }
+}
+
+impl SettingsProvider for AzureKeyVaultSettingsProvider {
+    fn data(&self, py: Python<'_>) -> Py<PyDict> {
+        let secrets_cache = self.secrets_cache.load();
+        secrets_cache.data.clone_ref(py)
+    }
+
+    async fn reload(&self) -> PyResult<()> {
+        Self::reload_secrets(
+            Arc::clone(&self.secret_client),
+            Arc::clone(&self.secrets_cache),
+            &self.url,
+        )
+        .await
     }
 
     fn section_separator() -> Option<&'static str> {
@@ -292,26 +395,17 @@ mod tests {
 
     #[test]
     fn test_validate_explicit_credentials_require_all_fields() {
-        Python::initialize();
+        let error = AzureKeyVaultSettingsProvider::validate_explicit_credentials(
+            Some("tenant-id"),
+            Some("client-id"),
+            None,
+        )
+        .unwrap_err();
 
-        Python::attach(|py| {
-            let provider = AzureKeyVaultSettingsProvider::new(
-                py,
-                String::from("https://example.vault.azure.net"),
-                Some(String::from("client-id")),
-                None,
-                Some(String::from("tenant-id")),
-                None,
-            )
-            .unwrap();
-
-            let error = provider.validate_explicit_credentials().unwrap_err();
-
-            assert_eq!(
-                error.to_string(),
-                "RuntimeError: 'tenant_id', 'client_id', and 'client_secret' must all be provided when using explicit Azure credentials"
-            );
-        });
+        assert_eq!(
+            error.to_string(),
+            "RuntimeError: 'tenant_id', 'client_id', and 'client_secret' must all be provided when using explicit Azure credentials"
+        );
     }
 
     #[test]
@@ -387,5 +481,59 @@ mod tests {
         });
 
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_skip_scheduling_reload_when_interval_is_missing() {
+        Python::initialize();
+        Python::attach(|py| {
+            let provider = AzureKeyVaultSettingsProvider::new(
+                py,
+                String::from("https://example.vault.azure.net"),
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+
+            provider.schedule_reload(py, None);
+
+            assert!(
+                provider
+                    .schedule_reload_cancellation_token
+                    .blocking_lock()
+                    .is_none()
+            );
+            assert!(provider.schedule_reload_handle.blocking_lock().is_none());
+        });
+    }
+
+    #[test]
+    fn test_cancel_scheduled_reload_when_provider_is_dropped() {
+        Python::initialize();
+
+        Python::attach(|py| {
+            let provider = AzureKeyVaultSettingsProvider::new(
+                py,
+                String::from("https://example.vault.azure.net"),
+                None,
+                None,
+                None,
+                Some(Duration::from_secs(1)),
+            )
+            .unwrap();
+
+            provider.schedule_reload(py, provider.reload_interval);
+
+            let cancellation_token = provider
+                .schedule_reload_cancellation_token
+                .blocking_lock()
+                .clone()
+                .unwrap();
+            drop(provider);
+
+            assert!(cancellation_token.is_cancelled());
+        });
     }
 }

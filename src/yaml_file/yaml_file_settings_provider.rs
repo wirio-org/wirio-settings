@@ -136,7 +136,7 @@ impl SettingsProvider for YamlFileSettingsProvider {
             .ok_or_else(|| PyRuntimeError::new_err("Could not parse the YAML file"))?;
 
         let mut parsed_data = SerdeParser::new().parse(yaml_object)?;
-        self.normalize_keys(&mut parsed_data);
+        Self::normalize_keys(&mut parsed_data);
         let data = Python::attach(|py| Self::create_data(py, parsed_data))?;
         self.data.store(Arc::new(data));
         Ok(())

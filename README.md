@@ -244,7 +244,7 @@ When using explicit credentials, `tenant_id`, `client_id`, and `client_secret` m
 > [!NOTE]
 > **Azure permissions:** Usually, the `Key Vault Secrets User` role is used to read secrets.
 
-To periodically refresh the loaded secrets, use the `reload_interval` parameter. The provider keeps serving the most recent successful values when a refresh fails. Omit the interval to load secrets only once.
+To periodically refresh the loaded secrets, use the `reload_interval` parameter. The provider waits that long between refresh attempts and keeps the last successfully loaded settings if a refresh fails.
 
 ```python
 from datetime import timedelta

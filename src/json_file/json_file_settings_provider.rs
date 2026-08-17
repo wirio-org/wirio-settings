@@ -128,7 +128,7 @@ impl SettingsProvider for JsonFileSettingsProvider {
 
         let raw_json = self.read_json_file().await?;
         let mut parsed_data = self.parse_raw_json(&raw_json)?;
-        self.normalize_keys(&mut parsed_data);
+        Self::normalize_keys(&mut parsed_data);
         let data = Python::attach(|py| Self::create_data(py, parsed_data))?;
         self.data.store(Arc::new(data));
         Ok(())

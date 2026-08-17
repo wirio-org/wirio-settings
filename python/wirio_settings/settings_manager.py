@@ -109,27 +109,27 @@ class SettingsManager(SettingsRoot):
     def add_azure_key_vault(
         self,
         url: str,
+        tenant_id: str | None = None,
         client_id: str | None = None,
         client_secret: str | None = None,
-        tenant_id: str | None = None,
         reload_interval: timedelta | None = None,
     ) -> Self:
         """Add a settings provider that reads setting values from Azure Key Vault.
 
         Args:
             url: Azure Key Vault URL.
+            tenant_id: Azure tenant ID.
             client_id: Azure client ID.
             client_secret: Azure client secret.
-            tenant_id: Azure tenant ID.
             reload_interval: Time between background refresh attempts. If omitted, settings are loaded once.
 
         """
         self.add(
             AzureKeyVaultSettingsSource(
                 url=url,
+                tenant_id=tenant_id,
                 client_id=client_id,
                 client_secret=client_secret,
-                tenant_id=tenant_id,
                 reload_interval=reload_interval,
             )
         )

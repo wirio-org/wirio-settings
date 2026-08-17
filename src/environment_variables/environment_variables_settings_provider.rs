@@ -59,7 +59,7 @@ impl SettingsProvider for EnvironmentVariablesSettingsProvider {
 
     async fn reload(&self) -> PyResult<()> {
         let mut environment_variables = Self::get_environment_variables();
-        self.normalize_keys(&mut environment_variables);
+        Self::normalize_keys(&mut environment_variables);
         let data = Python::attach(|py| Self::create_data(py, environment_variables))?;
         self.data.store(Arc::new(data));
         Ok(())

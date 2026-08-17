@@ -195,7 +195,7 @@ impl SettingsProvider for GcpSecretManagerSettingsProvider {
         let mut secret_values = self
             .get_secret_values(&secret_manager_client, secret_names)
             .await?;
-        self.normalize_keys(&mut secret_values);
+        Self::normalize_keys(&mut secret_values);
         let data = Python::attach(|py| Self::create_data(py, secret_values))?;
         self.data.store(Arc::new(data));
         Ok(())

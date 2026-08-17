@@ -171,7 +171,7 @@ impl SettingsProvider for KeyPerFileSettingsProvider {
             parsed_data.insert(file_name, Some(Self::trim_new_line(file_content)));
         }
 
-        self.normalize_keys(&mut parsed_data);
+        Self::normalize_keys(&mut parsed_data);
         let data = Python::attach(|py| Self::create_data(py, parsed_data))?;
         self.data.store(Arc::new(data));
         Ok(())

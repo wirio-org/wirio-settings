@@ -76,7 +76,7 @@ pub trait SettingsProvider: Sync + fmt::Display {
         })
     }
 
-    fn normalize_keys(&self, data: &mut BTreeMap<String, Option<String>>) {
+    fn normalize_keys(data: &mut BTreeMap<String, Option<String>>) {
         if data.is_empty() {
             return;
         }
@@ -180,7 +180,7 @@ mod tests {
             ),
         ]);
 
-        settings_provider_mock.normalize_keys(&mut data);
+        MockSettingsProvider::normalize_keys(&mut data);
 
         let expected = BTreeMap::from([
             (
@@ -203,7 +203,7 @@ mod tests {
         let expected_data = BTreeMap::from([(String::from("connection_string"), None)]);
         let mut data = BTreeMap::from([(String::from("ConnectionString"), None)]);
 
-        settings_provider_mock.normalize_keys(&mut data);
+        MockSettingsProvider::normalize_keys(&mut data);
 
         assert_eq!(data, expected_data);
     }
@@ -214,7 +214,7 @@ mod tests {
             Python::attach(|py| MockSettingsProvider::new(py, PyDict::new(py).unbind()));
         let mut data: BTreeMap<String, Option<String>> = BTreeMap::new();
 
-        settings_provider_mock.normalize_keys(&mut data);
+        MockSettingsProvider::normalize_keys(&mut data);
 
         assert!(data.is_empty());
     }

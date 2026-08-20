@@ -275,6 +275,25 @@ class SettingsManager(SettingsRoot):
 
         return children
 
+    def debug_repr(self) -> str:
+        """Return a representation of all settings and their providers."""
+        representation_with_lines: list[str] = []
+        setting_keys: set[str] = set()
+
+        for provider in reversed(self.providers):
+            provider_name = str(provider)
+
+            for setting_key, setting_value in sorted(provider.data().items()):
+                if setting_key in setting_keys:
+                    continue
+
+                representation_with_lines.append(
+                    f"{setting_key} = {setting_value!r} ({provider_name})"
+                )
+                setting_keys.add(setting_key)
+
+        return "\n".join(representation_with_lines)
+
     def _is_section_key(self, key: str) -> bool:
         children = self.get_children(key)
 

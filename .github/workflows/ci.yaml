@@ -11,10 +11,13 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
 
 permissions:
   contents: read
+
+env:
+  UV_VERSION: 0.12.5
 
 jobs:
   lint:
@@ -30,7 +33,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
-          version: 0.12.5
+          version: ${{ env.UV_VERSION }}
 
       - name: Install Python packages
         run: uv sync --locked
@@ -57,7 +60,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
-          version: 0.12.5
+          version: ${{ env.UV_VERSION }}
           python-version: ${{ matrix.python-version }}
 
       - name: Install Python packages
@@ -295,7 +298,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
-          version: 0.12.5
+          version: ${{ env.UV_VERSION }}
 
       - name: Publish to PyPI
         run: uv publish 'wheels-*/*'

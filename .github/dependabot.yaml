@@ -5,14 +5,14 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "monday"
+    cooldown:
+      default-days: 7
     target-branch: "main"
-    open-pull-requests-limit: 10
 
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "monday"
+    cooldown:
+      default-days: 7
     target-branch: "main"
-    open-pull-requests-limit: 10

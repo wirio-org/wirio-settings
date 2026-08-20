@@ -280,7 +280,7 @@ class SettingsManager(SettingsRoot):
         representation_with_lines: list[str] = []
         setting_keys: set[str] = set()
 
-        for provider in self.providers:
+        for provider in reversed(self.providers):
             provider_name = str(provider)
 
             for setting_key, setting_value in sorted(provider.data().items()):

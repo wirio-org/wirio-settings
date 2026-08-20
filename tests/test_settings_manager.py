@@ -1100,7 +1100,7 @@ class TestSettingsManager:
 
         add_defaults_patch.assert_not_called()
 
-    def test_show_setting_from_first_provider_in_debug_representation_when_key_is_duplicated(
+    def test_show_setting_from_highest_priority_provider_in_debug_representation_when_key_is_duplicated(
         self,
     ) -> None:
         settings_manager = SettingsManager(
@@ -1109,17 +1109,17 @@ class TestSettingsManager:
         settings_manager.add(
             _DictionarySettingsSource(
                 {
-                    "app_name": "wirio",
-                    "empty": "",
-                    "port": "8080",
+                    "missing": None,
+                    "port": "9090",
                 }
             )
         )
         settings_manager.add(
             _DictionarySettingsSource(
                 {
-                    "missing": None,
-                    "port": "9090",
+                    "app_name": "wirio",
+                    "empty": "",
+                    "port": "8080",
                 }
             )
         )

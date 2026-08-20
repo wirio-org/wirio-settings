@@ -18,6 +18,7 @@ permissions:
 
 env:
   UV_VERSION: 0.12.5
+  MATURIN_VERSION: v1.14.1
 
 jobs:
   lint:
@@ -111,7 +112,7 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
-          maturin-version: v1.14.1
+          maturin-version: ${{ env.MATURIN_VERSION }}
           args: --release --locked --out dist --find-interpreter --compatibility pypi
           target: ${{ matrix.platform.target }}
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
@@ -152,7 +153,7 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
-          maturin-version: v1.14.1
+          maturin-version: ${{ env.MATURIN_VERSION }}
           args: --release --locked --out dist --find-interpreter --compatibility pypi
           target: ${{ matrix.platform.target }}
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
@@ -192,7 +193,7 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
-          maturin-version: v1.14.1
+          maturin-version: ${{ env.MATURIN_VERSION }}
           args: --release --locked --out dist --find-interpreter --compatibility pypi
           target: ${{ matrix.platform.target }}
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
@@ -225,7 +226,7 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
-          maturin-version: v1.14.1
+          maturin-version: ${{ env.MATURIN_VERSION }}
           args: --release --locked --out dist --find-interpreter --compatibility pypi
           target: ${{ matrix.platform.target }}
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
@@ -246,7 +247,7 @@ jobs:
       - name: Build sdist
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
-          maturin-version: v1.14.1
+          maturin-version: ${{ env.MATURIN_VERSION }}
           command: sdist
           args: --out dist
 

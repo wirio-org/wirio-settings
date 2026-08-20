@@ -7,7 +7,6 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 7
-    target-branch: "main"
 
   - package-ecosystem: "cargo"
     directory: "/"
@@ -15,4 +14,3 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 7
-    target-branch: "main"

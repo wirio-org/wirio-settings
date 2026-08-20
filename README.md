@@ -19,10 +19,10 @@ Lightning-fast, strongly typed, and zero boilerplate settings library for Python
 - **A practical replacement:** Replace `pydantic-settings` and `python-dotenv` with one unified settings library.
 - **Roadmap:** Planned capabilities include automatic reload on settings changes (events, sentinels, time, async), pluggable configuration stores, feature flags, lifetimes, prefixes, filters, custom delimiters and aliases.
 
-## Table of content
+## Table of contents
 
 - [Overview](#overview)
-- [Table of content](#table-of-content)
+- [Table of contents](#table-of-contents)
 - [📦 Installation](#-installation)
 - [✨ Quickstart with fixed strings](#-quickstart-with-fixed-strings)
 - [✨ Quickstart with Pydantic models](#-quickstart-with-pydantic-models)

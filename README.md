@@ -312,19 +312,3 @@ secrets/
 ```
 
 Then values are available as `database_password` and `openai_api_key`.
-
-## Contributing
-
-### Generate test coverage report
-
-```bash
-rustup component add llvm-tools-preview
-```
-
-```bash
-cargo install cargo-llvm-cov
-```
-
-```bash
-make test-coverage
-```

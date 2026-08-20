@@ -30,6 +30,9 @@ class _DictionarySettingsProvider(SettingsProvider):
     def data(self) -> dict[str, str | None]:
         return self.values
 
+    def __str__(self) -> str:
+        return "_DictionarySettingsProvider"
+
     @override
     def try_get(self, key: str) -> SettingLookup:
         if key in self.values:
@@ -1096,3 +1099,36 @@ class TestSettingsManager:
         SettingsManager(content_root_path="", add_default_providers=False)
 
         add_defaults_patch.assert_not_called()
+
+    def test_show_setting_from_first_provider_in_debug_representation_when_key_is_duplicated(
+        self,
+    ) -> None:
+        settings_manager = SettingsManager(
+            content_root_path="", add_default_providers=False
+        )
+        settings_manager.add(
+            _DictionarySettingsSource(
+                {
+                    "app_name": "wirio",
+                    "empty": "",
+                    "port": "8080",
+                }
+            )
+        )
+        settings_manager.add(
+            _DictionarySettingsSource(
+                {
+                    "missing": None,
+                    "port": "9090",
+                }
+            )
+        )
+
+        debug_representation = settings_manager.debug_repr()
+
+        assert debug_representation == (
+            "app_name = 'wirio' (_DictionarySettingsProvider)\n"
+            "empty = '' (_DictionarySettingsProvider)\n"
+            "port = '8080' (_DictionarySettingsProvider)\n"
+            "missing = None (_DictionarySettingsProvider)"
+        )

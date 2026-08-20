@@ -49,6 +49,7 @@ requires = ["maturin>=1.12,<2.0"]
 build-backend = "maturin"
 
 [tool.uv]
+exclude-newer = "1 week"
 cache-keys = [
     { file = "pyproject.toml" },
     { file = "uv.lock" },

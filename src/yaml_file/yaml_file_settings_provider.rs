@@ -6,7 +6,6 @@ use serde_json::Value;
 use std::fmt;
 use std::path::Path;
 use std::sync::Arc;
-use tokio::fs;
 use tokio::sync::Mutex;
 
 use crate::core::{
@@ -49,7 +48,7 @@ impl YamlFileSettingsProvider {
     }
 
     async fn read_yaml_file(path: &Path) -> PyResult<String> {
-        fs::read_to_string(path).await.map_err(|error| {
+        tokio::fs::read_to_string(path).await.map_err(|error| {
             PyRuntimeError::new_err(format!(
                 "Failed to read YAML settings file '{}': {}",
                 path.display(),
@@ -160,7 +159,6 @@ mod tests {
     use std::collections::BTreeMap;
     use std::path::PathBuf;
     use tempfile::tempdir;
-    use tokio::fs;
 
     fn assert_data(
         provider: &YamlFileSettingsProvider,
@@ -180,7 +178,7 @@ mod tests {
     async fn test_load_values_from_yaml_file() {
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.yaml");
-        fs::write(
+        tokio::fs::write(
             &file_path,
             "
 appName: wirio
@@ -241,7 +239,7 @@ logging:
     async fn test_ignore_comments() {
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.yaml");
-        fs::write(
+        tokio::fs::write(
             &file_path,
             "# This is a comment
 appName: wirio # This is an inline comment
@@ -274,7 +272,7 @@ port: 8080
     async fn test_return_empty_data_when_yaml_file_is_empty() {
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.yaml");
-        fs::write(&file_path, "").await.unwrap();
+        tokio::fs::write(&file_path, "").await.unwrap();
 
         let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(
@@ -292,7 +290,7 @@ port: 8080
     async fn test_return_empty_data_when_yaml_file_has_only_comments() {
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.yaml");
-        fs::write(
+        tokio::fs::write(
             &file_path,
             "# This is a comment
 # Another comment
@@ -389,7 +387,7 @@ port: 8080
 
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.yaml");
-        fs::write(&file_path, "appName: [wirio").await.unwrap();
+        tokio::fs::write(&file_path, "appName: [wirio").await.unwrap();
 
         let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(
@@ -412,7 +410,7 @@ port: 8080
 
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.yaml");
-        fs::write(&file_path, "- wirio\n- config").await.unwrap();
+        tokio::fs::write(&file_path, "- wirio\n- config").await.unwrap();
 
         let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(
@@ -475,7 +473,7 @@ port: 8080
             "section: {}\nnested_section:\n  section: {}\nitems: []\nnested_items:\n  items: []";
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.yaml");
-        fs::write(&file_path, raw_yaml).await.unwrap();
+        tokio::fs::write(&file_path, raw_yaml).await.unwrap();
         let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(
                 py,
@@ -497,7 +495,7 @@ port: 8080
         let file_path = temporary_directory.path().join("settings.yaml");
         let runtime = pyo3_async_runtimes::tokio::get_runtime();
         runtime
-            .block_on(fs::write(&file_path, "value: initial"))
+            .block_on(tokio::fs::write(&file_path, "value: initial"))
             .unwrap();
         let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(
@@ -509,7 +507,7 @@ port: 8080
         Python::attach(|py| provider.load(py)).unwrap();
 
         let actual_value = runtime.block_on(async {
-            fs::write(&file_path, "value: updated").await.unwrap();
+            tokio::fs::write(&file_path, "value: updated").await.unwrap();
 
             tokio::time::timeout(std::time::Duration::from_secs(5), async {
                 loop {
@@ -526,7 +524,7 @@ port: 8080
                         break value;
                     }
 
-                    tokio::task::yield_now().await;
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 }
             })
             .await
@@ -544,7 +542,7 @@ port: 8080
         let file_path = temporary_directory.path().join("settings.yaml");
         let runtime = pyo3_async_runtimes::tokio::get_runtime();
         runtime
-            .block_on(fs::write(&file_path, "value: initial"))
+            .block_on(tokio::fs::write(&file_path, "value: initial"))
             .unwrap();
         let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(

@@ -1,7 +1,6 @@
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use std::path::{Path, PathBuf};
-use tokio::fs;
 
 use crate::core::PathWatcher;
 
@@ -36,7 +35,7 @@ impl PathProvider {
                 if !final_content_root_path.has_root() {
                     return Err(PyValueError::new_err(format!(
                         "When file path is not rooted, content root path ('{}') must be rooted",
-                        path.display()
+                        final_content_root_path.display()
                     )));
                 }
 
@@ -87,7 +86,7 @@ impl PathProvider {
 
     /// Checks if the path exists and is of the expected type (file or directory). If the path is optional and doesn't exist, it returns `false`. If the path is required and doesn't exist, it returns an error.
     pub async fn try_is_path_available(&self) -> PyResult<bool> {
-        let path_exists = fs::try_exists(&self.path).await.map_err(|error| {
+        let path_exists = tokio::fs::try_exists(&self.path).await.map_err(|error| {
             PyRuntimeError::new_err(format!(
                 "Failed to inspect '{}': {}",
                 self.path.display(),
@@ -106,7 +105,7 @@ impl PathProvider {
             )));
         }
 
-        let metadata = fs::metadata(&self.path).await.map_err(|error| {
+        let metadata = tokio::fs::metadata(&self.path).await.map_err(|error| {
             PyRuntimeError::new_err(format!(
                 "Failed to inspect '{}': {}",
                 self.path.display(),

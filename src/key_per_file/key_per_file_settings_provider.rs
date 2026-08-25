@@ -4,7 +4,6 @@ use pyo3::{exceptions::PyRuntimeError, types::PyDict};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
-use tokio::fs;
 use tokio::sync::Mutex;
 
 use crate::core::{
@@ -100,7 +99,7 @@ impl KeyPerFileSettingsProvider {
         }
 
         let mut parsed_data: BTreeMap<String, Option<String>> = BTreeMap::new();
-        let mut directory_entries = fs::read_dir(path_provider.path()).await.map_err(|error| {
+        let mut directory_entries = tokio::fs::read_dir(path_provider.path()).await.map_err(|error| {
             PyRuntimeError::new_err(format!(
                 "Failed to read directory '{}': {}",
                 path_provider.path().display(),
@@ -130,7 +129,7 @@ impl KeyPerFileSettingsProvider {
 
             if file_type.is_symlink() {
                 let entry_metadata =
-                    fs::metadata(&directory_entry_path).await.map_err(|error| {
+                    tokio::fs::metadata(&directory_entry_path).await.map_err(|error| {
                         PyRuntimeError::new_err(format!(
                             "Failed to inspect entry '{}': {}",
                             directory_entry_path.display(),
@@ -146,7 +145,7 @@ impl KeyPerFileSettingsProvider {
             let file_name = directory_entry.file_name().to_string_lossy().into_owned();
 
             let file_content =
-                fs::read_to_string(&directory_entry_path)
+                tokio::fs::read_to_string(&directory_entry_path)
                     .await
                     .map_err(|error| {
                         PyRuntimeError::new_err(format!(
@@ -191,7 +190,6 @@ mod tests {
     use pyo3::types::PyAnyMethods;
     use std::{collections::BTreeMap, path::PathBuf};
     use tempfile::tempdir;
-    use tokio::fs;
 
     fn assert_data(
         provider: &KeyPerFileSettingsProvider,
@@ -210,10 +208,10 @@ mod tests {
     #[tokio::test]
     async fn test_load_values_from_directory_files() {
         let temporary_directory = tempdir().unwrap();
-        fs::write(temporary_directory.path().join("app_name"), "wirio")
+        tokio::fs::write(temporary_directory.path().join("app_name"), "wirio")
             .await
             .unwrap();
-        fs::write(
+        tokio::fs::write(
             temporary_directory
                 .path()
                 .join("logging__log_level__default"),
@@ -221,7 +219,7 @@ mod tests {
         )
         .await
         .unwrap();
-        fs::write(
+        tokio::fs::write(
             temporary_directory.path().join("database_password"),
             "secret",
         )
@@ -305,7 +303,7 @@ mod tests {
 
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("not-a-directory");
-        fs::write(&file_path, "value").await.unwrap();
+        tokio::fs::write(&file_path, "value").await.unwrap();
         let provider = Python::attach(|py| {
             KeyPerFileSettingsProvider::new(
                 py,
@@ -395,7 +393,7 @@ mod tests {
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("value");
         let runtime = pyo3_async_runtimes::tokio::get_runtime();
-        runtime.block_on(fs::write(&file_path, "initial")).unwrap();
+        runtime.block_on(tokio::fs::write(&file_path, "initial")).unwrap();
         let provider = Python::attach(|py| {
             KeyPerFileSettingsProvider::new(
                 py,
@@ -407,7 +405,7 @@ mod tests {
         Python::attach(|py| provider.load(py)).unwrap();
 
         let actual_value = runtime.block_on(async {
-            fs::write(&file_path, "updated").await.unwrap();
+            tokio::fs::write(&file_path, "updated").await.unwrap();
 
             tokio::time::timeout(std::time::Duration::from_secs(5), async {
                 loop {
@@ -424,7 +422,7 @@ mod tests {
                         break value;
                     }
 
-                    tokio::task::yield_now().await;
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 }
             })
             .await
@@ -439,7 +437,7 @@ mod tests {
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("value");
         let runtime = pyo3_async_runtimes::tokio::get_runtime();
-        runtime.block_on(fs::write(&file_path, "initial")).unwrap();
+        runtime.block_on(tokio::fs::write(&file_path, "initial")).unwrap();
         let provider = Python::attach(|py| {
             KeyPerFileSettingsProvider::new(
                 py,

@@ -7,7 +7,6 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::Path;
 use std::sync::Arc;
-use tokio::fs;
 use tokio::sync::Mutex;
 
 use crate::core::{
@@ -50,7 +49,7 @@ impl JsonFileSettingsProvider {
     }
 
     async fn read_json_file(path: &Path) -> PyResult<String> {
-        fs::read_to_string(path).await.map_err(|error| {
+        tokio::fs::read_to_string(path).await.map_err(|error| {
             PyRuntimeError::new_err(format!(
                 "Failed to read JSON settings file '{}': {}",
                 path.display(),
@@ -153,7 +152,6 @@ mod tests {
     use std::collections::BTreeMap;
     use std::path::PathBuf;
     use tempfile::tempdir;
-    use tokio::fs;
 
     fn assert_data(
         provider: &JsonFileSettingsProvider,
@@ -187,7 +185,9 @@ mod tests {
         });
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.json");
-        fs::write(&file_path, json.to_string()).await.unwrap();
+        tokio::fs::write(&file_path, json.to_string())
+            .await
+            .unwrap();
         let provider = Python::attach(|py| {
             JsonFileSettingsProvider::new(
                 py,
@@ -223,7 +223,9 @@ mod tests {
         });
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.json");
-        fs::write(&file_path, json.to_string()).await.unwrap();
+        tokio::fs::write(&file_path, json.to_string())
+            .await
+            .unwrap();
         let provider = Python::attach(|py| {
             JsonFileSettingsProvider::new(
                 py,
@@ -253,7 +255,9 @@ mod tests {
         });
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.json");
-        fs::write(&file_path, json.to_string()).await.unwrap();
+        tokio::fs::write(&file_path, json.to_string())
+            .await
+            .unwrap();
         let provider = Python::attach(|py| {
             JsonFileSettingsProvider::new(
                 py,
@@ -310,7 +314,7 @@ mod tests {
         let file_path = temporary_directory.path().join("settings.json");
         let runtime = pyo3_async_runtimes::tokio::get_runtime();
         runtime
-            .block_on(fs::write(&file_path, r#"{"value":"initial"}"#))
+            .block_on(tokio::fs::write(&file_path, r#"{"value":"initial"}"#))
             .unwrap();
         let provider = Python::attach(|py| {
             JsonFileSettingsProvider::new(
@@ -322,7 +326,7 @@ mod tests {
         Python::attach(|py| provider.load(py)).unwrap();
 
         let actual_value = runtime.block_on(async {
-            fs::write(&file_path, r#"{"value":"updated"}"#)
+            tokio::fs::write(&file_path, r#"{"value":"updated"}"#)
                 .await
                 .unwrap();
 
@@ -341,7 +345,7 @@ mod tests {
                         break value;
                     }
 
-                    tokio::task::yield_now().await;
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 }
             })
             .await
@@ -357,7 +361,7 @@ mod tests {
         let file_path = temporary_directory.path().join("settings.json");
         let runtime = pyo3_async_runtimes::tokio::get_runtime();
         runtime
-            .block_on(fs::write(&file_path, r#"{"value":"initial"}"#))
+            .block_on(tokio::fs::write(&file_path, r#"{"value":"initial"}"#))
             .unwrap();
         let provider = Python::attach(|py| {
             JsonFileSettingsProvider::new(

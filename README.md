@@ -16,8 +16,9 @@ Lightning-fast, strongly typed, and zero boilerplate settings library for Python
 - **Rust-powered core:** Built with Rust under the hood for speed, reliability, and low runtime overhead.
 - **Secret stores:** Azure Key Vault, AWS Secrets Manager and GCP Secret Manager integrations are available with one line of code, with safe authentication.
 - **Pydantic models:** Load your application settings directly into models.
+- **Automatic reloads:** Keep settings up to date by automatically reloading them.
 - **A practical replacement:** Replace `pydantic-settings` and `python-dotenv` with one unified settings library.
-- **Roadmap:** Planned capabilities include automatic reload on settings changes (events, sentinels, time, async), pluggable configuration stores, feature flags, lifetimes, prefixes, filters, custom delimiters and aliases.
+- **Roadmap:** Planned capabilities include pluggable configuration stores, feature flags, lifetimes, prefixes, filters, custom delimiters and aliases.
 
 ## Table of contents
 
@@ -103,7 +104,12 @@ application_settings = (
 settings_manager.add_yaml_file("file.yaml")
 ```
 
-Comments are supported in YAML files. Setting `reload_on_change` reloads values when the file changes.
+Comments are supported in YAML files.
+
+Options:
+
+- `optional=True` skips the file if it is missing. The file is required by default.
+- `reload_on_change=True` reloads values when the file changes.
 
 ### JSON file
 
@@ -111,7 +117,12 @@ Comments are supported in YAML files. Setting `reload_on_change` reloads values 
 settings_manager.add_json_file("file.json")
 ```
 
-Comments are not supported in JSON files. Setting `reload_on_change` reloads values when the file changes.
+Comments are not supported in JSON files.
+
+Options:
+
+- `optional=True` skips the file if it is missing. The file is required by default.
+- `reload_on_change=True` reloads values when the file changes.
 
 ### Environment variables
 
@@ -201,7 +212,12 @@ We can also pass custom GCP credentials with the `credentials_json` parameter.
 settings_manager.add_key_per_file("secrets")
 ```
 
-Given a directory, each file name becomes a setting key and the file content becomes the setting value. Setting `reload_on_change` reloads values when directory contents change.
+Given a directory, each file name becomes a setting key and the file content becomes the setting value.
+
+Options:
+
+- `optional=True` skips the directory if it is missing. The directory is required by default.
+- `reload_on_change=True` reloads values when directory contents change.
 
 This provider is useful when secrets are mounted as files by the runtime instead of exposed as environment variables. It lets us keep application code unchanged while switching the secret delivery mechanism.
 

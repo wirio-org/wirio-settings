@@ -1,0 +1,53 @@
+name: Test
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: Runner used to execute the test suite
+        required: true
+        type: string
+      uv-version:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (Python=${{ matrix.python-version }}, Resolution=${{ matrix.resolution-strategy }})
+    runs-on: ${{ inputs.runner }}
+    strategy:
+      matrix:
+        python-version: ["3.13", "3.14"]
+        resolution-strategy: ["lowest-direct", "highest"]
+    env:
+      UV_NO_SYNC: 1
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: ${{ inputs.uv-version }}
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Python packages
+        run: |
+          uv sync \
+          --resolution ${{ matrix.resolution-strategy }}
+        shell: bash
+
+      - name: Install crates
+        run: uv run -- maturin develop --uv
+        shell: bash
+
+      - name: Rust tests
+        run: cargo test --locked
+        shell: bash
+
+      - name: Python tests
+        run: uv run -- pytest --cov=wirio_settings --cov-branch tests
+        shell: bash

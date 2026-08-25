@@ -21,9 +21,16 @@ env:
   MATURIN_VERSION: v1.14.1
 
 jobs:
+  configuration:
+    name: Configuration
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-24.04
+    outputs:
+      uv-version: ${{ env.UV_VERSION }}
+
   lint:
     name: Lint
-    if: github.actor != 'dependabot[bot]'
+    needs: configuration
     runs-on: ubuntu-24.04
     env:
       UV_NO_SYNC: 1
@@ -45,42 +52,12 @@ jobs:
         shell: bash
 
   test:
-    name: Test (Python=${{ matrix.python-version }}, Resolution=${{ matrix.resolution-strategy }})
-    needs: lint
-    runs-on: ubuntu-24.04
-    strategy:
-      matrix:
-        python-version: ["3.13", "3.14"]
-        resolution-strategy: ["lowest-direct", "highest"]
-    env:
-      UV_NO_SYNC: 1
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
-        with:
-          version: ${{ env.UV_VERSION }}
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install Python packages
-        run: |
-          uv sync \
-          --resolution ${{ matrix.resolution-strategy }}
-        shell: bash
-
-      - name: Install crates
-        run: uv run -- maturin develop --uv
-        shell: bash
-
-      - name: Rust tests
-        run: cargo test --locked
-        shell: bash
-
-      - name: Python tests
-        run: uv run -- pytest --cov=wirio_settings --cov-branch tests
-        shell: bash
+    name: Test
+    needs: [configuration, lint]
+    uses: ./.github/workflows/_test.yaml
+    with:
+      runner: ubuntu-24.04
+      uv-version: ${{ needs.configuration.outputs.uv-version }}
 
   linux:
     runs-on: ${{ matrix.platform.runner }}
@@ -127,6 +104,29 @@ jobs:
           name: wheels-linux-${{ matrix.platform.target }}
           path: dist
 
+  test-linux:
+    name: Test Linux (${{ matrix.platform.target }})
+    needs: [configuration, linux]
+    strategy:
+      matrix:
+        platform:
+          - runner: ubuntu-22.04
+            target: x86_64
+          - runner: ubuntu-22.04
+            target: x86
+          - runner: ubuntu-22.04
+            target: aarch64
+          - runner: ubuntu-22.04
+            target: armv7
+          - runner: ubuntu-22.04
+            target: s390x
+          - runner: ubuntu-22.04
+            target: ppc64le
+    uses: ./.github/workflows/_test.yaml
+    with:
+      runner: ${{ matrix.platform.runner }}
+      uv-version: ${{ needs.configuration.outputs.uv-version }}
+
   musllinux:
     runs-on: ${{ matrix.platform.runner }}
     needs: test
@@ -164,6 +164,25 @@ jobs:
         with:
           name: wheels-musllinux-${{ matrix.platform.target }}
           path: dist
+
+  test-musllinux:
+    name: Test musllinux (${{ matrix.platform.target }})
+    needs: [configuration, musllinux]
+    strategy:
+      matrix:
+        platform:
+          - runner: ubuntu-22.04
+            target: x86_64
+          - runner: ubuntu-22.04
+            target: x86
+          - runner: ubuntu-22.04
+            target: aarch64
+          - runner: ubuntu-22.04
+            target: armv7
+    uses: ./.github/workflows/_test.yaml
+    with:
+      runner: ${{ matrix.platform.runner }}
+      uv-version: ${{ needs.configuration.outputs.uv-version }}
 
   windows:
     runs-on: ${{ matrix.platform.runner }}
@@ -204,6 +223,26 @@ jobs:
           name: wheels-windows-${{ matrix.platform.target }}
           path: dist
 
+  test-windows:
+    name: Test Windows (${{ matrix.platform.target }})
+    needs: [configuration, windows]
+    strategy:
+      matrix:
+        platform:
+          - runner: windows-latest
+            target: x64
+            python_arch: x64
+          - runner: windows-latest
+            target: x86
+            python_arch: x86
+          - runner: windows-11-arm
+            target: aarch64
+            python_arch: arm64
+    uses: ./.github/workflows/_test.yaml
+    with:
+      runner: ${{ matrix.platform.runner }}
+      uv-version: ${{ needs.configuration.outputs.uv-version }}
+
   macos:
     runs-on: ${{ matrix.platform.runner }}
     needs: test
@@ -237,6 +276,21 @@ jobs:
           name: wheels-macos-${{ matrix.platform.target }}
           path: dist
 
+  test-macos:
+    name: Test macOS (${{ matrix.platform.target }})
+    needs: [configuration, macos]
+    strategy:
+      matrix:
+        platform:
+          - runner: macos-15-intel
+            target: x86_64
+          - runner: macos-latest
+            target: aarch64
+    uses: ./.github/workflows/_test.yaml
+    with:
+      runner: ${{ matrix.platform.runner }}
+      uv-version: ${{ needs.configuration.outputs.uv-version }}
+
   sdist:
     runs-on: ubuntu-latest
     needs: test
@@ -263,7 +317,7 @@ jobs:
     permissions:
       # Used to upload coverage report to Codecov
       id-token: write
-    needs: [linux, musllinux, windows, macos, sdist]
+    needs: [test-linux, test-musllinux, test-windows, test-macos, sdist]
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

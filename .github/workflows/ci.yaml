@@ -75,7 +75,7 @@ jobs:
         shell: bash
 
       - name: Rust tests
-        run: cargo test
+        run: cargo test --locked
         shell: bash
 
       - name: Python tests

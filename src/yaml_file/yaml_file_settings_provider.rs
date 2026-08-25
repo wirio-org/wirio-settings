@@ -387,7 +387,9 @@ port: 8080
 
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.yaml");
-        tokio::fs::write(&file_path, "appName: [wirio").await.unwrap();
+        tokio::fs::write(&file_path, "appName: [wirio")
+            .await
+            .unwrap();
 
         let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(
@@ -410,7 +412,9 @@ port: 8080
 
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.yaml");
-        tokio::fs::write(&file_path, "- wirio\n- config").await.unwrap();
+        tokio::fs::write(&file_path, "- wirio\n- config")
+            .await
+            .unwrap();
 
         let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(
@@ -507,7 +511,9 @@ port: 8080
         Python::attach(|py| provider.load(py)).unwrap();
 
         let actual_value = runtime.block_on(async {
-            tokio::fs::write(&file_path, "value: updated").await.unwrap();
+            tokio::fs::write(&file_path, "value: updated")
+                .await
+                .unwrap();
 
             tokio::time::timeout(std::time::Duration::from_secs(5), async {
                 loop {

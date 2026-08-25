@@ -99,13 +99,16 @@ impl KeyPerFileSettingsProvider {
         }
 
         let mut parsed_data: BTreeMap<String, Option<String>> = BTreeMap::new();
-        let mut directory_entries = tokio::fs::read_dir(path_provider.path()).await.map_err(|error| {
-            PyRuntimeError::new_err(format!(
-                "Failed to read directory '{}': {}",
-                path_provider.path().display(),
-                error
-            ))
-        })?;
+        let mut directory_entries =
+            tokio::fs::read_dir(path_provider.path())
+                .await
+                .map_err(|error| {
+                    PyRuntimeError::new_err(format!(
+                        "Failed to read directory '{}': {}",
+                        path_provider.path().display(),
+                        error
+                    ))
+                })?;
 
         while let Some(directory_entry) = directory_entries.next_entry().await.map_err(|error| {
             PyRuntimeError::new_err(format!(
@@ -129,13 +132,15 @@ impl KeyPerFileSettingsProvider {
 
             if file_type.is_symlink() {
                 let entry_metadata =
-                    tokio::fs::metadata(&directory_entry_path).await.map_err(|error| {
-                        PyRuntimeError::new_err(format!(
-                            "Failed to inspect entry '{}': {}",
-                            directory_entry_path.display(),
-                            error
-                        ))
-                    })?;
+                    tokio::fs::metadata(&directory_entry_path)
+                        .await
+                        .map_err(|error| {
+                            PyRuntimeError::new_err(format!(
+                                "Failed to inspect entry '{}': {}",
+                                directory_entry_path.display(),
+                                error
+                            ))
+                        })?;
 
                 if entry_metadata.is_dir() {
                     continue;
@@ -144,16 +149,15 @@ impl KeyPerFileSettingsProvider {
 
             let file_name = directory_entry.file_name().to_string_lossy().into_owned();
 
-            let file_content =
-                tokio::fs::read_to_string(&directory_entry_path)
-                    .await
-                    .map_err(|error| {
-                        PyRuntimeError::new_err(format!(
-                            "Failed to read entry '{}': {}",
-                            directory_entry_path.display(),
-                            error
-                        ))
-                    })?;
+            let file_content = tokio::fs::read_to_string(&directory_entry_path)
+                .await
+                .map_err(|error| {
+                    PyRuntimeError::new_err(format!(
+                        "Failed to read entry '{}': {}",
+                        directory_entry_path.display(),
+                        error
+                    ))
+                })?;
 
             parsed_data.insert(file_name, Some(Self::trim_new_line(file_content)));
         }
@@ -393,7 +397,9 @@ mod tests {
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("value");
         let runtime = pyo3_async_runtimes::tokio::get_runtime();
-        runtime.block_on(tokio::fs::write(&file_path, "initial")).unwrap();
+        runtime
+            .block_on(tokio::fs::write(&file_path, "initial"))
+            .unwrap();
         let provider = Python::attach(|py| {
             KeyPerFileSettingsProvider::new(
                 py,
@@ -437,7 +443,9 @@ mod tests {
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("value");
         let runtime = pyo3_async_runtimes::tokio::get_runtime();
-        runtime.block_on(tokio::fs::write(&file_path, "initial")).unwrap();
+        runtime
+            .block_on(tokio::fs::write(&file_path, "initial"))
+            .unwrap();
         let provider = Python::attach(|py| {
             KeyPerFileSettingsProvider::new(
                 py,

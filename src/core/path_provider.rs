@@ -3,6 +3,8 @@ use pyo3::prelude::*;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
+use crate::core::PathWatcher;
+
 #[derive(Debug, Clone)]
 pub struct PathProvider {
     path: PathBuf,
@@ -79,8 +81,12 @@ impl PathProvider {
         &self.path
     }
 
+    pub fn create_watcher(&self) -> PathWatcher {
+        PathWatcher::new(self.path.clone())
+    }
+
     /// Checks if the path exists and is of the expected type (file or directory). If the path is optional and doesn't exist, it returns `false`. If the path is required and doesn't exist, it returns an error.
-    pub(crate) async fn try_is_path_available(&self) -> PyResult<bool> {
+    pub async fn try_is_path_available(&self) -> PyResult<bool> {
         let path_exists = fs::try_exists(&self.path).await.map_err(|error| {
             PyRuntimeError::new_err(format!(
                 "Failed to inspect '{}': {}",

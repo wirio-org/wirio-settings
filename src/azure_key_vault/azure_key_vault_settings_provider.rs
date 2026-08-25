@@ -291,8 +291,8 @@ impl AzureKeyVaultSettingsProvider {
                     tokio::select! {
                         () = cancellation_token.cancelled() => break,
                         _ = Self::reload_secrets(
-                            Arc::clone(&secret_client),
-                            Arc::clone(&secrets_cache),
+                            &secret_client,
+                            &secrets_cache,
                             &url,
                         ) => {
                             // Ignore errors during scheduled reloads
@@ -304,8 +304,8 @@ impl AzureKeyVaultSettingsProvider {
     }
 
     async fn reload_secrets(
-        secret_client: Arc<SecretClient>,
-        secrets_cache: Arc<ArcSwap<SecretsCache>>,
+        secret_client: &SecretClient,
+        secrets_cache: &ArcSwap<SecretsCache>,
         url: &str,
     ) -> PyResult<()> {
         let mut secret_properties_pager =
@@ -328,7 +328,7 @@ impl AzureKeyVaultSettingsProvider {
             })?
         {
             Self::add_secret(
-                &secret_client,
+                secret_client,
                 loaded_secrets,
                 secret_properties,
                 &mut new_loaded_secrets,
@@ -337,7 +337,7 @@ impl AzureKeyVaultSettingsProvider {
             .await?;
         }
 
-        Self::update_secrets(&secrets_cache, new_loaded_secrets)
+        Self::update_secrets(secrets_cache, new_loaded_secrets)
     }
 }
 
@@ -361,12 +361,9 @@ impl SettingsProvider for AzureKeyVaultSettingsProvider {
     }
 
     async fn reload(&self) -> PyResult<()> {
-        Self::reload_secrets(
-            Arc::clone(&self.secret_client),
-            Arc::clone(&self.secrets_cache),
-            &self.url,
-        )
-        .await
+        let secret_client = Arc::clone(&self.secret_client);
+        let secrets_cache = Arc::clone(&self.secrets_cache);
+        Self::reload_secrets(&secret_client, &secrets_cache, &self.url).await
     }
 
     fn section_separator() -> Option<&'static str> {
@@ -570,12 +567,14 @@ mod tests {
 
             provider.schedule_reload(py, None);
 
-            assert!(
-                provider
-                    .schedule_reload_cancellation_token
-                    .blocking_lock()
-                    .is_none()
-            );
+            py.detach(|| {
+                assert!(
+                    provider
+                        .schedule_reload_cancellation_token
+                        .blocking_lock()
+                        .is_none()
+                );
+            });
         });
     }
 

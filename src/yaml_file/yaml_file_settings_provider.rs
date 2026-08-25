@@ -1,20 +1,16 @@
 use arc_swap::ArcSwap;
-use notify_debouncer_mini::notify::RecursiveMode;
-use notify_debouncer_mini::{DebounceEventResult, new_debouncer, notify::RecommendedWatcher};
-use notify_debouncer_mini::{DebouncedEvent, Debouncer};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use serde_json::Value;
+use std::fmt;
 use std::path::Path;
 use std::sync::Arc;
-use std::{fmt, time::Duration};
+use tokio::fs;
 use tokio::sync::Mutex;
-use tokio::{fs, sync::mpsc::UnboundedSender};
-use tokio_util::sync::CancellationToken;
 
 use crate::core::{
-    PathProvider, PythonSettingsProvider, SerdeParser, SettingLookup, SettingsProvider,
+    PathProvider, PathWatcher, PythonSettingsProvider, SerdeParser, SettingLookup, SettingsProvider,
 };
 
 #[pyclass(extends = PythonSettingsProvider, frozen, str)]
@@ -22,8 +18,7 @@ pub struct YamlFileSettingsProvider {
     data: Arc<ArcSwap<Py<PyDict>>>,
     path_provider: PathProvider,
     reload_on_change: bool,
-    watch_file_cancellation_token: Mutex<Option<CancellationToken>>,
-    watch_file_debouncer: Mutex<Option<Debouncer<RecommendedWatcher>>>,
+    path_watcher: Mutex<Option<PathWatcher>>,
 }
 
 #[pymethods]
@@ -49,8 +44,7 @@ impl YamlFileSettingsProvider {
             data: Arc::new(ArcSwap::from_pointee(PyDict::new(py).unbind())),
             path_provider,
             reload_on_change,
-            watch_file_cancellation_token: Mutex::new(None),
-            watch_file_debouncer: Mutex::new(None),
+            path_watcher: Mutex::new(None),
         }
     }
 
@@ -70,80 +64,31 @@ impl YamlFileSettingsProvider {
         }
 
         py.detach(|| {
-            let cancellation_token = CancellationToken::new();
-            self.watch_file_cancellation_token
-                .blocking_lock()
-                .replace(cancellation_token.clone());
-            let (channel_sender, mut channel_receiver) = tokio::sync::mpsc::unbounded_channel();
-            let watch_file_debouncer = Self::create_watch_file_debouncer(
-                self.path_provider.path(),
-                channel_sender,
-            )
-            .map_err(|error| {
+            let data = Arc::clone(&self.data);
+            let path_provider = self.path_provider.clone();
+            let mut path_watcher = self.path_provider.create_watcher();
+
+            path_watcher
+                .watch(move || {
+                    let data = Arc::clone(&data);
+                    let path_provider = path_provider.clone();
+
+                    async move {
+                        // Ignore errors during watched reloads
+                        let _ = Self::reload_settings(&data, &path_provider).await;
+                    }
+                })
+                .map_err(|error| {
                     PyRuntimeError::new_err(format!(
                         "Failed to watch YAML settings file '{}': {}",
                         self.path_provider.path().display(),
                         error
                     ))
                 })?;
-            self.watch_file_debouncer
-                .blocking_lock()
-                .replace(watch_file_debouncer);
-            let runtime = pyo3_async_runtimes::tokio::get_runtime();
-            let data = Arc::clone(&self.data);
-            let path_provider = self.path_provider.clone();
 
-            runtime.spawn(async move {
-                loop {
-                    tokio::select! {
-                        () = cancellation_token.cancelled() => break,
-                        result = channel_receiver.recv() => {
-                            let Some(result) = result else {
-                                break;
-                            };
-
-                            // Ignore errors during file watches
-                            if let Ok(events) = result {
-                                let are_relevant_file_changes = Self::are_relevant_file_changes(&events);
-
-                                if are_relevant_file_changes {
-                                    let _ = Self::reload_settings(&data, &path_provider).await;
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-
+            self.path_watcher.blocking_lock().replace(path_watcher);
             Ok(())
         })
-    }
-
-    fn create_watch_file_debouncer(
-        path: &Path,
-        channel_sender: UnboundedSender<DebounceEventResult>,
-    ) -> notify_debouncer_mini::notify::Result<Debouncer<RecommendedWatcher>> {
-        let mut debouncer = new_debouncer(Duration::from_millis(500), move |result| {
-            let _ = channel_sender.send(result);
-        })?;
-        debouncer
-            .watcher()
-            .watch(path, RecursiveMode::NonRecursive)?;
-        Ok(debouncer)
-    }
-
-    fn are_relevant_file_changes(events: &[DebouncedEvent]) -> bool {
-        let filtered_events: Vec<_> = events
-            .iter()
-            .filter(|event| !Self::should_ignore_file(&event.path))
-            .collect();
-        !filtered_events.is_empty()
-    }
-
-    /// Exclude files and directories when the name begins with period
-    fn should_ignore_file(path: &Path) -> bool {
-        path.file_name()
-            .is_some_and(|file_name| file_name.as_encoded_bytes().starts_with(b"."))
     }
 
     async fn reload_settings(
@@ -186,16 +131,6 @@ impl YamlFileSettingsProvider {
         let new_data = Python::attach(|py| Self::create_data(py, parsed_data))?;
         data.store(Arc::new(new_data));
         Ok(())
-    }
-}
-
-impl Drop for YamlFileSettingsProvider {
-    fn drop(&mut self) {
-        let watch_file_cancellation_token = self.watch_file_cancellation_token.get_mut().take();
-
-        if let Some(cancellation_token) = watch_file_cancellation_token {
-            cancellation_token.cancel();
-        }
     }
 }
 
@@ -550,22 +485,4 @@ port: 8080
 
         assert_data(&provider, &expected_parsed_yaml);
     }
-
-    // #[test]
-    // fn test_cancel_watcher_when_dropping_provider() {
-    //     Python::initialize();
-
-    //     let cancellation_token = tokio_util::sync::CancellationToken::new();
-    //     let provider = Python::attach(|py| {
-    //         YamlFileSettingsProvider::new(py, None, "settings.yaml", false, false)
-    //     });
-    //     provider
-    //         .watch_file_cancellation_token
-    //         .blocking_lock()
-    //         .replace(cancellation_token.clone());
-
-    //     drop(provider);
-
-    //     assert!(cancellation_token.is_cancelled());
-    // }
 }

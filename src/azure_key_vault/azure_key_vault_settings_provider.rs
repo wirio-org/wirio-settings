@@ -12,7 +12,6 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::azure_key_vault::default_azure_credential::DefaultAzureCredential;
@@ -26,7 +25,6 @@ pub struct AzureKeyVaultSettingsProvider {
     secret_client: Arc<SecretClient>,
     reload_interval: Option<Duration>,
     schedule_reload_cancellation_token: Mutex<Option<CancellationToken>>,
-    schedule_reload_handle: Mutex<Option<JoinHandle<()>>>,
 }
 
 struct SecretsCache {
@@ -36,28 +34,6 @@ struct SecretsCache {
 
 #[pymethods]
 impl AzureKeyVaultSettingsProvider {
-    #[new]
-    #[pyo3(signature = (url, tenant_id=None, client_id=None, client_secret=None, reload_interval=None))]
-    pub fn new_python(
-        py: Python<'_>,
-        url: String,
-        tenant_id: Option<String>,
-        client_id: Option<String>,
-        client_secret: Option<String>,
-        reload_interval: Option<Duration>,
-    ) -> PyResult<PyClassInitializer<Self>> {
-        Ok(
-            PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new(
-                py,
-                url,
-                tenant_id,
-                client_id,
-                client_secret,
-                reload_interval,
-            )?),
-        )
-    }
-
     #[pyo3(signature = () -> "dict[str, str | None]")]
     fn data(&self, py: Python<'_>) -> Py<PyDict> {
         SettingsProvider::data(self, py)
@@ -101,7 +77,6 @@ impl AzureKeyVaultSettingsProvider {
             secret_client: Arc::new(secret_client),
             reload_interval,
             schedule_reload_cancellation_token: Mutex::new(None),
-            schedule_reload_handle: Mutex::new(None),
         })
     }
 
@@ -307,7 +282,7 @@ impl AzureKeyVaultSettingsProvider {
             let secrets_cache = Arc::clone(&self.secrets_cache);
             let url = self.url.clone();
 
-            let schedule_reload_handle = runtime.spawn(async move {
+            runtime.spawn(async move {
                 loop {
                     tokio::select! {
                         () = cancellation_token.cancelled() => break,
@@ -325,10 +300,6 @@ impl AzureKeyVaultSettingsProvider {
                     };
                 }
             });
-
-            self.schedule_reload_handle
-                .blocking_lock()
-                .replace(schedule_reload_handle);
         });
     }
 
@@ -605,7 +576,6 @@ mod tests {
                     .blocking_lock()
                     .is_none()
             );
-            assert!(provider.schedule_reload_handle.blocking_lock().is_none());
         });
     }
 

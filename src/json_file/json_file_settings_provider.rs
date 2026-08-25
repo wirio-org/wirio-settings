@@ -5,46 +5,21 @@ use pyo3::types::PyDict;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fmt;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs;
 
 use crate::core::{
-    PythonSettingsProvider, SerdeParser, SettingLookup, SettingsProvider, file_provider,
+    PathProvider, PythonSettingsProvider, SerdeParser, SettingLookup, SettingsProvider,
 };
 
 #[pyclass(extends = PythonSettingsProvider, frozen, str)]
 pub struct JsonFileSettingsProvider {
     data: ArcSwap<Py<PyDict>>,
-    path: PathBuf,
-    optional: bool,
+    path_provider: PathProvider,
 }
 
 #[pymethods]
 impl JsonFileSettingsProvider {
-    /// Creates a JSON settings provider from a path.
-    ///
-    /// The `path` argument can be:
-    /// - A file name (for example, `settings.json`).
-    /// - A relative path (for example, `config/settings.json`).
-    /// - An absolute path (for example, `/tmp/settings.json`).
-    ///
-    /// File names and relative paths are resolved against `content_root_path` when provided, otherwise against the current working directory.
-    #[new]
-    pub fn new_python(
-        py: Python<'_>,
-        content_root_path: Option<&str>,
-        path: &str,
-        optional: bool,
-    ) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new(
-            py,
-            content_root_path,
-            path,
-            optional,
-        ))
-    }
-
     #[pyo3(signature = () -> "dict[str, str | None]")]
     fn data(&self, py: Python<'_>) -> Py<PyDict> {
         SettingsProvider::data(self, py)
@@ -60,34 +35,30 @@ impl JsonFileSettingsProvider {
 }
 
 impl JsonFileSettingsProvider {
-    pub fn new(
-        py: Python<'_>,
-        content_root_path: Option<&str>,
-        path: &str,
-        optional: bool,
-    ) -> Self {
+    pub fn new(py: Python<'_>, path_provider: PathProvider) -> Self {
         Self {
             data: ArcSwap::from_pointee(PyDict::new(py).unbind()),
-            path: file_provider::resolve_path(content_root_path, path),
-            optional,
+            path_provider,
         }
     }
 
     async fn read_json_file(&self) -> PyResult<String> {
-        fs::read_to_string(&self.path).await.map_err(|error| {
-            PyRuntimeError::new_err(format!(
-                "Failed to read JSON settings file '{}': {}",
-                self.path.display(),
-                error
-            ))
-        })
+        fs::read_to_string(self.path_provider.path())
+            .await
+            .map_err(|error| {
+                PyRuntimeError::new_err(format!(
+                    "Failed to read JSON settings file '{}': {}",
+                    self.path_provider.path().display(),
+                    error
+                ))
+            })
     }
 
     fn parse_raw_json(&self, raw_json: &str) -> PyResult<BTreeMap<String, Option<String>>> {
         let parsed_json: Value = serde_json::from_str(raw_json).map_err(|error| {
             PyRuntimeError::new_err(format!(
                 "Could not parse JSON file '{}': {}",
-                self.path.display(),
+                self.path_provider.path().display(),
                 error
             ))
         })?;
@@ -107,23 +78,8 @@ impl SettingsProvider for JsonFileSettingsProvider {
     }
 
     async fn reload(&self) -> PyResult<()> {
-        let file_exists = fs::try_exists(&self.path).await.map_err(|error| {
-            PyRuntimeError::new_err(format!(
-                "Failed to inspect '{}': {}",
-                self.path.display(),
-                error
-            ))
-        })?;
-
-        if !file_exists {
-            if self.optional {
-                return Ok(());
-            }
-
-            return Err(PyRuntimeError::new_err(format!(
-                "JSON settings file '{}' does not exist",
-                self.path.display()
-            )));
+        if !self.path_provider.try_is_path_available().await? {
+            return Ok(());
         }
 
         let raw_json = self.read_json_file().await?;
@@ -144,7 +100,7 @@ impl fmt::Display for JsonFileSettingsProvider {
 #[cfg(test)]
 mod tests {
     use super::JsonFileSettingsProvider;
-    use crate::core::SettingsProvider;
+    use crate::core::{PathProvider, SettingsProvider};
     use pyo3::Python;
     use pyo3::types::PyAnyMethods;
     use serde_json::json;
@@ -187,7 +143,10 @@ mod tests {
         let file_path = temporary_directory.path().join("settings.json");
         fs::write(&file_path, json.to_string()).await.unwrap();
         let provider = Python::attach(|py| {
-            JsonFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
+            JsonFileSettingsProvider::new(
+                py,
+                PathProvider::from_file(None, file_path.to_str().unwrap(), false).unwrap(),
+            )
         });
 
         SettingsProvider::reload(&provider).await.unwrap();
@@ -219,7 +178,10 @@ mod tests {
         let file_path = temporary_directory.path().join("settings.json");
         fs::write(&file_path, json.to_string()).await.unwrap();
         let provider = Python::attach(|py| {
-            JsonFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
+            JsonFileSettingsProvider::new(
+                py,
+                PathProvider::from_file(None, file_path.to_str().unwrap(), false).unwrap(),
+            )
         });
 
         SettingsProvider::reload(&provider).await.unwrap();
@@ -245,7 +207,10 @@ mod tests {
         let file_path = temporary_directory.path().join("settings.json");
         fs::write(&file_path, json.to_string()).await.unwrap();
         let provider = Python::attach(|py| {
-            JsonFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
+            JsonFileSettingsProvider::new(
+                py,
+                PathProvider::from_file(None, file_path.to_str().unwrap(), false).unwrap(),
+            )
         });
 
         SettingsProvider::reload(&provider).await.unwrap();
@@ -259,7 +224,10 @@ mod tests {
 
         let invalid_file_path = PathBuf::from("\0invalid.json");
         let provider = Python::attach(|py| {
-            JsonFileSettingsProvider::new(py, None, invalid_file_path.to_str().unwrap(), false)
+            JsonFileSettingsProvider::new(
+                py,
+                PathProvider::from_file(None, invalid_file_path.to_str().unwrap(), false).unwrap(),
+            )
         });
 
         let error = SettingsProvider::reload(&provider).await.unwrap_err();
@@ -273,7 +241,11 @@ mod tests {
         Python::initialize();
 
         let display = Python::attach(|py| {
-            JsonFileSettingsProvider::new(py, None, "settings.json", false).to_string()
+            JsonFileSettingsProvider::new(
+                py,
+                PathProvider::from_file(None, "settings.json", false).unwrap(),
+            )
+            .to_string()
         });
 
         assert_eq!(display, "JsonFileSettingsProvider");

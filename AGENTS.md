@@ -1,4 +1,8 @@
-# AGENTS.md
+# wirio-settings
+
+## Architecture
+
+This is a Python package backed by a Rust PyO3 extension. Rust implementations and the extension exports are in `src/`. The public Python wrapper is in `python/wirio_settings/`, and Python tests are in `tests/`.
 
 # Environment
 
@@ -11,6 +15,7 @@
 - Review the added code and write comprehensive unit tests to achieve 100% test coverage. Use `cargo llvm-cov --text` to check the coverage.
 - Don't stop until the next steps, in order, pass: linter and tests.
 - After all steps, review if the documentation needs to be updated. If it does, update it accordingly.
+- When a lock is required, the code must first detach from the Python runtime to avoid deadlocks with PyO3, then acquire the lock, and finally reattach to the Python runtime if needed. Use `py.detach` and `Python::attach` for this process.
 
 # Rust
 

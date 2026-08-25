@@ -1,5 +1,6 @@
 import re
 from collections.abc import Sequence
+from pathlib import Path
 from typing import final, override
 
 import pytest
@@ -401,8 +402,8 @@ class TestSettingsManager:
         source = add_patch.call_args.args[0]
         assert isinstance(source, GcpSecretManagerSettingsSource)
 
-    def test_add_key_per_file(self, mocker: MockerFixture) -> None:
-        directory_path = "secrets"
+    def test_add_key_per_file(self, mocker: MockerFixture, tmp_path: Path) -> None:
+        directory_path = str(tmp_path / "secrets")
         settings_manager = SettingsManager(
             content_root_path="", add_default_providers=False
         )

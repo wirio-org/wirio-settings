@@ -1,5 +1,6 @@
 use pyo3::prelude::*;
 
+#[derive(Debug)]
 #[pyclass(frozen)]
 pub struct SettingsPath;
 

@@ -1,49 +1,33 @@
 use arc_swap::ArcSwap;
+use notify_debouncer_mini::notify::RecursiveMode;
+use notify_debouncer_mini::{DebounceEventResult, new_debouncer, notify::RecommendedWatcher};
+use notify_debouncer_mini::{DebouncedEvent, Debouncer};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use serde_json::Value;
-use std::fmt;
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::Arc;
-use tokio::fs;
+use std::{fmt, time::Duration};
+use tokio::sync::Mutex;
+use tokio::{fs, sync::mpsc::UnboundedSender};
+use tokio_util::sync::CancellationToken;
 
 use crate::core::{
-    PythonSettingsProvider, SerdeParser, SettingLookup, SettingsProvider, file_provider,
+    PathProvider, PythonSettingsProvider, SerdeParser, SettingLookup, SettingsProvider,
 };
 
 #[pyclass(extends = PythonSettingsProvider, frozen, str)]
 pub struct YamlFileSettingsProvider {
-    data: ArcSwap<Py<PyDict>>,
-    path: PathBuf,
-    optional: bool,
+    data: Arc<ArcSwap<Py<PyDict>>>,
+    path_provider: PathProvider,
+    reload_on_change: bool,
+    watch_file_cancellation_token: Mutex<Option<CancellationToken>>,
+    watch_file_debouncer: Mutex<Option<Debouncer<RecommendedWatcher>>>,
 }
 
 #[pymethods]
 impl YamlFileSettingsProvider {
-    /// Creates a YAML settings provider from a path.
-    ///
-    /// The `path` argument can be:
-    /// - A file name (for example, `settings.yaml`).
-    /// - A relative path (for example, `config/settings.yaml`).
-    /// - An absolute path (for example, `/tmp/settings.yaml`).
-    ///
-    /// File names and relative paths are resolved against `content_root_path` when provided, otherwise against the current working directory.
-    #[new]
-    pub fn new_python(
-        py: Python<'_>,
-        content_root_path: Option<&str>,
-        path: &str,
-        optional: bool,
-    ) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new(
-            py,
-            content_root_path,
-            path,
-            optional,
-        ))
-    }
-
     #[pyo3(signature = () -> "dict[str, str | None]")]
     fn data(&self, py: Python<'_>) -> Py<PyDict> {
         SettingsProvider::data(self, py)
@@ -54,32 +38,164 @@ impl YamlFileSettingsProvider {
     }
 
     pub fn load(&self, py: Python<'_>) -> PyResult<()> {
-        SettingsProvider::load(self, py)
+        SettingsProvider::load(self, py)?;
+        self.watch_file(py, self.reload_on_change)
     }
 }
 
 impl YamlFileSettingsProvider {
-    pub fn new(
-        py: Python<'_>,
-        content_root_path: Option<&str>,
-        path: &str,
-        optional: bool,
-    ) -> Self {
+    pub fn new(py: Python<'_>, path_provider: PathProvider, reload_on_change: bool) -> Self {
         Self {
-            data: ArcSwap::from_pointee(PyDict::new(py).unbind()),
-            path: file_provider::resolve_path(content_root_path, path),
-            optional,
+            data: Arc::new(ArcSwap::from_pointee(PyDict::new(py).unbind())),
+            path_provider,
+            reload_on_change,
+            watch_file_cancellation_token: Mutex::new(None),
+            watch_file_debouncer: Mutex::new(None),
         }
     }
 
-    async fn read_yaml_file(&self) -> PyResult<String> {
-        fs::read_to_string(&self.path).await.map_err(|error| {
+    async fn read_yaml_file(path: &Path) -> PyResult<String> {
+        fs::read_to_string(path).await.map_err(|error| {
             PyRuntimeError::new_err(format!(
                 "Failed to read YAML settings file '{}': {}",
-                self.path.display(),
+                path.display(),
                 error
             ))
         })
+    }
+
+    fn watch_file(&self, py: Python<'_>, reload_on_change: bool) -> PyResult<()> {
+        if !reload_on_change {
+            return Ok(());
+        }
+
+        py.detach(|| {
+            let cancellation_token = CancellationToken::new();
+            self.watch_file_cancellation_token
+                .blocking_lock()
+                .replace(cancellation_token.clone());
+            let (channel_sender, mut channel_receiver) = tokio::sync::mpsc::unbounded_channel();
+            let watch_file_debouncer = Self::create_watch_file_debouncer(
+                self.path_provider.path(),
+                channel_sender,
+            )
+            .map_err(|error| {
+                    PyRuntimeError::new_err(format!(
+                        "Failed to watch YAML settings file '{}': {}",
+                        self.path_provider.path().display(),
+                        error
+                    ))
+                })?;
+            self.watch_file_debouncer
+                .blocking_lock()
+                .replace(watch_file_debouncer);
+            let runtime = pyo3_async_runtimes::tokio::get_runtime();
+            let data = Arc::clone(&self.data);
+            let path_provider = self.path_provider.clone();
+
+            runtime.spawn(async move {
+                loop {
+                    tokio::select! {
+                        () = cancellation_token.cancelled() => break,
+                        result = channel_receiver.recv() => {
+                            let Some(result) = result else {
+                                break;
+                            };
+
+                            // Ignore errors during file watches
+                            if let Ok(events) = result {
+                                let are_relevant_file_changes = Self::are_relevant_file_changes(&events);
+
+                                if are_relevant_file_changes {
+                                    let _ = Self::reload_settings(&data, &path_provider).await;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            Ok(())
+        })
+    }
+
+    fn create_watch_file_debouncer(
+        path: &Path,
+        channel_sender: UnboundedSender<DebounceEventResult>,
+    ) -> notify_debouncer_mini::notify::Result<Debouncer<RecommendedWatcher>> {
+        let mut debouncer = new_debouncer(Duration::from_millis(500), move |result| {
+            let _ = channel_sender.send(result);
+        })?;
+        debouncer
+            .watcher()
+            .watch(path, RecursiveMode::NonRecursive)?;
+        Ok(debouncer)
+    }
+
+    fn are_relevant_file_changes(events: &[DebouncedEvent]) -> bool {
+        let filtered_events: Vec<_> = events
+            .iter()
+            .filter(|event| !Self::should_ignore_file(&event.path))
+            .collect();
+        !filtered_events.is_empty()
+    }
+
+    /// Exclude files and directories when the name begins with period
+    fn should_ignore_file(path: &Path) -> bool {
+        path.file_name()
+            .is_some_and(|file_name| file_name.as_encoded_bytes().starts_with(b"."))
+    }
+
+    async fn reload_settings(
+        data: &ArcSwap<Py<PyDict>>,
+        path_provider: &PathProvider,
+    ) -> PyResult<()> {
+        if !path_provider.try_is_path_available().await? {
+            return Ok(());
+        }
+
+        let path = path_provider.path();
+        let raw_yaml = Self::read_yaml_file(path).await?;
+
+        if raw_yaml.trim().is_empty() {
+            let new_data = Python::attach(|py| PyDict::new(py).unbind());
+            data.store(Arc::new(new_data));
+            return Ok(());
+        }
+
+        let parsed_yaml: Value = serde_saphyr::from_str(&raw_yaml).map_err(|error| {
+            PyRuntimeError::new_err(format!(
+                "Could not parse YAML file '{}': {}",
+                path.display(),
+                error
+            ))
+        })?;
+
+        if parsed_yaml.is_null() {
+            let new_data = Python::attach(|py| PyDict::new(py).unbind());
+            data.store(Arc::new(new_data));
+            return Ok(());
+        }
+
+        let yaml_object = parsed_yaml
+            .as_object()
+            .ok_or_else(|| PyRuntimeError::new_err("Could not parse the YAML file"))?;
+
+        let mut parsed_data = SerdeParser::new().parse(yaml_object)?;
+        Self::normalize_keys(&mut parsed_data);
+        let new_data = Python::attach(|py| Self::create_data(py, parsed_data))?;
+        data.store(Arc::new(new_data));
+        Ok(())
+    }
+}
+
+impl Drop for YamlFileSettingsProvider {
+    fn drop(&mut self) {
+        let watch_file_cancellation_token = self.watch_file_cancellation_token.get_mut().take();
+
+        if let Some(cancellation_token) = watch_file_cancellation_token {
+            cancellation_token.cancel();
+        }
     }
 }
 
@@ -90,56 +206,7 @@ impl SettingsProvider for YamlFileSettingsProvider {
     }
 
     async fn reload(&self) -> PyResult<()> {
-        let file_exists = fs::try_exists(&self.path).await.map_err(|error| {
-            PyRuntimeError::new_err(format!(
-                "Failed to inspect '{}': {}",
-                self.path.display(),
-                error
-            ))
-        })?;
-
-        if !file_exists {
-            if self.optional {
-                return Ok(());
-            }
-
-            return Err(PyRuntimeError::new_err(format!(
-                "YAML settings file '{}' does not exist",
-                self.path.display()
-            )));
-        }
-
-        let raw_yaml = self.read_yaml_file().await?;
-
-        if raw_yaml.trim().is_empty() {
-            let data = Python::attach(|py| PyDict::new(py).unbind());
-            self.data.store(Arc::new(data));
-            return Ok(());
-        }
-
-        let parsed_yaml: Value = serde_saphyr::from_str(&raw_yaml).map_err(|error| {
-            PyRuntimeError::new_err(format!(
-                "Could not parse YAML file '{}': {}",
-                self.path.display(),
-                error
-            ))
-        })?;
-
-        if parsed_yaml.is_null() {
-            let data = Python::attach(|py| PyDict::new(py).unbind());
-            self.data.store(Arc::new(data));
-            return Ok(());
-        }
-
-        let yaml_object = parsed_yaml
-            .as_object()
-            .ok_or_else(|| PyRuntimeError::new_err("Could not parse the YAML file"))?;
-
-        let mut parsed_data = SerdeParser::new().parse(yaml_object)?;
-        Self::normalize_keys(&mut parsed_data);
-        let data = Python::attach(|py| Self::create_data(py, parsed_data))?;
-        self.data.store(Arc::new(data));
-        Ok(())
+        Self::reload_settings(&self.data, &self.path_provider).await
     }
 }
 
@@ -152,7 +219,7 @@ impl fmt::Display for YamlFileSettingsProvider {
 #[cfg(test)]
 mod tests {
     use super::YamlFileSettingsProvider;
-    use crate::core::SettingsProvider;
+    use crate::core::{PathProvider, SettingsProvider};
     use pyo3::Python;
     use pyo3::types::PyAnyMethods;
     use std::collections::BTreeMap;
@@ -205,7 +272,11 @@ logging:
         .unwrap();
 
         let provider = Python::attach(|py| {
-            YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
+            YamlFileSettingsProvider::new(
+                py,
+                PathProvider::from_file(None, file_path.to_str().unwrap(), false).unwrap(),
+                false,
+            )
         });
         SettingsProvider::reload(&provider).await.unwrap();
 
@@ -247,7 +318,11 @@ port: 8080
         .unwrap();
 
         let provider = Python::attach(|py| {
-            YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
+            YamlFileSettingsProvider::new(
+                py,
+                PathProvider::from_file(None, file_path.to_str().unwrap(), false).unwrap(),
+                false,
+            )
         });
         SettingsProvider::reload(&provider).await.unwrap();
 
@@ -267,7 +342,11 @@ port: 8080
         fs::write(&file_path, "").await.unwrap();
 
         let provider = Python::attach(|py| {
-            YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
+            YamlFileSettingsProvider::new(
+                py,
+                PathProvider::from_file(None, file_path.to_str().unwrap(), false).unwrap(),
+                false,
+            )
         });
         SettingsProvider::reload(&provider).await.unwrap();
 
@@ -288,7 +367,11 @@ port: 8080
         .unwrap();
 
         let provider = Python::attach(|py| {
-            YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
+            YamlFileSettingsProvider::new(
+                py,
+                PathProvider::from_file(None, file_path.to_str().unwrap(), false).unwrap(),
+                false,
+            )
         });
         SettingsProvider::reload(&provider).await.unwrap();
 
@@ -301,7 +384,11 @@ port: 8080
         let file_path = temporary_directory.path().join("missing.yaml");
 
         let provider = Python::attach(|py| {
-            YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), true)
+            YamlFileSettingsProvider::new(
+                py,
+                PathProvider::from_file(None, file_path.to_str().unwrap(), true).unwrap(),
+                false,
+            )
         });
         SettingsProvider::reload(&provider).await.unwrap();
 
@@ -316,7 +403,11 @@ port: 8080
         let file_path = temporary_directory.path().join("missing.yaml");
 
         let provider = Python::attach(|py| {
-            YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
+            YamlFileSettingsProvider::new(
+                py,
+                PathProvider::from_file(None, file_path.to_str().unwrap(), false).unwrap(),
+                false,
+            )
         });
 
         let error = SettingsProvider::reload(&provider).await.unwrap_err();
@@ -324,10 +415,7 @@ port: 8080
 
         assert_eq!(
             error_message,
-            format!(
-                "RuntimeError: YAML settings file '{}' does not exist",
-                file_path.display()
-            )
+            format!("RuntimeError: '{}' does not exist", file_path.display())
         );
     }
 
@@ -339,8 +427,8 @@ port: 8080
         let provider = Python::attach(|py| {
             YamlFileSettingsProvider::new(
                 py,
-                None,
-                temporary_directory.path().to_str().unwrap(),
+                PathProvider::from_file(None, temporary_directory.path().to_str().unwrap(), false)
+                    .unwrap(),
                 false,
             )
         });
@@ -348,7 +436,13 @@ port: 8080
         let error = SettingsProvider::reload(&provider).await.unwrap_err();
         let error_message = error.to_string();
 
-        assert!(error_message.contains("Failed to read YAML settings file"));
+        assert_eq!(
+            error_message,
+            format!(
+                "RuntimeError: '{}' is not a file",
+                temporary_directory.path().display()
+            )
+        );
     }
 
     #[tokio::test]
@@ -360,7 +454,11 @@ port: 8080
         fs::write(&file_path, "appName: [wirio").await.unwrap();
 
         let provider = Python::attach(|py| {
-            YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
+            YamlFileSettingsProvider::new(
+                py,
+                PathProvider::from_file(None, file_path.to_str().unwrap(), false).unwrap(),
+                false,
+            )
         });
 
         let error = SettingsProvider::reload(&provider).await.unwrap_err();
@@ -379,7 +477,11 @@ port: 8080
         fs::write(&file_path, "- wirio\n- config").await.unwrap();
 
         let provider = Python::attach(|py| {
-            YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
+            YamlFileSettingsProvider::new(
+                py,
+                PathProvider::from_file(None, file_path.to_str().unwrap(), false).unwrap(),
+                false,
+            )
         });
 
         let error = SettingsProvider::reload(&provider).await.unwrap_err();
@@ -393,7 +495,12 @@ port: 8080
         Python::initialize();
 
         let display = Python::attach(|py| {
-            YamlFileSettingsProvider::new(py, None, "settings.yaml", false).to_string()
+            YamlFileSettingsProvider::new(
+                py,
+                PathProvider::from_file(None, "settings.yaml", false).unwrap(),
+                false,
+            )
+            .to_string()
         });
 
         assert_eq!(display, "YamlFileSettingsProvider");
@@ -405,7 +512,11 @@ port: 8080
 
         let invalid_file_path = PathBuf::from("\0invalid.yaml");
         let provider = Python::attach(|py| {
-            YamlFileSettingsProvider::new(py, None, invalid_file_path.to_str().unwrap(), false)
+            YamlFileSettingsProvider::new(
+                py,
+                PathProvider::from_file(None, invalid_file_path.to_str().unwrap(), false).unwrap(),
+                false,
+            )
         });
 
         let error = SettingsProvider::reload(&provider).await.unwrap_err();
@@ -428,11 +539,33 @@ port: 8080
         let file_path = temporary_directory.path().join("settings.yaml");
         fs::write(&file_path, raw_yaml).await.unwrap();
         let provider = Python::attach(|py| {
-            YamlFileSettingsProvider::new(py, None, file_path.to_str().unwrap(), false)
+            YamlFileSettingsProvider::new(
+                py,
+                PathProvider::from_file(None, file_path.to_str().unwrap(), false).unwrap(),
+                false,
+            )
         });
 
         SettingsProvider::reload(&provider).await.unwrap();
 
         assert_data(&provider, &expected_parsed_yaml);
     }
+
+    // #[test]
+    // fn test_cancel_watcher_when_dropping_provider() {
+    //     Python::initialize();
+
+    //     let cancellation_token = tokio_util::sync::CancellationToken::new();
+    //     let provider = Python::attach(|py| {
+    //         YamlFileSettingsProvider::new(py, None, "settings.yaml", false, false)
+    //     });
+    //     provider
+    //         .watch_file_cancellation_token
+    //         .blocking_lock()
+    //         .replace(cancellation_token.clone());
+
+    //     drop(provider);
+
+    //     assert!(cancellation_token.is_cancelled());
+    // }
 }

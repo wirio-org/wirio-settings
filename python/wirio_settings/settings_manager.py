@@ -78,11 +78,16 @@ class SettingsManager(SettingsRoot):
         self.add(EnvironmentVariablesSettingsSource())
         return self
 
-    def add_yaml_file(self, path: str, optional: bool = False) -> Self:
+    def add_yaml_file(
+        self, path: str, optional: bool = False, reload_on_change=False
+    ) -> Self:
         """Add a settings provider that reads setting values from a YAML file."""
         self.add(
             YamlFileSettingsSource(
-                content_root_path=self._content_root_path, path=path, optional=optional
+                content_root_path=self._content_root_path,
+                path=path,
+                optional=optional,
+                reload_on_change=reload_on_change,
             )
         )
         return self

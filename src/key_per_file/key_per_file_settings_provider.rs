@@ -3,35 +3,19 @@ use pyo3::prelude::*;
 use pyo3::{exceptions::PyRuntimeError, types::PyDict};
 use std::collections::BTreeMap;
 use std::fmt;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs;
 
-use crate::core::{PythonSettingsProvider, SettingLookup, SettingsProvider};
+use crate::core::{PathProvider, PythonSettingsProvider, SettingLookup, SettingsProvider};
 
 #[pyclass(extends = PythonSettingsProvider, frozen, str)]
 pub struct KeyPerFileSettingsProvider {
     data: ArcSwap<Py<PyDict>>,
-    directory_path: PathBuf,
-    optional: bool,
+    path_provider: PathProvider,
 }
 
 #[pymethods]
 impl KeyPerFileSettingsProvider {
-    /// Adds settings using files from a directory. File names are used as the key, file contents are used as the value.
-    #[new]
-    pub fn new_python(
-        py: Python<'_>,
-        directory_path: &str,
-        optional: bool,
-    ) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new(
-            py,
-            directory_path,
-            optional,
-        ))
-    }
-
     #[pyo3(signature = () -> "dict[str, str | None]")]
     fn data(&self, py: Python<'_>) -> Py<PyDict> {
         SettingsProvider::data(self, py)
@@ -47,11 +31,10 @@ impl KeyPerFileSettingsProvider {
 }
 
 impl KeyPerFileSettingsProvider {
-    pub fn new(py: Python<'_>, directory_path: &str, optional: bool) -> Self {
+    pub fn new(py: Python<'_>, path_provider: PathProvider) -> Self {
         Self {
             data: ArcSwap::from_pointee(PyDict::new(py).unbind()),
-            directory_path: PathBuf::from(directory_path),
-            optional,
+            path_provider,
         }
     }
 
@@ -75,55 +58,26 @@ impl SettingsProvider for KeyPerFileSettingsProvider {
     }
 
     async fn reload(&self) -> PyResult<()> {
-        let directory_exists = fs::try_exists(&self.directory_path)
-            .await
-            .map_err(|error| {
-                PyRuntimeError::new_err(format!(
-                    "Failed to inspect '{}': {}",
-                    self.directory_path.display(),
-                    error
-                ))
-            })?;
-
-        if !directory_exists {
-            if self.optional {
-                return Ok(());
-            }
-
-            return Err(PyRuntimeError::new_err(format!(
-                "'{}' does not exist",
-                self.directory_path.display()
-            )));
-        }
-
-        let directory_metadata = fs::metadata(&self.directory_path).await.map_err(|error| {
-            PyRuntimeError::new_err(format!(
-                "Failed to inspect '{}': {}",
-                self.directory_path.display(),
-                error
-            ))
-        })?;
-
-        if !directory_metadata.is_dir() {
-            return Err(PyRuntimeError::new_err(format!(
-                "'{}' is not a directory",
-                self.directory_path.display()
-            )));
+        if !self.path_provider.try_is_path_available().await? {
+            return Ok(());
         }
 
         let mut parsed_data: BTreeMap<String, Option<String>> = BTreeMap::new();
-        let mut directory_entries = fs::read_dir(&self.directory_path).await.map_err(|error| {
-            PyRuntimeError::new_err(format!(
-                "Failed to read the directory '{}': {}",
-                self.directory_path.display(),
-                error
-            ))
-        })?;
+        let mut directory_entries =
+            fs::read_dir(self.path_provider.path())
+                .await
+                .map_err(|error| {
+                    PyRuntimeError::new_err(format!(
+                        "Failed to read the directory '{}': {}",
+                        self.path_provider.path().display(),
+                        error
+                    ))
+                })?;
 
         while let Some(directory_entry) = directory_entries.next_entry().await.map_err(|error| {
             PyRuntimeError::new_err(format!(
                 "Failed to read the directory entry in '{}': {}",
-                self.directory_path.display(),
+                self.path_provider.path().display(),
                 error
             ))
         })? {
@@ -187,7 +141,7 @@ impl fmt::Display for KeyPerFileSettingsProvider {
 #[cfg(test)]
 mod tests {
     use super::KeyPerFileSettingsProvider;
-    use crate::core::SettingsProvider;
+    use crate::core::{PathProvider, SettingsProvider};
     use pyo3::Python;
     use pyo3::types::PyAnyMethods;
     use std::{collections::BTreeMap, path::PathBuf};
@@ -229,7 +183,11 @@ mod tests {
         .await
         .unwrap();
         let provider = Python::attach(|py| {
-            KeyPerFileSettingsProvider::new(py, temporary_directory.path().to_str().unwrap(), false)
+            KeyPerFileSettingsProvider::new(
+                py,
+                PathProvider::from_directory(temporary_directory.path().to_str().unwrap(), false)
+                    .unwrap(),
+            )
         });
 
         SettingsProvider::reload(&provider).await.unwrap();
@@ -255,7 +213,11 @@ mod tests {
         let temporary_directory = tempdir().unwrap();
         let missing_directory_path = temporary_directory.path().join("missing");
         let provider = Python::attach(|py| {
-            KeyPerFileSettingsProvider::new(py, missing_directory_path.to_str().unwrap(), true)
+            KeyPerFileSettingsProvider::new(
+                py,
+                PathProvider::from_directory(missing_directory_path.to_str().unwrap(), true)
+                    .unwrap(),
+            )
         });
 
         SettingsProvider::reload(&provider).await.unwrap();
@@ -270,7 +232,11 @@ mod tests {
         let temporary_directory = tempdir().unwrap();
         let missing_directory_path = temporary_directory.path().join("missing");
         let provider = Python::attach(|py| {
-            KeyPerFileSettingsProvider::new(py, missing_directory_path.to_str().unwrap(), false)
+            KeyPerFileSettingsProvider::new(
+                py,
+                PathProvider::from_directory(missing_directory_path.to_str().unwrap(), false)
+                    .unwrap(),
+            )
         });
 
         let error = SettingsProvider::reload(&provider).await.unwrap_err();
@@ -293,7 +259,10 @@ mod tests {
         let file_path = temporary_directory.path().join("not-a-directory");
         fs::write(&file_path, "value").await.unwrap();
         let provider = Python::attach(|py| {
-            KeyPerFileSettingsProvider::new(py, file_path.to_str().unwrap(), false)
+            KeyPerFileSettingsProvider::new(
+                py,
+                PathProvider::from_directory(file_path.to_str().unwrap(), false).unwrap(),
+            )
         });
 
         let error = SettingsProvider::reload(&provider).await.unwrap_err();
@@ -309,9 +278,13 @@ mod tests {
     async fn test_fail_when_checking_directory_existence_with_invalid_path() {
         Python::initialize();
 
-        let invalid_directory_path = PathBuf::from("\0invalid");
+        let invalid_directory_path = PathBuf::from("/\0invalid");
         let provider = Python::attach(|py| {
-            KeyPerFileSettingsProvider::new(py, invalid_directory_path.to_str().unwrap(), false)
+            KeyPerFileSettingsProvider::new(
+                py,
+                PathProvider::from_directory(invalid_directory_path.to_str().unwrap(), false)
+                    .unwrap(),
+            )
         });
 
         let error = SettingsProvider::reload(&provider).await.unwrap_err();
@@ -324,9 +297,43 @@ mod tests {
     fn test_display_returns_type_name() {
         Python::initialize();
 
-        let display =
-            Python::attach(|py| KeyPerFileSettingsProvider::new(py, "settings", false).to_string());
+        let directory_path = std::env::current_dir().unwrap();
+        let display = Python::attach(|py| {
+            KeyPerFileSettingsProvider::new(
+                py,
+                PathProvider::from_directory(directory_path.to_str().unwrap(), false).unwrap(),
+            )
+            .to_string()
+        });
 
         assert_eq!(display, "KeyPerFileSettingsProvider");
+    }
+
+    #[test]
+    fn test_trim_trailing_line_feed() {
+        let value = KeyPerFileSettingsProvider::trim_new_line(String::from("value\n"));
+
+        assert_eq!(value, "value");
+    }
+
+    #[test]
+    fn test_trim_trailing_carriage_return_and_line_feed() {
+        let value = KeyPerFileSettingsProvider::trim_new_line(String::from("value\r\n"));
+
+        assert_eq!(value, "value");
+    }
+
+    #[test]
+    fn test_preserve_value_without_trailing_new_line() {
+        let value = KeyPerFileSettingsProvider::trim_new_line(String::from("value"));
+
+        assert_eq!(value, "value");
+    }
+
+    #[test]
+    fn test_preserve_additional_trailing_new_line() {
+        let value = KeyPerFileSettingsProvider::trim_new_line(String::from("value\n\n"));
+
+        assert_eq!(value, "value\n");
     }
 }

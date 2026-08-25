@@ -234,7 +234,10 @@ mod tests {
 
         assert_eq!(
             error.to_string(),
-            format!("RuntimeError: '{}' does not exist", missing_path.display())
+            format!(
+                "RuntimeError: Path '{}' does not exist",
+                missing_path.display()
+            )
         );
     }
 

@@ -794,13 +794,9 @@ mod tests {
             SecretClient::new(url, Arc::new(CredentialMock), Some(secret_client_options)).unwrap(),
         );
 
-        AzureKeyVaultSettingsProvider::reload_secrets(
-            &secret_client,
-            &secrets_cache,
-            url,
-        )
-        .await
-        .unwrap();
+        AzureKeyVaultSettingsProvider::reload_secrets(&secret_client, &secrets_cache, url)
+            .await
+            .unwrap();
 
         let reloaded_secrets = secrets_cache.load_full();
         assert!(

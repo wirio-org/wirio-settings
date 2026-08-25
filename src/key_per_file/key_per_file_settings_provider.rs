@@ -245,7 +245,7 @@ mod tests {
         assert_eq!(
             error_message,
             format!(
-                "RuntimeError: '{}' does not exist",
+                "RuntimeError: Path '{}' does not exist",
                 missing_directory_path.display()
             )
         );

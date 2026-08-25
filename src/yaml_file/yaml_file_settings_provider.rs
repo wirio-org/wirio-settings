@@ -350,7 +350,10 @@ port: 8080
 
         assert_eq!(
             error_message,
-            format!("RuntimeError: '{}' does not exist", file_path.display())
+            format!(
+                "RuntimeError: Path '{}' does not exist",
+                file_path.display()
+            )
         );
     }
 

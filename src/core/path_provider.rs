@@ -194,7 +194,7 @@ mod tests {
 
         assert_eq!(
             error.to_string(),
-            "ValueError: When file path is not rooted, content root path ('settings.yaml') must be rooted"
+            "ValueError: When file path is not rooted, content root path ('config') must be rooted"
         );
     }
 

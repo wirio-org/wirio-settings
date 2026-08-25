@@ -26,7 +26,12 @@ jobs:
     if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-24.04
     outputs:
-      uv-version: ${{ env.UV_VERSION }}
+      uv-version: ${{ steps.export-configurations.outputs.uv-version }}
+    steps:
+      - name: Export configurations
+        id: export-configurations
+        run: echo "uv-version=${UV_VERSION}" >> "$GITHUB_OUTPUT"
+        shell: bash
 
   lint:
     name: Lint

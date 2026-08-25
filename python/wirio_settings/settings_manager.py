@@ -79,7 +79,7 @@ class SettingsManager(SettingsRoot):
         return self
 
     def add_yaml_file(
-        self, path: str, optional: bool = False, reload_on_change=False
+        self, path: str, optional: bool = False, reload_on_change: bool = False
     ) -> Self:
         """Add a settings provider that reads setting values from a YAML file."""
         self.add(
@@ -92,21 +92,32 @@ class SettingsManager(SettingsRoot):
         )
         return self
 
-    def add_json_file(self, path: str, optional: bool = False) -> Self:
+    def add_json_file(
+        self, path: str, optional: bool = False, reload_on_change: bool = False
+    ) -> Self:
         """Add a settings provider that reads setting values from a JSON file."""
         self.add(
             JsonFileSettingsSource(
-                content_root_path=self._content_root_path, path=path, optional=optional
+                content_root_path=self._content_root_path,
+                path=path,
+                optional=optional,
+                reload_on_change=reload_on_change,
             )
         )
         return self
 
-    def add_key_per_file(self, directory_path: str, optional: bool = False) -> Self:
+    def add_key_per_file(
+        self,
+        directory_path: str,
+        optional: bool = False,
+        reload_on_change: bool = False,
+    ) -> Self:
         """Add settings using files from a directory. File names are used as the key, file contents are used as the value."""
         self.add(
             KeyPerFileSettingsSource(
                 directory_path=directory_path,
                 optional=optional,
+                reload_on_change=reload_on_change,
             )
         )
         return self

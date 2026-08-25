@@ -103,7 +103,7 @@ application_settings = (
 settings_manager.add_yaml_file("file.yaml")
 ```
 
-Comments are supported in YAML files.
+Comments are supported in YAML files. Setting `reload_on_change` reloads values when the file changes.
 
 ### JSON file
 
@@ -111,7 +111,7 @@ Comments are supported in YAML files.
 settings_manager.add_json_file("file.json")
 ```
 
-Comments are not supported in JSON files.
+Comments are not supported in JSON files. Setting `reload_on_change` reloads values when the file changes.
 
 ### Environment variables
 
@@ -201,7 +201,7 @@ We can also pass custom GCP credentials with the `credentials_json` parameter.
 settings_manager.add_key_per_file("secrets")
 ```
 
-Given a directory, each file name becomes a setting key and the file content becomes the setting value.
+Given a directory, each file name becomes a setting key and the file content becomes the setting value. Setting `reload_on_change` reloads values when directory contents change.
 
 This provider is useful when secrets are mounted as files by the runtime instead of exposed as environment variables. It lets us keep application code unchanged while switching the secret delivery mechanism.
 

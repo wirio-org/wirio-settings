@@ -7,15 +7,21 @@ use pyo3::prelude::*;
 #[pyclass(extends = PythonSettingsSource, frozen)]
 pub struct KeyPerFileSettingsSource {
     path_provider: PathProvider,
+    reload_on_change: bool,
 }
 
 #[pymethods]
 impl KeyPerFileSettingsSource {
     #[new]
-    pub fn new_python(directory_path: &str, optional: bool) -> PyResult<PyClassInitializer<Self>> {
+    pub fn new_python(
+        directory_path: &str,
+        optional: bool,
+        reload_on_change: bool,
+    ) -> PyResult<PyClassInitializer<Self>> {
         Ok(
             PyClassInitializer::from(PythonSettingsSource::new()).add_subclass(Self {
                 path_provider: PathProvider::from_directory(directory_path, optional)?,
+                reload_on_change,
             }),
         )
     }
@@ -30,7 +36,11 @@ impl SettingsSource for KeyPerFileSettingsSource {
         Py::new(
             py,
             PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(
-                KeyPerFileSettingsProvider::new(py, self.path_provider.clone()),
+                KeyPerFileSettingsProvider::new(
+                    py,
+                    self.path_provider.clone(),
+                    self.reload_on_change,
+                ),
             ),
         )
         .map(|provider| provider.into_bound(py).into_super().unbind())
@@ -55,6 +65,7 @@ mod tests {
                     false,
                 )
                 .unwrap(),
+                reload_on_change: false,
             };
 
             let provider = source.build(py).unwrap();

@@ -5,13 +5,18 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 use tokio::fs;
+use tokio::sync::Mutex;
 
-use crate::core::{PathProvider, PythonSettingsProvider, SettingLookup, SettingsProvider};
+use crate::core::{
+    PathProvider, PathWatcher, PythonSettingsProvider, SettingLookup, SettingsProvider,
+};
 
 #[pyclass(extends = PythonSettingsProvider, frozen, str)]
 pub struct KeyPerFileSettingsProvider {
-    data: ArcSwap<Py<PyDict>>,
+    data: Arc<ArcSwap<Py<PyDict>>>,
     path_provider: PathProvider,
+    reload_on_change: bool,
+    path_watcher: Mutex<Option<PathWatcher>>,
 }
 
 #[pymethods]
@@ -26,15 +31,18 @@ impl KeyPerFileSettingsProvider {
     }
 
     pub fn load(&self, py: Python<'_>) -> PyResult<()> {
-        SettingsProvider::load(self, py)
+        SettingsProvider::load(self, py)?;
+        self.watch_directory(py, self.reload_on_change)
     }
 }
 
 impl KeyPerFileSettingsProvider {
-    pub fn new(py: Python<'_>, path_provider: PathProvider) -> Self {
+    pub fn new(py: Python<'_>, path_provider: PathProvider, reload_on_change: bool) -> Self {
         Self {
-            data: ArcSwap::from_pointee(PyDict::new(py).unbind()),
+            data: Arc::new(ArcSwap::from_pointee(PyDict::new(py).unbind())),
             path_provider,
+            reload_on_change,
+            path_watcher: Mutex::new(None),
         }
     }
 
@@ -49,42 +57,68 @@ impl KeyPerFileSettingsProvider {
 
         value
     }
-}
 
-impl SettingsProvider for KeyPerFileSettingsProvider {
-    fn data(&self, py: Python<'_>) -> Py<PyDict> {
-        let data = self.data.load();
-        data.clone_ref(py)
-    }
-
-    async fn reload(&self) -> PyResult<()> {
-        if !self.path_provider.try_is_path_available().await? {
+    fn watch_directory(&self, py: Python<'_>, reload_on_change: bool) -> PyResult<()> {
+        if !reload_on_change {
             return Ok(());
         }
 
-        let mut parsed_data: BTreeMap<String, Option<String>> = BTreeMap::new();
-        let mut directory_entries =
-            fs::read_dir(self.path_provider.path())
-                .await
+        py.detach(|| {
+            let data = Arc::clone(&self.data);
+            let path_provider = self.path_provider.clone();
+            let mut path_watcher = self.path_provider.create_watcher();
+
+            path_watcher
+                .watch(move || {
+                    let data = Arc::clone(&data);
+                    let path_provider = path_provider.clone();
+
+                    async move {
+                        // Ignore errors during watched reloads
+                        let _ = Self::reload_settings(&data, &path_provider).await;
+                    }
+                })
                 .map_err(|error| {
                     PyRuntimeError::new_err(format!(
-                        "Failed to read the directory '{}': {}",
+                        "Failed to watch directory '{}': {}",
                         self.path_provider.path().display(),
                         error
                     ))
                 })?;
 
+            self.path_watcher.blocking_lock().replace(path_watcher);
+            Ok(())
+        })
+    }
+
+    async fn reload_settings(
+        data: &ArcSwap<Py<PyDict>>,
+        path_provider: &PathProvider,
+    ) -> PyResult<()> {
+        if !path_provider.try_is_path_available().await? {
+            return Ok(());
+        }
+
+        let mut parsed_data: BTreeMap<String, Option<String>> = BTreeMap::new();
+        let mut directory_entries = fs::read_dir(path_provider.path()).await.map_err(|error| {
+            PyRuntimeError::new_err(format!(
+                "Failed to read directory '{}': {}",
+                path_provider.path().display(),
+                error
+            ))
+        })?;
+
         while let Some(directory_entry) = directory_entries.next_entry().await.map_err(|error| {
             PyRuntimeError::new_err(format!(
-                "Failed to read the directory entry in '{}': {}",
-                self.path_provider.path().display(),
+                "Failed to read directory entry in '{}': {}",
+                path_provider.path().display(),
                 error
             ))
         })? {
             let directory_entry_path = directory_entry.path();
             let file_type = directory_entry.file_type().await.map_err(|error| {
                 PyRuntimeError::new_err(format!(
-                    "Failed to inspect the entry '{}': {}",
+                    "Failed to inspect entry '{}': {}",
                     directory_entry_path.display(),
                     error
                 ))
@@ -98,7 +132,7 @@ impl SettingsProvider for KeyPerFileSettingsProvider {
                 let entry_metadata =
                     fs::metadata(&directory_entry_path).await.map_err(|error| {
                         PyRuntimeError::new_err(format!(
-                            "Failed to inspect the entry '{}': {}",
+                            "Failed to inspect entry '{}': {}",
                             directory_entry_path.display(),
                             error
                         ))
@@ -116,7 +150,7 @@ impl SettingsProvider for KeyPerFileSettingsProvider {
                     .await
                     .map_err(|error| {
                         PyRuntimeError::new_err(format!(
-                            "Failed to read the entry '{}': {}",
+                            "Failed to read entry '{}': {}",
                             directory_entry_path.display(),
                             error
                         ))
@@ -126,9 +160,20 @@ impl SettingsProvider for KeyPerFileSettingsProvider {
         }
 
         Self::normalize_keys(&mut parsed_data);
-        let data = Python::attach(|py| Self::create_data(py, parsed_data))?;
-        self.data.store(Arc::new(data));
+        let new_data = Python::attach(|py| Self::create_data(py, parsed_data))?;
+        data.store(Arc::new(new_data));
         Ok(())
+    }
+}
+
+impl SettingsProvider for KeyPerFileSettingsProvider {
+    fn data(&self, py: Python<'_>) -> Py<PyDict> {
+        let data = self.data.load();
+        data.clone_ref(py)
+    }
+
+    async fn reload(&self) -> PyResult<()> {
+        Self::reload_settings(&self.data, &self.path_provider).await
     }
 }
 
@@ -187,6 +232,7 @@ mod tests {
                 py,
                 PathProvider::from_directory(temporary_directory.path().to_str().unwrap(), false)
                     .unwrap(),
+                false,
             )
         });
 
@@ -217,6 +263,7 @@ mod tests {
                 py,
                 PathProvider::from_directory(missing_directory_path.to_str().unwrap(), true)
                     .unwrap(),
+                false,
             )
         });
 
@@ -236,6 +283,7 @@ mod tests {
                 py,
                 PathProvider::from_directory(missing_directory_path.to_str().unwrap(), false)
                     .unwrap(),
+                false,
             )
         });
 
@@ -262,6 +310,7 @@ mod tests {
             KeyPerFileSettingsProvider::new(
                 py,
                 PathProvider::from_directory(file_path.to_str().unwrap(), false).unwrap(),
+                false,
             )
         });
 
@@ -284,6 +333,7 @@ mod tests {
                 py,
                 PathProvider::from_directory(invalid_directory_path.to_str().unwrap(), false)
                     .unwrap(),
+                false,
             )
         });
 
@@ -302,6 +352,7 @@ mod tests {
             KeyPerFileSettingsProvider::new(
                 py,
                 PathProvider::from_directory(directory_path.to_str().unwrap(), false).unwrap(),
+                false,
             )
             .to_string()
         });
@@ -335,5 +386,71 @@ mod tests {
         let value = KeyPerFileSettingsProvider::trim_new_line(String::from("value\n\n"));
 
         assert_eq!(value, "value\n");
+    }
+
+    #[test]
+    fn test_reload_values_when_directory_file_is_updated() {
+        Python::initialize();
+
+        let temporary_directory = tempdir().unwrap();
+        let file_path = temporary_directory.path().join("value");
+        let runtime = pyo3_async_runtimes::tokio::get_runtime();
+        runtime.block_on(fs::write(&file_path, "initial")).unwrap();
+        let provider = Python::attach(|py| {
+            KeyPerFileSettingsProvider::new(
+                py,
+                PathProvider::from_directory(temporary_directory.path().to_str().unwrap(), false)
+                    .unwrap(),
+                true,
+            )
+        });
+        Python::attach(|py| provider.load(py)).unwrap();
+
+        let actual_value = runtime.block_on(async {
+            fs::write(&file_path, "updated").await.unwrap();
+
+            tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                loop {
+                    let value = Python::attach(|py| {
+                        let data = SettingsProvider::data(&provider, py);
+                        data.bind(py)
+                            .get_item("value")
+                            .unwrap()
+                            .extract::<String>()
+                            .unwrap()
+                    });
+
+                    if value == "updated" {
+                        break value;
+                    }
+
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .unwrap()
+        });
+
+        assert_eq!(actual_value, "updated");
+    }
+
+    #[test]
+    fn test_not_watch_directory_when_reload_on_change_is_disabled() {
+        let temporary_directory = tempdir().unwrap();
+        let file_path = temporary_directory.path().join("value");
+        let runtime = pyo3_async_runtimes::tokio::get_runtime();
+        runtime.block_on(fs::write(&file_path, "initial")).unwrap();
+        let provider = Python::attach(|py| {
+            KeyPerFileSettingsProvider::new(
+                py,
+                PathProvider::from_directory(temporary_directory.path().to_str().unwrap(), false)
+                    .unwrap(),
+                false,
+            )
+        });
+
+        Python::attach(|py| provider.load(py)).unwrap();
+
+        assert!(provider.path_watcher.blocking_lock().is_none());
     }
 }

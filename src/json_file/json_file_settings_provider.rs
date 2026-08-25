@@ -5,17 +5,21 @@ use pyo3::types::PyDict;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::path::Path;
 use std::sync::Arc;
 use tokio::fs;
+use tokio::sync::Mutex;
 
 use crate::core::{
-    PathProvider, PythonSettingsProvider, SerdeParser, SettingLookup, SettingsProvider,
+    PathProvider, PathWatcher, PythonSettingsProvider, SerdeParser, SettingLookup, SettingsProvider,
 };
 
 #[pyclass(extends = PythonSettingsProvider, frozen, str)]
 pub struct JsonFileSettingsProvider {
-    data: ArcSwap<Py<PyDict>>,
+    data: Arc<ArcSwap<Py<PyDict>>>,
     path_provider: PathProvider,
+    reload_on_change: bool,
+    path_watcher: Mutex<Option<PathWatcher>>,
 }
 
 #[pymethods]
@@ -30,35 +34,36 @@ impl JsonFileSettingsProvider {
     }
 
     pub fn load(&self, py: Python<'_>) -> PyResult<()> {
-        SettingsProvider::load(self, py)
+        SettingsProvider::load(self, py)?;
+        self.watch_file(py, self.reload_on_change)
     }
 }
 
 impl JsonFileSettingsProvider {
-    pub fn new(py: Python<'_>, path_provider: PathProvider) -> Self {
+    pub fn new(py: Python<'_>, path_provider: PathProvider, reload_on_change: bool) -> Self {
         Self {
-            data: ArcSwap::from_pointee(PyDict::new(py).unbind()),
+            data: Arc::new(ArcSwap::from_pointee(PyDict::new(py).unbind())),
             path_provider,
+            reload_on_change,
+            path_watcher: Mutex::new(None),
         }
     }
 
-    async fn read_json_file(&self) -> PyResult<String> {
-        fs::read_to_string(self.path_provider.path())
-            .await
-            .map_err(|error| {
-                PyRuntimeError::new_err(format!(
-                    "Failed to read JSON settings file '{}': {}",
-                    self.path_provider.path().display(),
-                    error
-                ))
-            })
+    async fn read_json_file(path: &Path) -> PyResult<String> {
+        fs::read_to_string(path).await.map_err(|error| {
+            PyRuntimeError::new_err(format!(
+                "Failed to read JSON settings file '{}': {}",
+                path.display(),
+                error
+            ))
+        })
     }
 
-    fn parse_raw_json(&self, raw_json: &str) -> PyResult<BTreeMap<String, Option<String>>> {
+    fn parse_raw_json(path: &Path, raw_json: &str) -> PyResult<BTreeMap<String, Option<String>>> {
         let parsed_json: Value = serde_json::from_str(raw_json).map_err(|error| {
             PyRuntimeError::new_err(format!(
                 "Could not parse JSON file '{}': {}",
-                self.path_provider.path().display(),
+                path.display(),
                 error
             ))
         })?;
@@ -69,6 +74,56 @@ impl JsonFileSettingsProvider {
 
         SerdeParser::new().parse(json_object)
     }
+
+    fn watch_file(&self, py: Python<'_>, reload_on_change: bool) -> PyResult<()> {
+        if !reload_on_change {
+            return Ok(());
+        }
+
+        py.detach(|| {
+            let data = Arc::clone(&self.data);
+            let path_provider = self.path_provider.clone();
+            let mut path_watcher = self.path_provider.create_watcher();
+
+            path_watcher
+                .watch(move || {
+                    let data = Arc::clone(&data);
+                    let path_provider = path_provider.clone();
+
+                    async move {
+                        // Ignore errors during watched reloads
+                        let _ = Self::reload_settings(&data, &path_provider).await;
+                    }
+                })
+                .map_err(|error| {
+                    PyRuntimeError::new_err(format!(
+                        "Failed to watch JSON settings file '{}': {}",
+                        self.path_provider.path().display(),
+                        error
+                    ))
+                })?;
+
+            self.path_watcher.blocking_lock().replace(path_watcher);
+            Ok(())
+        })
+    }
+
+    async fn reload_settings(
+        data: &ArcSwap<Py<PyDict>>,
+        path_provider: &PathProvider,
+    ) -> PyResult<()> {
+        if !path_provider.try_is_path_available().await? {
+            return Ok(());
+        }
+
+        let path = path_provider.path();
+        let raw_json = Self::read_json_file(path).await?;
+        let mut parsed_data = Self::parse_raw_json(path, &raw_json)?;
+        Self::normalize_keys(&mut parsed_data);
+        let new_data = Python::attach(|py| Self::create_data(py, parsed_data))?;
+        data.store(Arc::new(new_data));
+        Ok(())
+    }
 }
 
 impl SettingsProvider for JsonFileSettingsProvider {
@@ -78,16 +133,7 @@ impl SettingsProvider for JsonFileSettingsProvider {
     }
 
     async fn reload(&self) -> PyResult<()> {
-        if !self.path_provider.try_is_path_available().await? {
-            return Ok(());
-        }
-
-        let raw_json = self.read_json_file().await?;
-        let mut parsed_data = self.parse_raw_json(&raw_json)?;
-        Self::normalize_keys(&mut parsed_data);
-        let data = Python::attach(|py| Self::create_data(py, parsed_data))?;
-        self.data.store(Arc::new(data));
-        Ok(())
+        Self::reload_settings(&self.data, &self.path_provider).await
     }
 }
 
@@ -146,6 +192,7 @@ mod tests {
             JsonFileSettingsProvider::new(
                 py,
                 PathProvider::from_file(None, file_path.to_str().unwrap(), false).unwrap(),
+                false,
             )
         });
 
@@ -181,6 +228,7 @@ mod tests {
             JsonFileSettingsProvider::new(
                 py,
                 PathProvider::from_file(None, file_path.to_str().unwrap(), false).unwrap(),
+                false,
             )
         });
 
@@ -210,6 +258,7 @@ mod tests {
             JsonFileSettingsProvider::new(
                 py,
                 PathProvider::from_file(None, file_path.to_str().unwrap(), false).unwrap(),
+                false,
             )
         });
 
@@ -227,6 +276,7 @@ mod tests {
             JsonFileSettingsProvider::new(
                 py,
                 PathProvider::from_file(None, invalid_file_path.to_str().unwrap(), false).unwrap(),
+                false,
             )
         });
 
@@ -244,10 +294,81 @@ mod tests {
             JsonFileSettingsProvider::new(
                 py,
                 PathProvider::from_file(None, "settings.json", false).unwrap(),
+                false,
             )
             .to_string()
         });
 
         assert_eq!(display, "JsonFileSettingsProvider");
+    }
+
+    #[test]
+    fn test_reload_values_when_json_file_is_updated() {
+        Python::initialize();
+
+        let temporary_directory = tempdir().unwrap();
+        let file_path = temporary_directory.path().join("settings.json");
+        let runtime = pyo3_async_runtimes::tokio::get_runtime();
+        runtime
+            .block_on(fs::write(&file_path, r#"{"value":"initial"}"#))
+            .unwrap();
+        let provider = Python::attach(|py| {
+            JsonFileSettingsProvider::new(
+                py,
+                PathProvider::from_file(None, file_path.to_str().unwrap(), false).unwrap(),
+                true,
+            )
+        });
+        Python::attach(|py| provider.load(py)).unwrap();
+
+        let actual_value = runtime.block_on(async {
+            fs::write(&file_path, r#"{"value":"updated"}"#)
+                .await
+                .unwrap();
+
+            tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                loop {
+                    let value = Python::attach(|py| {
+                        let data = SettingsProvider::data(&provider, py);
+                        data.bind(py)
+                            .get_item("value")
+                            .unwrap()
+                            .extract::<String>()
+                            .unwrap()
+                    });
+
+                    if value == "updated" {
+                        break value;
+                    }
+
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .unwrap()
+        });
+
+        assert_eq!(actual_value, "updated");
+    }
+
+    #[test]
+    fn test_not_watch_json_file_when_reload_on_change_is_disabled() {
+        let temporary_directory = tempdir().unwrap();
+        let file_path = temporary_directory.path().join("settings.json");
+        let runtime = pyo3_async_runtimes::tokio::get_runtime();
+        runtime
+            .block_on(fs::write(&file_path, r#"{"value":"initial"}"#))
+            .unwrap();
+        let provider = Python::attach(|py| {
+            JsonFileSettingsProvider::new(
+                py,
+                PathProvider::from_file(None, file_path.to_str().unwrap(), false).unwrap(),
+                false,
+            )
+        });
+
+        Python::attach(|py| provider.load(py)).unwrap();
+
+        assert!(provider.path_watcher.blocking_lock().is_none());
     }
 }

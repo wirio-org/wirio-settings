@@ -488,4 +488,74 @@ port: 8080
 
         assert_data(&provider, &expected_parsed_yaml);
     }
+
+    #[test]
+    fn test_reload_values_when_yaml_file_is_updated() {
+        Python::initialize();
+
+        let temporary_directory = tempdir().unwrap();
+        let file_path = temporary_directory.path().join("settings.yaml");
+        let runtime = pyo3_async_runtimes::tokio::get_runtime();
+        runtime
+            .block_on(fs::write(&file_path, "value: initial"))
+            .unwrap();
+        let provider = Python::attach(|py| {
+            YamlFileSettingsProvider::new(
+                py,
+                PathProvider::from_file(None, file_path.to_str().unwrap(), false).unwrap(),
+                true,
+            )
+        });
+        Python::attach(|py| provider.load(py)).unwrap();
+
+        let actual_value = runtime.block_on(async {
+            fs::write(&file_path, "value: updated").await.unwrap();
+
+            tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                loop {
+                    let value = Python::attach(|py| {
+                        let data = SettingsProvider::data(&provider, py);
+                        data.bind(py)
+                            .get_item("value")
+                            .unwrap()
+                            .extract::<String>()
+                            .unwrap()
+                    });
+
+                    if value == "updated" {
+                        break value;
+                    }
+
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .unwrap()
+        });
+
+        assert_eq!(actual_value, "updated");
+    }
+
+    #[test]
+    fn test_not_watch_yaml_file_when_reload_on_change_is_disabled() {
+        Python::initialize();
+
+        let temporary_directory = tempdir().unwrap();
+        let file_path = temporary_directory.path().join("settings.yaml");
+        let runtime = pyo3_async_runtimes::tokio::get_runtime();
+        runtime
+            .block_on(fs::write(&file_path, "value: initial"))
+            .unwrap();
+        let provider = Python::attach(|py| {
+            YamlFileSettingsProvider::new(
+                py,
+                PathProvider::from_file(None, file_path.to_str().unwrap(), false).unwrap(),
+                false,
+            )
+        });
+
+        Python::attach(|py| provider.load(py)).unwrap();
+
+        assert!(provider.path_watcher.blocking_lock().is_none());
+    }
 }

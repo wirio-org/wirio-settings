@@ -795,8 +795,8 @@ mod tests {
         );
 
         AzureKeyVaultSettingsProvider::reload_secrets(
-            secret_client,
-            Arc::clone(&secrets_cache),
+            &secret_client,
+            &secrets_cache,
             url,
         )
         .await

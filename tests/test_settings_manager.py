@@ -1,5 +1,8 @@
+import asyncio
 import re
 from collections.abc import Sequence
+from pathlib import Path
+from time import monotonic, sleep
 from typing import final, override
 
 import pytest
@@ -401,8 +404,8 @@ class TestSettingsManager:
         source = add_patch.call_args.args[0]
         assert isinstance(source, GcpSecretManagerSettingsSource)
 
-    def test_add_key_per_file(self, mocker: MockerFixture) -> None:
-        directory_path = "secrets"
+    def test_add_key_per_file(self, mocker: MockerFixture, tmp_path: Path) -> None:
+        directory_path = str(tmp_path / "secrets")
         settings_manager = SettingsManager(
             content_root_path="", add_default_providers=False
         )
@@ -1132,3 +1135,90 @@ class TestSettingsManager:
             "port = '8080' (_DictionarySettingsProvider)\n"
             "missing = None (_DictionarySettingsProvider)"
         )
+
+    async def test_reload_yaml_file_when_updated(self, tmp_path: Path) -> None:
+        expected_initial_value = "initial"
+        expected_updated_value = "updated"
+        settings_file_path = tmp_path / "settings.yaml"
+        settings_file_path.write_text(
+            f'{{"value":"{expected_initial_value}"}}', encoding="utf-8"
+        )
+        settings_manager = SettingsManager(
+            content_root_path=str(tmp_path), add_default_providers=False
+        )
+
+        settings_manager.add_yaml_file(
+            path="settings.yaml",
+            reload_on_change=True,
+        )
+        initial_value = settings_manager.get_required_value("value")
+        settings_file_path.write_text(
+            f'{{"value":"{expected_updated_value}"}}', encoding="utf-8"
+        )
+
+        actual_value = initial_value
+        timeout_at = monotonic() + 5
+
+        while actual_value != expected_updated_value and monotonic() < timeout_at:
+            await asyncio.sleep(0.1)
+            actual_value = settings_manager.get_required_value("value")
+
+        assert initial_value == expected_initial_value
+        assert actual_value == expected_updated_value
+
+    async def test_reload_json_file_when_updated(self, tmp_path: Path) -> None:
+        expected_initial_value = "initial"
+        expected_updated_value = "updated"
+        settings_file_path = tmp_path / "settings.json"
+        settings_file_path.write_text(
+            f'{{"value":"{expected_initial_value}"}}', encoding="utf-8"
+        )
+        settings_manager = SettingsManager(
+            content_root_path=str(tmp_path), add_default_providers=False
+        )
+
+        settings_manager.add_json_file(
+            path="settings.json",
+            reload_on_change=True,
+        )
+        initial_value = settings_manager.get_required_value("value")
+        settings_file_path.write_text(
+            f'{{"value":"{expected_updated_value}"}}', encoding="utf-8"
+        )
+
+        actual_value = initial_value
+        timeout_at = monotonic() + 5
+
+        while actual_value != expected_updated_value and monotonic() < timeout_at:
+            await asyncio.sleep(0.1)
+            actual_value = settings_manager.get_required_value("value")
+
+        assert initial_value == expected_initial_value
+        assert actual_value == expected_updated_value
+
+    def test_reload_key_per_file_when_directory_files_are_updated(
+        self, tmp_path: Path
+    ) -> None:
+        expected_initial_value = "initial"
+        expected_updated_value = "updated"
+        settings_file_path = tmp_path / "value"
+        settings_file_path.write_text(expected_initial_value, encoding="utf-8")
+        settings_manager = SettingsManager(
+            content_root_path="", add_default_providers=False
+        )
+
+        settings_manager.add_key_per_file(
+            directory_path=str(tmp_path),
+            reload_on_change=True,
+        )
+        initial_value = settings_manager.get_required_value("value")
+        settings_file_path.write_text(expected_updated_value, encoding="utf-8")
+
+        actual_value = initial_value
+        timeout_at = monotonic() + 5
+        while actual_value != expected_updated_value and monotonic() < timeout_at:
+            sleep(0.05)
+            actual_value = settings_manager.get_required_value("value")
+
+        assert initial_value == expected_initial_value
+        assert actual_value == expected_updated_value

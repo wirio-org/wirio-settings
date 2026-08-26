@@ -26,31 +26,6 @@ pub struct AwsSecretsManagerSettingsProvider {
 
 #[pymethods]
 impl AwsSecretsManagerSettingsProvider {
-    #[new]
-    #[pyo3(signature = (secret_id, region=None, url=None, access_key_id=None, secret_access_key=None, session_token=None, profile=None))]
-    #[allow(clippy::too_many_arguments)]
-    pub fn new_python(
-        py: Python<'_>,
-        secret_id: String,
-        region: Option<String>,
-        url: Option<String>,
-        access_key_id: Option<String>,
-        secret_access_key: Option<String>,
-        session_token: Option<String>,
-        profile: Option<String>,
-    ) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new(
-            py,
-            secret_id,
-            region,
-            url,
-            access_key_id,
-            secret_access_key,
-            session_token,
-            profile,
-        ))
-    }
-
     #[pyo3(signature = () -> "dict[str, str | None]")]
     fn data(&self, py: Python<'_>) -> Py<PyDict> {
         SettingsProvider::data(self, py)

@@ -1,29 +1,30 @@
 use crate::{
-    core::{PythonSettingsProvider, PythonSettingsSource, SettingsSource},
+    core::{PathProvider, PythonSettingsProvider, PythonSettingsSource, SettingsSource},
     json_file::JsonFileSettingsProvider,
 };
 use pyo3::prelude::*;
 
 #[pyclass(extends = PythonSettingsSource, frozen)]
 pub struct JsonFileSettingsSource {
-    content_root_path: Option<String>,
-    path: String,
-    optional: bool,
+    path_provider: PathProvider,
+    reload_on_change: bool,
 }
 
 #[pymethods]
 impl JsonFileSettingsSource {
     #[new]
     pub fn new_python(
-        content_root_path: Option<String>,
-        path: String,
+        content_root_path: Option<&str>,
+        path: &str,
         optional: bool,
-    ) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(PythonSettingsSource::new()).add_subclass(Self {
-            content_root_path,
-            path,
-            optional,
-        })
+        reload_on_change: bool,
+    ) -> PyResult<PyClassInitializer<Self>> {
+        Ok(
+            PyClassInitializer::from(PythonSettingsSource::new()).add_subclass(Self {
+                path_provider: PathProvider::from_file(content_root_path, path, optional)?,
+                reload_on_change,
+            }),
+        )
     }
 
     fn build(&self, py: Python<'_>) -> PyResult<Py<PythonSettingsProvider>> {
@@ -38,9 +39,8 @@ impl SettingsSource for JsonFileSettingsSource {
             PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(
                 JsonFileSettingsProvider::new(
                     py,
-                    self.content_root_path.as_deref(),
-                    &self.path,
-                    self.optional,
+                    self.path_provider.clone(),
+                    self.reload_on_change,
                 ),
             ),
         )
@@ -50,6 +50,8 @@ impl SettingsSource for JsonFileSettingsSource {
 
 #[cfg(test)]
 mod tests {
+    use crate::core::PathProvider;
+
     use super::JsonFileSettingsSource;
     use pyo3::Python;
     use pyo3::types::PyAnyMethods;
@@ -59,9 +61,8 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let source = JsonFileSettingsSource {
-                content_root_path: None,
-                path: String::from("settings.json"),
-                optional: false,
+                path_provider: PathProvider::from_file(None, "settings.json", false).unwrap(),
+                reload_on_change: false,
             };
 
             let provider = source.build(py).unwrap();

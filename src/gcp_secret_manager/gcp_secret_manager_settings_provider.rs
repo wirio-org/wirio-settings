@@ -21,20 +21,6 @@ pub struct GcpSecretManagerSettingsProvider {
 
 #[pymethods]
 impl GcpSecretManagerSettingsProvider {
-    #[new]
-    #[pyo3(signature = (project_id, credentials_json=None))]
-    pub fn new_python(
-        py: Python<'_>,
-        project_id: String,
-        credentials_json: Option<String>,
-    ) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new(
-            py,
-            project_id,
-            credentials_json,
-        ))
-    }
-
     #[pyo3(signature = () -> "dict[str, str | None]")]
     fn data(&self, py: Python<'_>) -> Py<PyDict> {
         SettingsProvider::data(self, py)

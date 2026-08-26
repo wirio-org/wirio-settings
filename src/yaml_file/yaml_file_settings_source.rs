@@ -1,29 +1,30 @@
 use crate::{
-    core::{PythonSettingsProvider, PythonSettingsSource, SettingsSource},
+    core::{PathProvider, PythonSettingsProvider, PythonSettingsSource, SettingsSource},
     yaml_file::YamlFileSettingsProvider,
 };
 use pyo3::prelude::*;
 
 #[pyclass(extends = PythonSettingsSource, frozen)]
 pub struct YamlFileSettingsSource {
-    content_root_path: Option<String>,
-    path: String,
-    optional: bool,
+    path_provider: PathProvider,
+    reload_on_change: bool,
 }
 
 #[pymethods]
 impl YamlFileSettingsSource {
     #[new]
     pub fn new_python(
-        content_root_path: Option<String>,
-        path: String,
+        content_root_path: Option<&str>,
+        path: &str,
         optional: bool,
-    ) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(PythonSettingsSource::new()).add_subclass(Self {
-            content_root_path,
-            path,
-            optional,
-        })
+        reload_on_change: bool,
+    ) -> PyResult<PyClassInitializer<Self>> {
+        Ok(
+            PyClassInitializer::from(PythonSettingsSource::new()).add_subclass(Self {
+                path_provider: PathProvider::from_file(content_root_path, path, optional)?,
+                reload_on_change,
+            }),
+        )
     }
 
     fn build(&self, py: Python<'_>) -> PyResult<Py<PythonSettingsProvider>> {
@@ -38,9 +39,8 @@ impl SettingsSource for YamlFileSettingsSource {
             PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(
                 YamlFileSettingsProvider::new(
                     py,
-                    self.content_root_path.as_deref(),
-                    &self.path,
-                    self.optional,
+                    self.path_provider.clone(),
+                    self.reload_on_change,
                 ),
             ),
         )
@@ -50,6 +50,8 @@ impl SettingsSource for YamlFileSettingsSource {
 
 #[cfg(test)]
 mod tests {
+    use crate::core::PathProvider;
+
     use super::YamlFileSettingsSource;
     use pyo3::Python;
     use pyo3::types::PyAnyMethods;
@@ -59,9 +61,8 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let source = YamlFileSettingsSource {
-                content_root_path: None,
-                path: String::from("settings.yaml"),
-                optional: false,
+                path_provider: PathProvider::from_file(None, "settings.yaml", false).unwrap(),
+                reload_on_change: false,
             };
 
             let provider = source.build(py).unwrap();

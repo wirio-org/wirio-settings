@@ -1,5 +1,6 @@
 [toolchain]
 channel = "1.96"
+profile = "minimal"
 components = [
     "rustc",
     "cargo",
@@ -9,5 +10,5 @@ components = [
     "rust-analyzer",
     "clippy",
     "rust-src",
-    "llvm-tools"
+    "llvm-tools",
 ]

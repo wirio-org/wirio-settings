@@ -13,11 +13,6 @@ pub struct EnvironmentVariablesSettingsProvider {
 
 #[pymethods]
 impl EnvironmentVariablesSettingsProvider {
-    #[new]
-    pub fn new_python(py: Python<'_>) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(Self::new(py))
-    }
-
     #[pyo3(signature = () -> "dict[str, str | None]")]
     fn data(&self, py: Python<'_>) -> Py<PyDict> {
         SettingsProvider::data(self, py)

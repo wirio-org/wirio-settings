@@ -1,15 +1,13 @@
 # wirio-settings
 
-## Architecture
-
 This is a Python package backed by a Rust PyO3 extension. Rust implementations and the extension exports are in `src/`. The public Python wrapper is in `python/wirio_settings/`, and Python tests are in `tests/`.
 
-# Environment
+## Environment
 
 - Lint: `make lint`.
 - Test: `make test`.
 
-# General guidelines
+## General guidelines
 
 - Don't modify the `_wirio_settings.pyi` file manually. It's generated automatically by `maturin`. If you need to modify it, do so in the `lib.rs` file and then run `make generate-stubs` to regenerate the `.pyi` file.
 - Review the added code and write comprehensive unit tests to achieve 100% test coverage. Use `cargo llvm-cov --text` to check the coverage.
@@ -17,18 +15,16 @@ This is a Python package backed by a Rust PyO3 extension. Rust implementations a
 - After all steps, review if the documentation needs to be updated. If it does, update it accordingly.
 - When a lock is required, the code must first detach from the Python runtime to avoid deadlocks with PyO3, then acquire the lock, and finally reattach to the Python runtime if needed. Use `py.detach` and `Python::attach` for this process.
 
-# Rust
+## Rust
 
-## Code style
-
-#### General guidelines
+### Guidelines
 
 - When `expect` is used, provide a message that describes the reason for the expectation. It must start with a capital letter and not end with a period.
 - Don't modify the `_wirio_settings.pyi` file manually. It is generated automatically by `maturin`. If you need to modify it, do so in the `lib.rs` file and then run `make generate-stubs` to regenerate the `.pyi` file.
-- When using PyO3, use attributes instead of functions such as `.add_function` or `add_submodule`.
+- When using PyO3, use macros instead of functions such as `add_function` or `add_submodule`.
 - To work with directories and files, use `tokio::fs` instead of `std::fs`. This is because `std::fs` is blocking, while `tokio::fs` is asynchronous and non-blocking. Using `std::fs` can lead to performance issues in asynchronous applications, as it can block the event loop and prevent other tasks from executing. Therefore, it's recommended to use `tokio::fs` for file system operations in asynchronous Rust applications.
 
-## Testing
+### Testing
 
 - Test names must start with `test_`, be followed by a verb in present tense, and read as `The test should...`. The names mustn't include the word "should", and they must be descriptive and concise, avoiding the inclusion of the tested function whenever possible. Examples: `test_create_user`, `test_fail_when_creating_user_with_untrusted_email`, `test_ban_user_using_administrator_account`.
 - Append new test cases to the end of the existing ones.
@@ -38,15 +34,13 @@ This is a Python package backed by a Rust PyO3 extension. Rust implementations a
 - To create temporary files in tests, use the `tempfile` crate.
 - Asynchronous tests must be annotated using `#[tokio::test]` instead of `#[test]`.
 
-# Python
+## Python
 
-## Environment
+### Environment
 
 - Package manager: `uv`.
 
-## Code style
-
-### General guidelines
+### Guidelines
 
 - Use type hints everywhere.
 - Use standard decorators, such as `@override` or `@abstractmethod`, when appropriate.
@@ -96,7 +90,7 @@ return value or default
 | number         | `value != 0`        |
 | boolean        | `value`             |
 
-## Testing
+### Testing
 
 - Run tests using `uv`.
 - Test files must be placed in the `tests` directory, mirroring the structure of the `src` directory.
@@ -106,7 +100,7 @@ return value or default
 - `MockerFixture` should use the `create_autospec` method to create mocks, and the `instance=True` parameter should be passed to ensure the mock behaves like an instance of the class being mocked. `mocker.Mock()` should be avoided, as it creates a generic mock that doesn't enforce the interface of the mocked class. Use `MockerFixture` instead of `monkeypatch`.
 - When patching, don't hardcode the path. If you have to reference a module, use `__module__`, and if you have to reference a method, use `__name__`. For example, instead of `mocker.patch("HostEnvironment.inspect.currentframe")`, use `mocker.patch(f"{HostEnvironment.__module__}.{inspect.__name__}.{inspect.currentframe.__name__}")`. Also, when patching, use `autospec=True` to ensure the mock behaves like the original object.
 
-# Documentation
+## Documentation
 
 - Use American English.
 - The documentation must be placed in the `docs` directory or the `README` file.

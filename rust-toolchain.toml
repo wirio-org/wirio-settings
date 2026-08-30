@@ -7,7 +7,6 @@ components = [
     "rustfmt",
     "rust-std",
     "rust-docs",
-    "rust-analyzer",
     "clippy",
     "rust-src",
     "llvm-tools",

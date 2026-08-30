@@ -322,7 +322,7 @@ jobs:
     permissions:
       # Used to upload coverage report to Codecov
       id-token: write
-    needs: [test-linux, test-musllinux, test-windows, test-macos, sdist]
+    needs: test
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -346,7 +346,15 @@ jobs:
     name: Release
     runs-on: ubuntu-24.04
     if: ${{ startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' }}
-    needs: [upload-test-coverage]
+    needs:
+      [
+        test-linux,
+        test-macos,
+        test-musllinux,
+        test-windows,
+        sdist,
+        upload-test-coverage,
+      ]
     environment: release
     permissions:
       # Use to sign the release artifacts

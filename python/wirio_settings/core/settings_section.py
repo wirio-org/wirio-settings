@@ -1,5 +1,7 @@
 from typing import Final, cast, final, override
 
+from pydantic import BaseModel
+
 from wirio_settings._wirio_settings import SettingsPath
 from wirio_settings.core.settings import Settings
 from wirio_settings.core.settings_root import SettingsRoot
@@ -49,6 +51,12 @@ class SettingsSection(Settings):
             path = f"{path}{SettingsPath.KEY_DELIMITER}{key}"
 
         return self._root.get_children(path)
+
+    @override
+    def get_model[TModel: BaseModel](self, model_type: type[TModel]) -> TModel:
+        """Get a settings model bound to this section."""
+        model = super().get_model(model_type)
+        return self._root._register_model(model, self._path)
 
     @override
     def get_value[TField](

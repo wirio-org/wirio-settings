@@ -1,8 +1,9 @@
 from datetime import timedelta
 from os import environ
 from typing import Final, Self, cast, final, override
+from weakref import WeakMethod
 
-from pydantic import TypeAdapter
+from pydantic import BaseModel, TypeAdapter
 
 from wirio_settings._wirio_settings import (
     AwsSecretsManagerSettingsSource,
@@ -11,6 +12,7 @@ from wirio_settings._wirio_settings import (
     GcpSecretManagerSettingsSource,
     JsonFileSettingsSource,
     KeyPerFileSettingsSource,
+    ModelRegistry,
     SettingLookup,
     SettingsPath,
     SettingsProvider,
@@ -18,6 +20,8 @@ from wirio_settings._wirio_settings import (
     YamlFileSettingsSource,
 )
 from wirio_settings.core._typed_type import TypedType
+from wirio_settings.core.settings import Settings
+from wirio_settings.core.settings_binder import SettingsBinder
 from wirio_settings.core.settings_root import SettingsRoot
 from wirio_settings.core.settings_section import SettingsSection
 
@@ -27,6 +31,7 @@ class SettingsManager(SettingsRoot):
     _content_root_path: Final[str | None]
     _sources: Final[list[SettingsSource]]
     _providers: Final[list[SettingsProvider]]
+    _model_registry: ModelRegistry | None
 
     def __init__(
         self, content_root_path: str | None = None, add_default_providers: bool = True
@@ -42,6 +47,7 @@ class SettingsManager(SettingsRoot):
         self._content_root_path = content_root_path
         self._sources = []
         self._providers = []
+        self._model_registry = None
 
         if add_default_providers:
             self.add_default_providers()
@@ -58,8 +64,17 @@ class SettingsManager(SettingsRoot):
     def add(self, source: SettingsSource) -> None:
         self._sources.append(source)
         provider = source.build()
+
+        if self._model_registry is not None:
+            provider.set_model_registry(self._model_registry)
+
         provider.load()
         self._providers.append(provider)
+
+    @override
+    def get_model[TModel: BaseModel](self, model_type: type[TModel]) -> TModel:
+        model = super().get_model(model_type)
+        return self._register_model(model)
 
     def add_default_providers(self) -> Self:
         """Add default settings providers in the recommended order."""
@@ -190,7 +205,7 @@ class SettingsManager(SettingsRoot):
         return self
 
     @override
-    def get_value[TField](
+    def get_value[TField = str](
         self,
         key: str,
         value_type: type[TField] | type[str] = str,
@@ -214,7 +229,7 @@ class SettingsManager(SettingsRoot):
         return cast("TField", TypeAdapter(value_type).validate_python(raw_value))
 
     @override
-    def get_required_value[TField](
+    def get_required_value[TField = str](
         self,
         key: str,
         value_type: type[TField] | type[str] = str,
@@ -310,6 +325,13 @@ class SettingsManager(SettingsRoot):
 
         return "\n".join(representation_with_lines)
 
+    @override
+    def _register_model[TModel: BaseModel](
+        self, model: TModel, section_path: str | None = None
+    ) -> TModel:
+        self._get_model_registry().add_model(model, section_path)
+        return model
+
     def _is_section_key(self, key: str) -> bool:
         children = self.get_children(key)
 
@@ -317,3 +339,46 @@ class SettingsManager(SettingsRoot):
             return False
 
         return any(not child.key.isdigit() for child in children)
+
+    def _reload_models(self) -> None:
+        model_registry = self._model_registry
+
+        if model_registry is None:
+            return
+
+        for registered_model in model_registry.models():
+            model = registered_model.model_reference()
+
+            if model is None:
+                continue
+
+            settings: Settings
+
+            try:
+                if registered_model.section_path is None:
+                    settings = self
+                else:
+                    settings = SettingsSection(self, registered_model.section_path)
+
+                updated_model = SettingsBinder.bind_model(settings, type(model))
+            except Exception:  # noqa: BLE001, S112
+                continue
+
+            model.__dict__ = updated_model.__dict__
+            model.__pydantic_fields_set__ = updated_model.__pydantic_fields_set__
+            model.__pydantic_extra__ = updated_model.__pydantic_extra__
+            model.__pydantic_private__ = updated_model.__pydantic_private__
+
+    def _get_model_registry(self) -> ModelRegistry:
+        model_registry = self._model_registry
+
+        if model_registry is not None:
+            return model_registry
+
+        model_registry = ModelRegistry(WeakMethod(self._reload_models))
+        self._model_registry = model_registry
+
+        for provider in self._providers:
+            provider.set_model_registry(model_registry)
+
+        return model_registry

@@ -45,7 +45,7 @@ Lightning-fast, strongly typed, and zero boilerplate settings library for Python
   - [Defaults and required fields](#defaults-and-required-fields)
   - [Sections](#sections)
   - [Nested keys](#nested-keys)
-- [Debugging](#debugging)
+  - [Pydantic model reloads](#pydantic-model-reloads)
   - [Debug settings](#debug-settings)
 
 ## 📦 Installation
@@ -360,7 +360,27 @@ Nested keys use `.`:
 - `database.port`
 - `logging.log_level.default`
 
-## Debugging
+### Pydantic model reloads
+
+Models returned by `get_model()` are automatically updated when a configured provider reloads its values. This is useful for long-running applications such as web servers or background jobs that need to keep their settings up to date without restarting or redeploying.
+
+```python
+from pydantic import BaseModel
+from wirio_settings import SettingsManager
+
+
+class ApplicationSettings(BaseModel):
+    port: int
+
+
+application_settings = (
+    SettingsManager()
+    .add_yaml_file("settings.yaml", reload_on_change=True)
+    .get_model(ApplicationSettings)
+)
+```
+
+When `settings.yaml` changes its contents, `application_settings.port` is updated without calling `get_model()` again. If the refreshed values do not validate against the model, the existing model values are retained.
 
 ### Debug settings
 

@@ -1,11 +1,13 @@
 use crate::{_wirio_settings::SettingsPath, core::convention_changer};
 use pyo3::{
+    exceptions::PyRuntimeError,
     prelude::*,
     types::{PyDict, PyString},
 };
 use std::{collections::BTreeMap, fmt, mem};
+use tokio::sync::OnceCell;
 
-use super::SettingLookup;
+use super::{ModelRegistry, SettingLookup};
 
 /// Provides setting values
 #[pyclass(name = "SettingsProvider", subclass, frozen)]
@@ -15,7 +17,7 @@ pub struct PythonSettingsProvider;
 impl PythonSettingsProvider {
     #[new]
     pub fn new() -> Self {
-        Self
+        Self {}
     }
 
     #[pyo3(signature = () -> "dict[str, str | None]")]
@@ -32,6 +34,11 @@ impl PythonSettingsProvider {
 
     #[allow(clippy::unused_self)]
     fn load(&self) {
+        unimplemented!()
+    }
+
+    #[allow(clippy::needless_pass_by_value, clippy::unused_self, unused_variables)]
+    fn set_model_registry(&self, model_registry: PyRef<'_, ModelRegistry>) {
         unimplemented!()
     }
 }
@@ -111,24 +118,41 @@ pub trait SettingsProvider: Sync + fmt::Display {
         let short_name = full_name.split("::").last();
         short_name.unwrap_or(full_name)
     }
+
+    fn model_registry(&self) -> &OnceCell<Py<ModelRegistry>>;
+
+    fn set_model_registry(&self, model_registry: PyRef<'_, ModelRegistry>) -> PyResult<()> {
+        let model_registry: Py<ModelRegistry> = model_registry.into();
+        self.model_registry().set(model_registry).map_err(|error| {
+            PyRuntimeError::new_err(format!("Model registry is already set: {error}"))
+        })
+    }
+
+    fn on_reload(py: Python<'_>, model_registry: &OnceCell<Py<ModelRegistry>>) {
+        if let Some(model_registry) = model_registry.get() {
+            model_registry.bind(py).borrow().on_provider_reload();
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::PythonSettingsProvider;
 
-    use super::{SettingLookup, SettingsProvider};
+    use super::{ModelRegistry, SettingLookup, SettingsProvider};
     use pyo3::{prelude::*, types::PyDict};
     use std::{
         collections::BTreeMap,
         fmt,
         sync::atomic::{AtomicBool, Ordering},
     };
+    use tokio::sync::OnceCell;
 
     #[pyclass(extends = PythonSettingsProvider, frozen, str)]
     struct MockSettingsProvider {
         data: Py<PyDict>,
         is_loaded: AtomicBool,
+        model_registry: OnceCell<Py<ModelRegistry>>,
     }
 
     impl MockSettingsProvider {
@@ -137,6 +161,7 @@ mod tests {
             Self {
                 data,
                 is_loaded: AtomicBool::new(false),
+                model_registry: OnceCell::new(),
             }
         }
     }
@@ -156,6 +181,10 @@ mod tests {
             .unwrap();
             self.is_loaded.store(true, Ordering::SeqCst);
             Ok(())
+        }
+
+        fn model_registry(&self) -> &OnceCell<Py<ModelRegistry>> {
+            &self.model_registry
         }
     }
 

@@ -11,12 +11,12 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OnceCell};
 use tokio_util::sync::CancellationToken;
 
 use crate::azure_key_vault::default_azure_credential::DefaultAzureCredential;
 use crate::azure_key_vault::remove_user_agent::RemoveUserAgent;
-use crate::core::{PythonSettingsProvider, SettingLookup, SettingsProvider};
+use crate::core::{ModelRegistry, PythonSettingsProvider, SettingLookup, SettingsProvider};
 
 #[pyclass(extends = PythonSettingsProvider, frozen, str)]
 pub struct AzureKeyVaultSettingsProvider {
@@ -25,6 +25,7 @@ pub struct AzureKeyVaultSettingsProvider {
     secret_client: Arc<SecretClient>,
     reload_interval: Option<Duration>,
     schedule_reload_cancellation_token: Mutex<Option<CancellationToken>>,
+    model_registry: Arc<OnceCell<Py<ModelRegistry>>>,
 }
 
 struct SecretsCache {
@@ -47,6 +48,10 @@ impl AzureKeyVaultSettingsProvider {
         SettingsProvider::load(self, py)?;
         self.schedule_reload(py, self.reload_interval);
         Ok(())
+    }
+
+    fn set_model_registry(&self, model_registry: PyRef<'_, ModelRegistry>) -> PyResult<()> {
+        SettingsProvider::set_model_registry(self, model_registry)
     }
 }
 
@@ -77,6 +82,7 @@ impl AzureKeyVaultSettingsProvider {
             secret_client: Arc::new(secret_client),
             reload_interval,
             schedule_reload_cancellation_token: Mutex::new(None),
+            model_registry: Arc::new(OnceCell::new()),
         })
     }
 
@@ -184,7 +190,7 @@ impl AzureKeyVaultSettingsProvider {
         Ok(secret_resource_id.name)
     }
 
-    /// Check if the loaded secret is up to date with the queried secret properties
+    /// Checks if the loaded secret is up to date with the queried secret properties
     fn is_secret_up_to_date(loaded_secret: &Secret, secret_properties: &SecretProperties) -> bool {
         loaded_secret
             .attributes
@@ -245,6 +251,7 @@ impl AzureKeyVaultSettingsProvider {
     fn update_secrets(
         secrets_cache: &ArcSwap<SecretsCache>,
         new_loaded_secrets: BTreeMap<String, Secret>,
+        model_registry: &OnceCell<Py<ModelRegistry>>,
     ) -> PyResult<()> {
         let mut secret_values = new_loaded_secrets
             .iter()
@@ -252,19 +259,21 @@ impl AzureKeyVaultSettingsProvider {
             .collect::<BTreeMap<String, Option<String>>>();
         Self::normalize_keys(&mut secret_values);
 
-        Python::attach(|py| -> PyResult<()> {
+        let updated_secrets_cache = Python::attach(|py| -> PyResult<SecretsCache> {
             let data = PyDict::new(py);
 
             for (secret_name, secret_value) in secret_values {
                 data.set_item(secret_name, secret_value)?;
             }
 
-            secrets_cache.store(Arc::new(SecretsCache {
+            Ok(SecretsCache {
                 data: data.unbind(),
                 loaded_secrets: Some(new_loaded_secrets),
-            }));
-            Ok(())
-        })
+            })
+        })?;
+        secrets_cache.store(Arc::new(updated_secrets_cache));
+        Python::attach(|py| Self::on_reload(py, model_registry));
+        Ok(())
     }
 
     fn schedule_reload(&self, py: Python<'_>, reload_interval: Option<Duration>) {
@@ -281,6 +290,7 @@ impl AzureKeyVaultSettingsProvider {
             let secret_client = Arc::clone(&self.secret_client);
             let secrets_cache = Arc::clone(&self.secrets_cache);
             let url = self.url.clone();
+            let model_registry = Arc::clone(&self.model_registry);
 
             runtime.spawn(async move {
                 loop {
@@ -294,6 +304,7 @@ impl AzureKeyVaultSettingsProvider {
                             &secret_client,
                             &secrets_cache,
                             &url,
+                            &model_registry,
                         ) => {
                             // Ignore errors during scheduled reloads
                         }
@@ -307,6 +318,7 @@ impl AzureKeyVaultSettingsProvider {
         secret_client: &SecretClient,
         secrets_cache: &ArcSwap<SecretsCache>,
         url: &str,
+        model_registry: &OnceCell<Py<ModelRegistry>>,
     ) -> PyResult<()> {
         let mut secret_properties_pager =
             secret_client
@@ -337,7 +349,7 @@ impl AzureKeyVaultSettingsProvider {
             .await?;
         }
 
-        Self::update_secrets(secrets_cache, new_loaded_secrets)
+        Self::update_secrets(secrets_cache, new_loaded_secrets, model_registry)
     }
 }
 
@@ -363,11 +375,21 @@ impl SettingsProvider for AzureKeyVaultSettingsProvider {
     async fn reload(&self) -> PyResult<()> {
         let secret_client = Arc::clone(&self.secret_client);
         let secrets_cache = Arc::clone(&self.secrets_cache);
-        Self::reload_secrets(&secret_client, &secrets_cache, &self.url).await
+        Self::reload_secrets(
+            &secret_client,
+            &secrets_cache,
+            &self.url,
+            &self.model_registry,
+        )
+        .await
     }
 
     fn section_separator() -> Option<&'static str> {
         Some("--")
+    }
+
+    fn model_registry(&self) -> &OnceCell<Py<ModelRegistry>> {
+        &self.model_registry
     }
 }
 
@@ -380,7 +402,7 @@ impl fmt::Display for AzureKeyVaultSettingsProvider {
 #[cfg(test)]
 mod tests {
     use super::{AzureKeyVaultSettingsProvider, SecretsCache};
-    use crate::core::SettingsProvider;
+    use crate::core::{ModelRegistry, SettingsProvider};
     use arc_swap::ArcSwap;
     use async_trait::async_trait;
     use azure_core::credentials::{AccessToken, TokenCredential, TokenRequestOptions};
@@ -391,11 +413,14 @@ mod tests {
     use azure_security_keyvault_secrets::SecretClient;
     use azure_security_keyvault_secrets::SecretClientOptions;
     use azure_security_keyvault_secrets::models::{Secret, SecretAttributes, SecretProperties};
-    use pyo3::Python;
-    use pyo3::types::PyDict;
+    use pyo3::{
+        Py, Python,
+        types::{PyAnyMethods, PyDict, PyModule, PyWeakrefReference},
+    };
     use std::collections::BTreeMap;
     use std::sync::Arc;
     use std::time::Duration;
+    use tokio::sync::OnceCell;
 
     #[derive(Debug)]
     struct CredentialMock;
@@ -794,9 +819,15 @@ mod tests {
             SecretClient::new(url, Arc::new(CredentialMock), Some(secret_client_options)).unwrap(),
         );
 
-        AzureKeyVaultSettingsProvider::reload_secrets(&secret_client, &secrets_cache, url)
-            .await
-            .unwrap();
+        let model_registry = OnceCell::new();
+        AzureKeyVaultSettingsProvider::reload_secrets(
+            &secret_client,
+            &secrets_cache,
+            url,
+            &model_registry,
+        )
+        .await
+        .unwrap();
 
         let reloaded_secrets = secrets_cache.load_full();
         assert!(
@@ -806,5 +837,39 @@ mod tests {
                 .unwrap()
                 .contains_key(&cached_secret_name)
         );
+    }
+
+    #[test]
+    fn test_set_model_registry() {
+        Python::initialize();
+
+        Python::attach(|py| {
+            let module = PyModule::from_code(py, c"def callback():\n    pass\n", c"", c"").unwrap();
+            let callback = module.getattr("callback").unwrap();
+            let callback_reference = PyWeakrefReference::new(&callback).unwrap().unbind();
+            let model_registry = Py::new(py, ModelRegistry::new(py, callback_reference)).unwrap();
+            let provider = AzureKeyVaultSettingsProvider::new(
+                py,
+                String::from("https://example.vault.azure.net"),
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+
+            provider
+                .set_model_registry(model_registry.bind(py).borrow())
+                .unwrap();
+
+            assert!(
+                provider
+                    .model_registry()
+                    .get()
+                    .unwrap()
+                    .bind(py)
+                    .is(model_registry.bind(py))
+            );
+        });
     }
 }

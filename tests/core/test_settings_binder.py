@@ -5,6 +5,7 @@ from typing import final, override
 import pytest
 from pydantic import BaseModel, Field
 from wirio_settings._wirio_settings import (
+    ModelRegistry,
     SettingLookup,
     SettingsProvider,
     SettingsSource,
@@ -16,12 +17,14 @@ from wirio_settings.settings_manager import SettingsManager
 @final
 class _DictionarySettingsProvider(SettingsProvider):
     values: dict[str, str | None]
+    _model_registry: ModelRegistry | None
 
     def __new__(cls, _values: dict[str, str | None]) -> SettingsProvider:
         return super().__new__(cls)
 
     def __init__(self, values: dict[str, str | None]) -> None:
         self.values = values
+        self._model_registry = None
 
     def data(self) -> dict[str, str | None]:
         return self.values
@@ -36,6 +39,10 @@ class _DictionarySettingsProvider(SettingsProvider):
     @override
     def load(self) -> None:
         pass
+
+    @override
+    def set_model_registry(self, model_registry: ModelRegistry) -> None:
+        self._model_registry = model_registry
 
 
 @final

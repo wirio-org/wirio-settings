@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
+from pydantic import BaseModel
+
 from wirio_settings._wirio_settings import SettingLookup
 from wirio_settings.core.settings import Settings
 
@@ -25,6 +27,11 @@ class SettingsRoot(Settings, ABC):
         key: str,
         value_type: type[TField] | type[str] = str,
     ) -> TField | None: ...
+
+    @abstractmethod
+    def _register_model[TModel: BaseModel](
+        self, model: TModel, section_path: str | None = None
+    ) -> TModel: ...
 
     def _try_get_setting(self, key: str) -> SettingLookup:
         for provider in reversed(self.providers):

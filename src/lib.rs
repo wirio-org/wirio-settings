@@ -18,6 +18,12 @@ mod _wirio_settings {
     pub use crate::core::PythonSettingsProvider;
 
     #[pymodule_export]
+    pub use crate::core::ModelRegistry;
+
+    #[pymodule_export]
+    pub use crate::core::RegisteredModel;
+
+    #[pymodule_export]
     pub use crate::core::PythonSettingsSource;
 
     #[pymodule_export]

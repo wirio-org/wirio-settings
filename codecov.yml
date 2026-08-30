@@ -1,7 +1,7 @@
 comment:
-  layout: "condensed_header, condensed_files, condensed_footer"
+  layout: "condensed_header, diff, condensed_footer"
   behavior: default
-  hide_project_coverage: FALSE
+  hide_project_coverage: false
   require_changes: false
   require_base: false
   require_head: true
@@ -11,6 +11,10 @@ coverage:
     project:
       default:
         informational: true
+        target: auto
+        threshold: 0%
     patch:
       default:
         informational: true
+        target: auto
+        threshold: 0%

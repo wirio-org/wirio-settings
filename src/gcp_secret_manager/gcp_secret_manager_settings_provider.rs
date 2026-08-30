@@ -1,4 +1,4 @@
-use crate::core::{PythonSettingsProvider, SettingLookup, SettingsProvider};
+use crate::core::{ModelRegistry, PythonSettingsProvider, SettingLookup, SettingsProvider};
 use arc_swap::ArcSwap;
 use google_cloud_auth::credentials::Credentials as GoogleCredentials;
 use google_cloud_auth::credentials::service_account::Builder as ServiceAccountCredentialsBuilder;
@@ -11,12 +11,14 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
+use tokio::sync::OnceCell;
 
 #[pyclass(extends = PythonSettingsProvider, frozen, str)]
 pub struct GcpSecretManagerSettingsProvider {
     data: ArcSwap<Py<PyDict>>,
     project_id: String,
     credentials_json: Option<String>,
+    model_registry: OnceCell<Py<ModelRegistry>>,
 }
 
 #[pymethods]
@@ -33,6 +35,10 @@ impl GcpSecretManagerSettingsProvider {
     pub fn load(&self, py: Python<'_>) -> PyResult<()> {
         SettingsProvider::load(self, py)
     }
+
+    fn set_model_registry(&self, model_registry: PyRef<'_, ModelRegistry>) -> PyResult<()> {
+        SettingsProvider::set_model_registry(self, model_registry)
+    }
 }
 
 impl GcpSecretManagerSettingsProvider {
@@ -41,6 +47,7 @@ impl GcpSecretManagerSettingsProvider {
             data: ArcSwap::from_pointee(PyDict::new(py).unbind()),
             project_id,
             credentials_json,
+            model_registry: OnceCell::new(),
         }
     }
 
@@ -184,11 +191,16 @@ impl SettingsProvider for GcpSecretManagerSettingsProvider {
         Self::normalize_keys(&mut secret_values);
         let data = Python::attach(|py| Self::create_data(py, secret_values))?;
         self.data.store(Arc::new(data));
+        Python::attach(|py| Self::on_reload(py, self.model_registry()));
         Ok(())
     }
 
     fn section_separator() -> Option<&'static str> {
         Some("--")
+    }
+
+    fn model_registry(&self) -> &OnceCell<Py<ModelRegistry>> {
+        &self.model_registry
     }
 }
 
@@ -201,8 +213,11 @@ impl fmt::Display for GcpSecretManagerSettingsProvider {
 #[cfg(test)]
 mod tests {
     use super::GcpSecretManagerSettingsProvider;
-    use crate::core::SettingsProvider;
-    use pyo3::Python;
+    use crate::core::{ModelRegistry, SettingsProvider};
+    use pyo3::{
+        Py, Python,
+        types::{PyAnyMethods, PyModule, PyWeakrefReference},
+    };
 
     #[test]
     fn test_replace_double_dash_with_dot_in_secret_name() {
@@ -273,5 +288,32 @@ mod tests {
         assert!(error.to_string().contains(
             "RuntimeError: Secret 'ApiKey' in GCP Secret Manager does not contain valid UTF-8 data:"
         ));
+    }
+
+    #[test]
+    fn test_set_model_registry() {
+        Python::initialize();
+
+        Python::attach(|py| {
+            let module = PyModule::from_code(py, c"def callback():\n    pass\n", c"", c"").unwrap();
+            let callback = module.getattr("callback").unwrap();
+            let callback_reference = PyWeakrefReference::new(&callback).unwrap().unbind();
+            let model_registry = Py::new(py, ModelRegistry::new(py, callback_reference)).unwrap();
+            let provider =
+                GcpSecretManagerSettingsProvider::new(py, String::from("project-id"), None);
+
+            provider
+                .set_model_registry(model_registry.bind(py).borrow())
+                .unwrap();
+
+            assert!(
+                provider
+                    .model_registry()
+                    .get()
+                    .unwrap()
+                    .bind(py)
+                    .is(model_registry.bind(py))
+            );
+        });
     }
 }

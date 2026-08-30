@@ -9,8 +9,11 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
+use tokio::sync::OnceCell;
 
-use crate::core::{PythonSettingsProvider, SerdeParser, SettingLookup, SettingsProvider};
+use crate::core::{
+    ModelRegistry, PythonSettingsProvider, SerdeParser, SettingLookup, SettingsProvider,
+};
 
 #[pyclass(extends = PythonSettingsProvider, frozen, str)]
 pub struct AwsSecretsManagerSettingsProvider {
@@ -22,6 +25,7 @@ pub struct AwsSecretsManagerSettingsProvider {
     secret_access_key: Option<String>,
     session_token: Option<String>,
     profile: Option<String>,
+    model_registry: OnceCell<Py<ModelRegistry>>,
 }
 
 #[pymethods]
@@ -37,6 +41,10 @@ impl AwsSecretsManagerSettingsProvider {
 
     pub fn load(&self, py: Python<'_>) -> PyResult<()> {
         SettingsProvider::load(self, py)
+    }
+
+    fn set_model_registry(&self, model_registry: PyRef<'_, ModelRegistry>) -> PyResult<()> {
+        SettingsProvider::set_model_registry(self, model_registry)
     }
 }
 
@@ -61,6 +69,7 @@ impl AwsSecretsManagerSettingsProvider {
             secret_access_key,
             session_token,
             profile,
+            model_registry: OnceCell::new(),
         }
     }
 
@@ -167,7 +176,12 @@ impl SettingsProvider for AwsSecretsManagerSettingsProvider {
         Self::normalize_keys(&mut parsed_data);
         let data = Python::attach(|py| Self::create_data(py, parsed_data))?;
         self.data.store(Arc::new(data));
+        Python::attach(|py| Self::on_reload(py, self.model_registry()));
         Ok(())
+    }
+
+    fn model_registry(&self) -> &OnceCell<Py<ModelRegistry>> {
+        &self.model_registry
     }
 }
 
@@ -180,8 +194,11 @@ impl fmt::Display for AwsSecretsManagerSettingsProvider {
 #[cfg(test)]
 mod tests {
     use super::AwsSecretsManagerSettingsProvider;
-    use crate::core::SettingsProvider;
-    use pyo3::Python;
+    use crate::core::{ModelRegistry, SettingsProvider};
+    use pyo3::{
+        Py, Python,
+        types::{PyAnyMethods, PyModule, PyWeakrefReference},
+    };
     use serde_json::json;
     use std::collections::BTreeMap;
 
@@ -375,5 +392,40 @@ mod tests {
         });
 
         assert_eq!(display, "AwsSecretsManagerSettingsProvider");
+    }
+
+    #[test]
+    fn test_set_model_registry() {
+        Python::initialize();
+
+        Python::attach(|py| {
+            let module = PyModule::from_code(py, c"def callback():\n    pass\n", c"", c"").unwrap();
+            let callback = module.getattr("callback").unwrap();
+            let callback_reference = PyWeakrefReference::new(&callback).unwrap().unbind();
+            let model_registry = Py::new(py, ModelRegistry::new(py, callback_reference)).unwrap();
+            let provider = AwsSecretsManagerSettingsProvider::new(
+                py,
+                String::from("dev/secret-id"),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            );
+
+            provider
+                .set_model_registry(model_registry.bind(py).borrow())
+                .unwrap();
+
+            assert!(
+                provider
+                    .model_registry()
+                    .get()
+                    .unwrap()
+                    .bind(py)
+                    .is(model_registry.bind(py))
+            );
+        });
     }
 }

@@ -1,14 +1,16 @@
-use crate::core::{PythonSettingsProvider, SettingLookup, SettingsProvider};
+use crate::core::{ModelRegistry, PythonSettingsProvider, SettingLookup, SettingsProvider};
 use arc_swap::ArcSwap;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
+use tokio::sync::OnceCell;
 
 #[pyclass(extends = PythonSettingsProvider, frozen, str)]
 pub struct EnvironmentVariablesSettingsProvider {
     data: ArcSwap<Py<PyDict>>,
+    model_registry: OnceCell<Py<ModelRegistry>>,
 }
 
 #[pymethods]
@@ -25,12 +27,17 @@ impl EnvironmentVariablesSettingsProvider {
     pub fn load(&self, py: Python<'_>) -> PyResult<()> {
         SettingsProvider::load(self, py)
     }
+
+    fn set_model_registry(&self, model_registry: PyRef<'_, ModelRegistry>) -> PyResult<()> {
+        SettingsProvider::set_model_registry(self, model_registry)
+    }
 }
 
 impl EnvironmentVariablesSettingsProvider {
     pub fn new(py: Python<'_>) -> Self {
         Self {
             data: ArcSwap::from_pointee(PyDict::new(py).unbind()),
+            model_registry: OnceCell::new(),
         }
     }
 
@@ -57,11 +64,16 @@ impl SettingsProvider for EnvironmentVariablesSettingsProvider {
         Self::normalize_keys(&mut environment_variables);
         let data = Python::attach(|py| Self::create_data(py, environment_variables))?;
         self.data.store(Arc::new(data));
+        Python::attach(|py| Self::on_reload(py, self.model_registry()));
         Ok(())
     }
 
     fn section_separator() -> Option<&'static str> {
         Some("__")
+    }
+
+    fn model_registry(&self) -> &OnceCell<Py<ModelRegistry>> {
+        &self.model_registry
     }
 }
 
@@ -74,8 +86,11 @@ impl fmt::Display for EnvironmentVariablesSettingsProvider {
 #[cfg(test)]
 mod tests {
     use super::EnvironmentVariablesSettingsProvider;
-    use crate::core::SettingsProvider;
-    use pyo3::Python;
+    use crate::core::{ModelRegistry, SettingsProvider};
+    use pyo3::{
+        Py, Python,
+        types::{PyAnyMethods, PyModule, PyWeakrefReference},
+    };
 
     #[test]
     fn test_replace_double_underscore_with_dot_in_environment_variable_name() {
@@ -105,5 +120,31 @@ mod tests {
             Python::attach(|py| EnvironmentVariablesSettingsProvider::new(py).to_string());
 
         assert_eq!(display, expected_display);
+    }
+
+    #[test]
+    fn test_set_model_registry() {
+        Python::initialize();
+
+        Python::attach(|py| {
+            let module = PyModule::from_code(py, c"def callback():\n    pass\n", c"", c"").unwrap();
+            let callback = module.getattr("callback").unwrap();
+            let callback_reference = PyWeakrefReference::new(&callback).unwrap().unbind();
+            let model_registry = Py::new(py, ModelRegistry::new(py, callback_reference)).unwrap();
+            let provider = EnvironmentVariablesSettingsProvider::new(py);
+
+            provider
+                .set_model_registry(model_registry.bind(py).borrow())
+                .unwrap();
+
+            assert!(
+                provider
+                    .model_registry()
+                    .get()
+                    .unwrap()
+                    .bind(py)
+                    .is(model_registry.bind(py))
+            );
+        });
     }
 }

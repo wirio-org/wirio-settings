@@ -4,10 +4,11 @@ use pyo3::{exceptions::PyRuntimeError, types::PyDict};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OnceCell};
 
 use crate::core::{
-    PathProvider, PathWatcher, PythonSettingsProvider, SettingLookup, SettingsProvider,
+    ModelRegistry, PathProvider, PathWatcher, PythonSettingsProvider, SettingLookup,
+    SettingsProvider,
 };
 
 #[pyclass(extends = PythonSettingsProvider, frozen, str)]
@@ -16,6 +17,7 @@ pub struct KeyPerFileSettingsProvider {
     path_provider: PathProvider,
     reload_on_change: bool,
     path_watcher: Mutex<Option<PathWatcher>>,
+    model_registry: Arc<OnceCell<Py<ModelRegistry>>>,
 }
 
 #[pymethods]
@@ -33,6 +35,10 @@ impl KeyPerFileSettingsProvider {
         SettingsProvider::load(self, py)?;
         self.watch_directory(py, self.reload_on_change)
     }
+
+    fn set_model_registry(&self, model_registry: PyRef<'_, ModelRegistry>) -> PyResult<()> {
+        SettingsProvider::set_model_registry(self, model_registry)
+    }
 }
 
 impl KeyPerFileSettingsProvider {
@@ -42,6 +48,7 @@ impl KeyPerFileSettingsProvider {
             path_provider,
             reload_on_change,
             path_watcher: Mutex::new(None),
+            model_registry: Arc::new(OnceCell::new()),
         }
     }
 
@@ -65,16 +72,18 @@ impl KeyPerFileSettingsProvider {
         py.detach(|| {
             let data = Arc::clone(&self.data);
             let path_provider = self.path_provider.clone();
+            let model_registry = Arc::clone(&self.model_registry);
             let mut path_watcher = self.path_provider.create_watcher();
 
             path_watcher
                 .watch(move || {
                     let data = Arc::clone(&data);
                     let path_provider = path_provider.clone();
+                    let model_registry = Arc::clone(&model_registry);
 
                     async move {
                         // Ignore errors during watched reloads
-                        let _ = Self::reload_settings(&data, &path_provider).await;
+                        let _ = Self::reload_settings(&data, &path_provider, &model_registry).await;
                     }
                 })
                 .map_err(|error| {
@@ -93,6 +102,7 @@ impl KeyPerFileSettingsProvider {
     async fn reload_settings(
         data: &ArcSwap<Py<PyDict>>,
         path_provider: &PathProvider,
+        model_registry: &OnceCell<Py<ModelRegistry>>,
     ) -> PyResult<()> {
         if !path_provider.try_is_path_available().await? {
             return Ok(());
@@ -165,6 +175,7 @@ impl KeyPerFileSettingsProvider {
         Self::normalize_keys(&mut parsed_data);
         let new_data = Python::attach(|py| Self::create_data(py, parsed_data))?;
         data.store(Arc::new(new_data));
+        Python::attach(|py| Self::on_reload(py, model_registry));
         Ok(())
     }
 }
@@ -176,7 +187,11 @@ impl SettingsProvider for KeyPerFileSettingsProvider {
     }
 
     async fn reload(&self) -> PyResult<()> {
-        Self::reload_settings(&self.data, &self.path_provider).await
+        Self::reload_settings(&self.data, &self.path_provider, &self.model_registry).await
+    }
+
+    fn model_registry(&self) -> &OnceCell<Py<ModelRegistry>> {
+        &self.model_registry
     }
 }
 
@@ -189,9 +204,11 @@ impl fmt::Display for KeyPerFileSettingsProvider {
 #[cfg(test)]
 mod tests {
     use super::KeyPerFileSettingsProvider;
-    use crate::core::{PathProvider, SettingsProvider};
-    use pyo3::Python;
-    use pyo3::types::PyAnyMethods;
+    use crate::core::{ModelRegistry, PathProvider, SettingsProvider};
+    use pyo3::{
+        Py, Python,
+        types::{PyAnyMethods, PyModule, PyWeakrefReference},
+    };
     use std::{collections::BTreeMap, path::PathBuf};
     use tempfile::tempdir;
 
@@ -458,5 +475,37 @@ mod tests {
         Python::attach(|py| provider.load(py)).unwrap();
 
         assert!(provider.path_watcher.blocking_lock().is_none());
+    }
+
+    #[test]
+    fn test_set_model_registry() {
+        Python::initialize();
+
+        Python::attach(|py| {
+            let module = PyModule::from_code(py, c"def callback():\n    pass\n", c"", c"").unwrap();
+            let callback = module.getattr("callback").unwrap();
+            let callback_reference = PyWeakrefReference::new(&callback).unwrap().unbind();
+            let model_registry = Py::new(py, ModelRegistry::new(py, callback_reference)).unwrap();
+            let temporary_directory = tempdir().unwrap();
+            let provider = KeyPerFileSettingsProvider::new(
+                py,
+                PathProvider::from_directory(temporary_directory.path().to_str().unwrap(), false)
+                    .unwrap(),
+                false,
+            );
+
+            provider
+                .set_model_registry(model_registry.bind(py).borrow())
+                .unwrap();
+
+            assert!(
+                provider
+                    .model_registry()
+                    .get()
+                    .unwrap()
+                    .bind(py)
+                    .is(model_registry.bind(py))
+            );
+        });
     }
 }

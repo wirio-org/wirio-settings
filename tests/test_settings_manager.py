@@ -1,9 +1,10 @@
 import asyncio
+import gc
 import re
 from collections.abc import Sequence
 from pathlib import Path
 from time import monotonic, sleep
-from typing import final, override
+from typing import cast, final, override
 
 import pytest
 from pydantic import BaseModel, Field
@@ -13,6 +14,7 @@ from wirio_settings._wirio_settings import (
     AzureKeyVaultSettingsSource,
     GcpSecretManagerSettingsSource,
     KeyPerFileSettingsSource,
+    ModelRegistry,
     SettingLookup,
     SettingsProvider,
     SettingsSource,
@@ -23,12 +25,14 @@ from wirio_settings.settings_manager import SettingsManager
 @final
 class _DictionarySettingsProvider(SettingsProvider):
     values: dict[str, str | None]
+    _model_registry: ModelRegistry | None
 
     def __new__(cls, _values: dict[str, str | None]) -> SettingsProvider:
         return super().__new__(cls)
 
     def __init__(self, values: dict[str, str | None]) -> None:
         self.values = values
+        self._model_registry = None
 
     def data(self) -> dict[str, str | None]:
         return self.values
@@ -46,6 +50,10 @@ class _DictionarySettingsProvider(SettingsProvider):
     @override
     def load(self) -> None:
         pass
+
+    @override
+    def set_model_registry(self, model_registry: ModelRegistry) -> None:
+        self._model_registry = model_registry
 
 
 @final
@@ -1222,3 +1230,198 @@ class TestSettingsManager:
 
         assert initial_value == expected_initial_value
         assert actual_value == expected_updated_value
+
+    async def test_update_root_model_when_provider_data_is_reloaded(
+        self, tmp_path: Path
+    ) -> None:
+        class Settings(BaseModel):
+            app_name: str
+            port: int
+
+        expected_updated_app_name = "wirio-2"
+        expected_updated_port = 9090
+        settings_file_path = tmp_path / "settings.yaml"
+        settings_file_path.write_text(
+            '{"app_name":"wirio-1","port":8080}', encoding="utf-8"
+        )
+        settings_manager = SettingsManager(
+            content_root_path=str(tmp_path), add_default_providers=False
+        )
+        settings_manager.add_yaml_file("settings.yaml", reload_on_change=True)
+        settings = settings_manager.get_model(Settings)
+
+        assert settings_manager._model_registry is not None
+        tracked_models = settings_manager._model_registry.models()
+        assert len(tracked_models) == 1
+        assert tracked_models[0].model_reference() is settings
+        assert tracked_models[0].section_path is None
+
+        assert settings.app_name == "wirio-1"
+        assert settings.port == 8080
+
+        settings_file_path.write_text(
+            f'{{"app_name":"{expected_updated_app_name}","port":{expected_updated_port}}}',
+            encoding="utf-8",
+        )
+        timeout_at = monotonic() + 5
+
+        while (
+            settings.app_name != expected_updated_app_name and monotonic() < timeout_at
+        ):
+            await asyncio.sleep(0.1)
+
+        assert settings.app_name == "wirio-2"
+        assert settings.port == expected_updated_port
+
+    async def test_update_section_models_when_provider_data_is_reloaded(
+        self, tmp_path: Path
+    ) -> None:
+        class DatabaseSettings(BaseModel):
+            url: str
+
+        class ServiceSettings(BaseModel):
+            port: int
+
+        expected_updated_database_url = "postgresql://localhost/wirio-2"
+        expected_updated_service_port = 9090
+        settings_file_path = tmp_path / "settings.yaml"
+        settings_file_path.write_text(
+            '{"database":{"url":"postgresql://localhost/wirio"},"service":{"api":{"port":8080}}}',
+            encoding="utf-8",
+        )
+        settings_manager = SettingsManager(
+            content_root_path=str(tmp_path), add_default_providers=False
+        )
+        settings_manager.add_yaml_file("settings.yaml", reload_on_change=True)
+        database_settings = settings_manager.get_section("database").get_model(
+            DatabaseSettings
+        )
+        service_settings = (
+            settings_manager.get_section("service")
+            .get_section("api")
+            .get_model(ServiceSettings)
+        )
+        assert settings_manager._model_registry is not None
+        tracked_models = settings_manager._model_registry.models()
+
+        assert len(tracked_models) == 2
+        assert tracked_models[0].model_reference() is database_settings
+        assert tracked_models[0].section_path == "database"
+        assert tracked_models[1].model_reference() is service_settings
+        assert tracked_models[1].section_path == "service.api"
+
+        settings_file_path.write_text(
+            f'{{"database":{{"url":"{expected_updated_database_url}"}},"service":{{"api":{{"port":{expected_updated_service_port}}}}}}}',
+            encoding="utf-8",
+        )
+        timeout_at = monotonic() + 5
+
+        while (
+            database_settings.url != expected_updated_database_url
+            and monotonic() < timeout_at
+        ):
+            await asyncio.sleep(0.1)
+
+        assert database_settings.url == expected_updated_database_url
+        assert service_settings.port == expected_updated_service_port
+
+    def test_keep_model_when_refreshed_values_are_invalid(self) -> None:
+        class Settings(BaseModel):
+            port: int
+
+        expected_port = 8080
+        values: dict[str, str | None] = {"port": "8080"}
+        settings_manager = SettingsManager(
+            content_root_path="", add_default_providers=False
+        )
+        settings_manager.add(_DictionarySettingsSource(values))
+        settings = settings_manager.get_model(Settings)
+
+        values["port"] = "invalid"
+        settings_manager._reload_models()
+
+        assert settings.port == expected_port
+
+    async def test_remove_unreferenced_models_when_provider_reloads_data(
+        self, tmp_path: Path
+    ) -> None:
+        class Settings(BaseModel):
+            port: int
+
+        expected_port = 8080
+        settings_file_path = tmp_path / "settings.yaml"
+        settings_file_path.write_text('{"port": 8080}', encoding="utf-8")
+        settings_manager = SettingsManager(
+            content_root_path="", add_default_providers=False
+        )
+        settings_manager.add_yaml_file(str(settings_file_path), reload_on_change=True)
+        settings = settings_manager.get_model(Settings)
+        assert settings.port == expected_port
+        del settings
+        gc.collect()
+
+        settings_file_path.write_text('{"port": 9090}', encoding="utf-8")
+        timeout_at = monotonic() + 5
+
+        assert settings_manager._model_registry is not None
+
+        while (
+            len(settings_manager._model_registry.models()) != 0
+            and monotonic() < timeout_at
+        ):
+            await asyncio.sleep(0.1)
+
+        assert len(settings_manager._model_registry.models()) == 0
+
+    def test_keep_models_alive_while_registry_snapshot_is_referenced(self) -> None:
+        class Settings(BaseModel):
+            port: int
+
+        settings_manager = SettingsManager(
+            content_root_path="", add_default_providers=False
+        )
+        settings_manager.add(_DictionarySettingsSource({"port": "8080"}))
+        settings = settings_manager.get_model(Settings)
+
+        assert settings_manager._model_registry is not None
+        tracked_models = settings_manager._model_registry.models()
+
+        del settings
+        gc.collect()
+
+        assert tracked_models[0].model_reference() is not None
+
+    def test_initialize_model_registry_when_getting_first_model(self) -> None:
+        class Settings(BaseModel):
+            port: int
+
+        settings_manager = SettingsManager(
+            content_root_path="", add_default_providers=False
+        )
+        settings_manager.add(_DictionarySettingsSource({"port": "8080"}))
+        provider = cast("_DictionarySettingsProvider", settings_manager.providers[0])
+
+        assert settings_manager._model_registry is None
+        assert provider._model_registry is None
+
+        settings_manager.get_model(Settings)
+
+        assert settings_manager._model_registry is not None
+        assert provider._model_registry is settings_manager._model_registry
+
+    def test_assign_model_registry_to_new_added_provider_after_getting_first_model(
+        self,
+    ) -> None:
+        class Settings(BaseModel):
+            port: int
+
+        settings_manager = SettingsManager(
+            content_root_path="", add_default_providers=False
+        )
+        settings_manager.add(_DictionarySettingsSource({"port": "8080"}))
+        settings_manager.get_model(Settings)
+        settings_manager.add(_DictionarySettingsSource({"host": "localhost"}))
+        provider = cast("_DictionarySettingsProvider", settings_manager.providers[1])
+
+        assert settings_manager._model_registry is not None
+        assert provider._model_registry is settings_manager._model_registry

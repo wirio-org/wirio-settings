@@ -1,3 +1,4 @@
+mod model_registry;
 mod path_provider;
 mod path_watcher;
 mod serde_parser;
@@ -8,6 +9,7 @@ mod settings_source;
 
 pub(crate) mod convention_changer;
 
+pub use model_registry::{ModelRegistry, RegisteredModel};
 pub(crate) use path_provider::PathProvider;
 pub(crate) use path_watcher::PathWatcher;
 pub(crate) use serde_parser::SerdeParser;

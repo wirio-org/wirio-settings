@@ -346,7 +346,15 @@ jobs:
     name: Release
     runs-on: ubuntu-24.04
     if: ${{ startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' }}
-    needs: [upload-test-coverage]
+    needs:
+      [
+        test-linux,
+        test-macos,
+        test-musllinux,
+        test-windows,
+        sdist,
+        upload-test-coverage,
+      ]
     environment: release
     permissions:
       # Use to sign the release artifacts

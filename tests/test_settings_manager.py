@@ -1425,3 +1425,51 @@ class TestSettingsManager:
 
         assert settings_manager._model_registry is not None
         assert provider._model_registry is settings_manager._model_registry
+
+    async def test_replace_pydantic_internal_state_when_reloading_models(
+        self, tmp_path: Path
+    ) -> None:
+        class Settings(BaseModel):
+            port: int
+
+        settings_file_path = tmp_path / "settings.yaml"
+        settings_file_path.write_text("port: 8080", encoding="utf-8")
+        settings_manager = SettingsManager(
+            content_root_path=None, add_default_providers=False
+        )
+        settings_manager.add_yaml_file(str(settings_file_path), reload_on_change=True)
+        settings = settings_manager.get_model(Settings)
+        original_model_id = id(settings)
+
+        assert hasattr(settings, "__dict__")
+        assert hasattr(settings, "__pydantic_fields_set__")
+        assert hasattr(settings, "__pydantic_extra__")
+        assert hasattr(settings, "__pydantic_private__")
+
+        initial_dict = settings.__dict__
+        initial_fields_set = settings.__pydantic_fields_set__
+        initial_extra = settings.__pydantic_extra__
+        initial_private = settings.__pydantic_private__
+
+        assert initial_dict == {"port": 8080}
+        assert initial_fields_set == {"port"}
+        assert initial_extra is None
+        assert initial_private is None
+
+        settings_file_path.write_text("port: 9090", encoding="utf-8")
+        timeout_at = monotonic() + 5
+
+        while settings.port != 9090 and monotonic() < timeout_at:
+            await asyncio.sleep(0.1)
+
+        assert id(settings) == original_model_id
+        assert settings.port == 9090
+        assert settings.model_dump() == {"port": 9090}
+        assert settings.__dict__ == {"port": 9090}
+        assert settings.__dict__ is not initial_dict
+        assert settings.__pydantic_fields_set__ == {"port"}
+        assert settings.__pydantic_fields_set__ is not initial_fields_set
+        assert settings.__pydantic_extra__ is None
+        assert settings.__pydantic_extra__ is initial_extra
+        assert settings.__pydantic_private__ is None
+        assert settings.__pydantic_private__ is initial_private

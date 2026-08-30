@@ -361,10 +361,13 @@ class SettingsManager(SettingsRoot):
                     settings = SettingsSection(self, registered_model.section_path)
 
                 updated_model = SettingsBinder.bind_model(settings, type(model))
-            except:  # noqa: E722, S112
+            except Exception:  # noqa: BLE001, S112
                 continue
 
             model.__dict__ = updated_model.__dict__
+            model.__pydantic_fields_set__ = updated_model.__pydantic_fields_set__
+            model.__pydantic_extra__ = updated_model.__pydantic_extra__
+            model.__pydantic_private__ = updated_model.__pydantic_private__
 
     def _get_model_registry(self) -> ModelRegistry:
         model_registry = self._model_registry

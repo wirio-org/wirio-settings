@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 env:
-  UV_VERSION: 0.12.5
+  UV_VERSION: 0.12.7
   MATURIN_VERSION: v1.14.1
 
 jobs:

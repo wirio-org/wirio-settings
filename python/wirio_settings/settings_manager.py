@@ -29,22 +29,30 @@ from wirio_settings.core.settings_section import SettingsSection
 @final
 class SettingsManager(SettingsRoot):
     _content_root_path: Final[str | None]
+    _environment_key: Final[str]
     _sources: Final[list[SettingsSource]]
     _providers: Final[list[SettingsProvider]]
     _model_registry: ModelRegistry | None
 
     def __init__(
-        self, content_root_path: str | None = None, add_default_providers: bool = True
+        self,
+        *,
+        content_root_path: str | None = None,
+        environment_key: str = "WIRIO_ENVIRONMENT",
+        add_default_providers: bool = True,
     ) -> None:
         """Initialize the settings manager.
 
         Args:
             content_root_path: Absolute path to the directory that contains the application content files.
                 If not provided, the content root path will be determined automatically based on the current working directory.
+            environment_key: Name of the environment variable that holds the current environment name.
+                If the environment variable is not set on the system, the environment name defaults to "local".
             add_default_providers: Whether to add the default settings providers.
 
         """
         self._content_root_path = content_root_path
+        self._environment_key = environment_key
         self._sources = []
         self._providers = []
         self._model_registry = None
@@ -78,7 +86,7 @@ class SettingsManager(SettingsRoot):
 
     def add_default_providers(self) -> Self:
         """Add default settings providers in the recommended order."""
-        environment_name = environ.get("WIRIO_ENVIRONMENT", "local")
+        environment_name = environ.get(self._environment_key, "local")
         return (
             self.add_yaml_file("settings.yaml", optional=True)
             .add_yaml_file(
@@ -94,7 +102,7 @@ class SettingsManager(SettingsRoot):
         return self
 
     def add_yaml_file(
-        self, path: str, optional: bool = False, reload_on_change: bool = False
+        self, path: str, *, optional: bool = False, reload_on_change: bool = False
     ) -> Self:
         """Add a settings provider that reads setting values from a YAML file."""
         self.add(
@@ -108,7 +116,7 @@ class SettingsManager(SettingsRoot):
         return self
 
     def add_json_file(
-        self, path: str, optional: bool = False, reload_on_change: bool = False
+        self, path: str, *, optional: bool = False, reload_on_change: bool = False
     ) -> Self:
         """Add a settings provider that reads setting values from a JSON file."""
         self.add(
@@ -124,6 +132,7 @@ class SettingsManager(SettingsRoot):
     def add_key_per_file(
         self,
         directory_path: str,
+        *,
         optional: bool = False,
         reload_on_change: bool = False,
     ) -> Self:
@@ -140,6 +149,7 @@ class SettingsManager(SettingsRoot):
     def add_azure_key_vault(
         self,
         url: str,
+        *,
         tenant_id: str | None = None,
         client_id: str | None = None,
         client_secret: str | None = None,
@@ -170,6 +180,7 @@ class SettingsManager(SettingsRoot):
         self,
         secret_id: str,
         region: str | None = None,
+        *,
         url: str | None = None,
         access_key_id: str | None = None,
         secret_access_key: str | None = None,
@@ -193,6 +204,7 @@ class SettingsManager(SettingsRoot):
     def add_gcp_secret_manager(
         self,
         project_id: str,
+        *,
         credentials_json: str | None = None,
     ) -> Self:
         """Add a settings provider that reads setting values from GCP Secret Manager."""

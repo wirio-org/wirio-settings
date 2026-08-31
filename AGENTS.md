@@ -99,6 +99,7 @@ return value or default
 - When mocks are needed, use `MockerFixture`.
 - `MockerFixture` should use the `create_autospec` method to create mocks, and the `instance=True` parameter should be passed to ensure the mock behaves like an instance of the class being mocked. `mocker.Mock()` should be avoided, as it creates a generic mock that doesn't enforce the interface of the mocked class. Use `MockerFixture` instead of `monkeypatch`.
 - When patching, don't hardcode the path. If you have to reference a module, use `__module__`, and if you have to reference a method, use `__name__`. For example, instead of `mocker.patch("HostEnvironment.inspect.currentframe")`, use `mocker.patch(f"{HostEnvironment.__module__}.{inspect.__name__}.{inspect.currentframe.__name__}")`. Also, when patching, use `autospec=True` to ensure the mock behaves like the original object.
+- When `mocker.patch.dict` is used, set `clear=True` to ensure that the dictionary is cleared, and therefore there're only the keys and values to test.
 
 ## Documentation
 

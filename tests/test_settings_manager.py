@@ -7,7 +7,7 @@ from time import monotonic, sleep
 from typing import cast, final, override
 
 import pytest
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 from pytest_mock import MockerFixture
 from wirio_settings._wirio_settings import (
     AwsSecretsManagerSettingsSource,
@@ -1473,3 +1473,23 @@ class TestSettingsManager:
         assert settings.__pydantic_extra__ is initial_extra
         assert settings.__pydantic_private__ is None
         assert settings.__pydantic_private__ is initial_private
+
+    def test_get_secret_str_values(self) -> None:
+        class Settings(BaseModel):
+            api_key: SecretStr
+
+        expected_api_key = "secret-api-key"
+        settings_manager = SettingsManager(add_default_providers=False)
+        settings_manager.add(_DictionarySettingsSource({"api_key": expected_api_key}))
+
+        settings_model = settings_manager.get_model(Settings)
+        assert isinstance(settings_model.api_key, SecretStr)
+        assert settings_model.api_key.get_secret_value() == expected_api_key
+
+        optional_value = settings_manager.get_value("api_key", SecretStr)
+        assert isinstance(optional_value, SecretStr)
+        assert optional_value.get_secret_value() == expected_api_key
+
+        required_value = settings_manager.get_required_value("api_key", SecretStr)
+        assert isinstance(required_value, SecretStr)
+        assert required_value.get_secret_value() == expected_api_key

@@ -45,7 +45,7 @@ dev = [
 ]
 
 [build-system]
-requires = ["maturin>=1.12,<2.0"]
+requires = ["maturin>=1.14.1,<2.0"]
 build-backend = "maturin"
 
 [tool.uv]

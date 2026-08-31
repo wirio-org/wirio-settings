@@ -189,6 +189,7 @@ sharedSetting: Integration YAML settings
                 "FROM_ENVIRONMENT": expected_from_environment_variables,
                 "SHARED_SETTING": shared_setting,
             },
+            clear=True,
         )
 
         settings_manager = SettingsManager(content_root_path=str(tmp_path))
@@ -206,3 +207,61 @@ sharedSetting: Integration YAML settings
             == expected_from_environment_variables
         )
         assert settings_manager.get_required_value("shared_setting") == shared_setting
+
+    def test_load_settings_using_custom_environment_key(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        environment_key = "CUSTOM_ENVIRONMENT"
+        expected_log_level = "DEBUG"
+        expected_environment_name = "custom"
+        mocker.patch.dict(
+            os.environ, {environment_key: expected_environment_name}, clear=True
+        )
+        tmp_path.joinpath(f"settings.{expected_environment_name}.yaml").write_text(
+            f"""
+log_level: {expected_log_level}
+""".strip()
+        )
+
+        settings_manager = SettingsManager(
+            content_root_path=str(tmp_path), environment_key=environment_key
+        )
+
+        assert settings_manager.get_required_value("log_level") == expected_log_level
+
+    def test_fall_back_to_local_environment_when_environment_key_is_not_set(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        environment_key = "CUSTOM_ENVIRONMENT"
+        expected_log_level = "DEBUG"
+        expected_environment_name = "local"
+        mocker.patch.dict(os.environ, clear=True)
+        tmp_path.joinpath(f"settings.{expected_environment_name}.yaml").write_text(
+            f"""
+log_level: {expected_log_level}
+""".strip()
+        )
+
+        settings_manager = SettingsManager(
+            content_root_path=str(tmp_path), environment_key=environment_key
+        )
+
+        assert settings_manager.get_required_value("log_level") == expected_log_level
+
+    def test_load_settings_using_default_environment_key_when_environment_key_is_not_set(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        expected_log_level = "DEBUG"
+        expected_environment_name = "development"
+        mocker.patch.dict(
+            os.environ, {"WIRIO_ENVIRONMENT": expected_environment_name}, clear=True
+        )
+        tmp_path.joinpath(f"settings.{expected_environment_name}.yaml").write_text(
+            f"""
+log_level: {expected_log_level}
+""".strip()
+        )
+
+        settings_manager = SettingsManager(content_root_path=str(tmp_path))
+
+        assert settings_manager.get_required_value("log_level") == expected_log_level

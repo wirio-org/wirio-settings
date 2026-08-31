@@ -39,6 +39,7 @@ Lightning-fast, strongly typed, and zero boilerplate settings library for Python
 - [Configuration](#configuration)
   - [Provider priority](#provider-priority)
   - [Naming convention](#naming-convention)
+  - [Environment key](#environment-key)
   - [Recommended usage](#recommended-usage)
 - [Reading settings](#reading-settings)
   - [Read one value](#read-one-value)
@@ -263,6 +264,18 @@ Considerations:
 ### Naming convention
 
 Each provider (environment variables, YAML, Azure Key Vault...) has its own naming convention for keys. `wirio-settings` uses snake case for settings keys. When loading from providers, keys are normalized to snake case. For example, the `APP_NAME` environment variable maps to `app_name`.
+
+### Environment key
+
+By default, `SettingsManager` reads `WIRIO_ENVIRONMENT` to determine the environment name. For example, `WIRIO_ENVIRONMENT=production` loads `settings.production.yaml`. If the variable is not set, the environment defaults to `local`. The environment-specific file is optional.
+
+To use an environment variable with a different name, pass `environment_key` when creating the `SettingsManager` instance:
+
+```python
+settings_manager = SettingsManager(environment_key="PYTHONAPP_ENVIRONMENT")
+```
+
+With `PYTHONAPP_ENVIRONMENT=production`, the default providers load `settings.production.yaml`.
 
 ### Recommended usage
 

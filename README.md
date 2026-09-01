@@ -404,7 +404,7 @@ logging_settings = settings_manager.get_section("logging").get_model(LoggingSett
 
 ## Recommended usage
 
-We have all pieces, but must have take into account that are several important connections that only have to be added when we're already deployed the application, and it's not only related to settings. When we're in local, we won't access secret stores, instrument libraries nor send telemetry to the cloud, and for that we must add a check.
+We have all the pieces, but we must consider that several important integrations should be added only after we deploy the application, not only settings-related integrations. In a local environment, we do not access secret stores, instrument libraries, or send telemetry to the cloud, so we must add a check.
 
 For example, if we use the `WIRIO_ENVIRONMENT` environment variable to detect the environment, we can add the secret store provider only when it's not `local`:
 

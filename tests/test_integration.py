@@ -15,10 +15,7 @@ class TestIntegration:
         expected_secret_1 = "secret-value-1"
         expected_secret_2 = "secret-value-2"
         expected_nested_secret = "Nested-value"
-        settings_manager = SettingsManager(
-            content_root_path="",
-            add_default_providers=False,
-        )
+        settings_manager = SettingsManager(add_default_providers=False)
 
         settings_manager.add_aws_secrets_manager(
             secret_id=secret_id,
@@ -39,10 +36,7 @@ class TestIntegration:
         expected_secret_1 = "secret-value-1"
         expected_secret_2 = "secret-value-2"
         expected_nested_secret = "Nested-value"
-        settings_manager = SettingsManager(
-            content_root_path="",
-            add_default_providers=False,
-        )
+        settings_manager = SettingsManager(add_default_providers=False)
 
         settings_manager.add_gcp_secret_manager(
             project_id=project_id,
@@ -63,10 +57,7 @@ class TestIntegration:
         expected_secret_1 = "secret-value-1"
         expected_secret_2 = "secret-value-2"
         expected_nested_secret = "Nested-value"
-        settings_manager = SettingsManager(
-            content_root_path="",
-            add_default_providers=False,
-        )
+        settings_manager = SettingsManager(add_default_providers=False)
 
         settings_manager.add_azure_key_vault(url=key_vault_url)
 
@@ -83,10 +74,7 @@ class TestIntegration:
     def test_load_settings_using_environment_variables(self) -> None:
         expected_feature_flag = "true"
         expected_nested_value = "nested-value"
-        settings_manager = SettingsManager(
-            content_root_path="",
-            add_default_providers=False,
-        )
+        settings_manager = SettingsManager(add_default_providers=False)
 
         settings_manager.add_environment_variables()
 
@@ -106,10 +94,7 @@ class TestIntegration:
         tmp_path.joinpath("app_name").write_text(expected_app_name)
         tmp_path.joinpath("logging__log_level__default").write_text(expected_log_level)
         tmp_path.joinpath("database_password").write_text(f"{expected_password}\n")
-        settings_manager = SettingsManager(
-            content_root_path="",
-            add_default_providers=False,
-        )
+        settings_manager = SettingsManager(add_default_providers=False)
 
         settings_manager.add_key_per_file(directory_path=str(tmp_path))
 
@@ -137,10 +122,7 @@ logging:
     default: warning
 """.strip()
         )
-        settings_manager = SettingsManager(
-            content_root_path="",
-            add_default_providers=False,
-        )
+        settings_manager = SettingsManager(add_default_providers=False)
 
         settings_manager.add_yaml_file(path=str(settings_file_path))
 

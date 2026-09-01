@@ -10,25 +10,45 @@
 
 ## Overview
 
-Lightning-fast, strongly typed, and zero boilerplate settings library for Python:
+Every Python application — whether it's a simple API, notebook or multi-agent pipeline — needs the same thing under the hood: settings. Model names, URLs, database passwords, timeouts, feature flags. In any real app you have to work with settings — the question is why `wirio-settings`.
+
+Here's why: your application settings, one line, done right. No more scattered `os.environ` calls, no more silent typos in environment variable names, no more manual `.env` parsing — just a typed Pydantic model, loaded from wherever your settings actually live and always up to date.
 
 - **Great defaults from day one:** It automatically looks for settings files and environment variables, with recommended configurations and one line of code.
 - **Rust-powered core:** Built with Rust under the hood for speed, reliability, and low runtime overhead.
 - **Secret stores:** Azure Key Vault, AWS Secrets Manager and GCP Secret Manager integrations are available with one line of code, with safe authentication.
+- **Automatic reloads:** Keep settings up to date by automatically reloading them, with no need to restart the application or deploy a new version.
 - **Pydantic models:** Load your application settings directly into models.
-- **Automatic reloads:** Keep settings up to date by automatically reloading them.
 - **A practical replacement:** Replace `pydantic-settings` and `python-dotenv` with one unified settings library.
-- **Roadmap:** Planned capabilities include pluggable configuration stores, feature flags, lifetimes, prefixes, filters, custom delimiters and aliases.
+- **Roadmap:** Planned capabilities include pluggable configuration stores, feature flags, prefixes, filters, custom delimiters and aliases.
 
 ## Table of contents
 
 - [Overview](#overview)
 - [Table of contents](#table-of-contents)
 - [📦 Installation](#-installation)
-- [✨ Quickstart with fixed strings](#-quickstart-with-fixed-strings)
-- [✨ Quickstart with Pydantic models](#-quickstart-with-pydantic-models)
-- [✨ Quickstart with Pydantic models and Azure Key Vault](#-quickstart-with-pydantic-models-and-azure-key-vault)
-- [All providers](#all-providers)
+- [🚀 Get started](#-get-started)
+  - [1. Introduction](#1-introduction)
+  - [2. Read settings](#2-read-settings)
+  - [3. Bind the settings to a Pydantic model](#3-bind-the-settings-to-a-pydantic-model)
+  - [4. Add environment-specific settings](#4-add-environment-specific-settings)
+  - [5. Read the secrets securely](#5-read-the-secrets-securely)
+  - [6. Summary](#6-summary)
+- [Core concepts](#core-concepts)
+  - [Providers and priority](#providers-and-priority)
+  - [Default providers](#default-providers)
+  - [Environments](#environments)
+  - [Key naming and nesting](#key-naming-and-nesting)
+  - [Content root](#content-root)
+- [Reading settings](#reading-settings)
+  - [Read one value](#read-one-value)
+  - [Typed values](#typed-values)
+  - [Pydantic models](#pydantic-models)
+  - [Nested models](#nested-models)
+  - [Lists and dictionaries](#lists-and-dictionaries)
+  - [Sections](#sections)
+- [Recommended usage](#recommended-usage)
+- [Providers](#providers)
   - [YAML file](#yaml-file)
   - [JSON file](#json-file)
   - [Environment variables](#environment-variables)
@@ -36,18 +56,13 @@ Lightning-fast, strongly typed, and zero boilerplate settings library for Python
   - [AWS Secrets Manager](#aws-secrets-manager)
   - [GCP Secret Manager](#gcp-secret-manager)
   - [Key-per-file directory](#key-per-file-directory)
-- [Configuration](#configuration)
-  - [Provider priority](#provider-priority)
-  - [Naming convention](#naming-convention)
-  - [Environment key](#environment-key)
-  - [Recommended usage](#recommended-usage)
-- [Reading settings](#reading-settings)
-  - [Read one value](#read-one-value)
-  - [Defaults and required fields](#defaults-and-required-fields)
-  - [Sections](#sections)
-  - [Nested keys](#nested-keys)
+- [Automatic reloads](#automatic-reloads)
+  - [Reload on file change](#reload-on-file-change)
+  - [Reload on an interval](#reload-on-an-interval)
   - [Pydantic model reloads](#pydantic-model-reloads)
+- [Troubleshooting](#troubleshooting)
   - [Debug settings](#debug-settings)
+  - [Common errors](#common-errors)
 
 ## 📦 Installation
 
@@ -55,17 +70,58 @@ Lightning-fast, strongly typed, and zero boilerplate settings library for Python
 uv add wirio-settings
 ```
 
-## ✨ Quickstart with fixed strings
+## 🚀 Get started
+
+In this mini-tutorial, we configure a small application step by step. Each step builds on the previous one, and the final result is a fully typed settings model that works in local and in production.
+
+### 1. Introduction
+
+We'll use `SettingsManager`, which by default reads:
+
+- Environment variables.
+- The `settings.local.yaml` file when it exists, that we'll use for local development.
+
+YAML is a modern alternative to `.env` files that supports typed values and structured settings.
+
+The file name is standardized by well-known frameworks and tools such as Claude Code and GitHub Copilot, enabling environment-specific configuration. As we will see later, `local` is the environment we use when developing on our machines.
+
+### 2. Read settings
+
+Create a `settings.local.yaml` file in your working directory (it's usually the root of the repository) with the following contents:
+
+```yaml
+openai_api_key: secretkey
+openai_model: gpt-5
+timeout_seconds: 30
+postgresql_connection_string: postgresql+asyncpg://user:password@localhost/db
+```
+
+> [!WARNING]
+> Never commit secrets to version control. This file is for local development only, and it should be ignored in `.gitignore`.
+
+And read the settings using `SettingsManager`:
 
 ```python
 from wirio_settings import SettingsManager
 
 
 settings_manager = SettingsManager()
-database_password = settings_manager.get_required_value("database_password")
+
+openai_api_key = settings_manager.get_required_value("openai_api_key")
 ```
 
-## ✨ Quickstart with Pydantic models
+Values are returned as strings unless we pass a type as the second argument, which validates and converts the value.
+
+We also can load optional settings with `get_value`, which returns `None` when the is missing.
+
+Take into account that, independently of the origin of the setting, it'll always be converted to snake_case because it's the Python convention. For example, the environment variable `POSTGRESQL_CONNECTION_STRING` maps to the key `postgresql_connection_string`.
+
+> [!NOTE]
+> If you're comfortable with this simplified approach, or you're prototyping (for example from a Jupyter notebook), you can stop here. The rest of the tutorial is about production-ready practices.
+
+### 3. Bind the settings to a Pydantic model
+
+Reading key by key is fine for a couple of values. For an application, we usually want one validated object instead of using Magic Strings anti-pattern:
 
 ```python
 from pydantic import BaseModel
@@ -73,21 +129,58 @@ from wirio_settings import SettingsManager
 
 
 class ApplicationSettings(BaseModel):
-    database_password: str
+    openai_api_key: str
+    openai_model: str
+    timeout_seconds: int
+    postgresql_connection_string: str
 
 
 application_settings = SettingsManager().get_model(ApplicationSettings)
 ```
 
-## ✨ Quickstart with Pydantic models and Azure Key Vault
+We'll use typed and Pydantic capabilities to express optional values, defaults and nested models.
+
+### 4. Add environment-specific settings
+
+As explained in [Default providers](#default-providers), `SettingsManager` loads `settings.yaml`, `settings.{environment}.yaml`, and environment variables. If the files are missing, they are skipped.
+
+We use different settings per environment. For example, we may want to use a different database connection string, URL or API key in production.
+
+So, we just create a settings file for each environment we want to support. For example:
+
+- `settings.local.yaml` for local development.
+- `settings.staging.yaml` for staging.
+- `settings.production.yaml` for production.
+
+The environment will be detected (details in [Environments](#environments)) and the proper file will be loaded automatically.
+
+Talking about `settings.yaml` file, it's used for shared settings that are common to all environments. For example, we may want to use the same OpenAI model in all environments.
+
+Now our settings are tracked in version control, and we can have different values for each environment without changing the application code or giving developers excessive cloud permissions just to change a setting.
+
+> [!WARNING]
+> Never commit secrets to version control. The settings files should contain only non-sensitive values. To load secrets when we deploy (when we're not developing in local), we will use a secret store (e.g. Azure Key Vault or AWS Secrets Manager) or a different mechanism, as explained in the next section.
+
+### 5. Read the secrets securely
+
+When we're not developing in local, we want to read secrets from a secure location instead of exposing them in a file.
+
+Choose the provider that matches how the application receives its secrets:
+
+- [Azure Key Vault](#azure-key-vault) for Azure workloads.
+- [AWS Secrets Manager](#aws-secrets-manager) for AWS workloads.
+- [GCP Secret Manager](#gcp-secret-manager) for Google Cloud workloads.
+- [Key-per-file directories](#key-per-file-directory) when the runtime mounts secrets as files, such as Docker or Kubernetes secret volumes.
+- [Environment variables](#environment-variables) when the deployment platform injects secret values, often through a cloud secret store link or using Kubernetes External Secrets Operator. The application reads the injected value; the platform is responsible for resolving the secret store reference.
+
+For example, we can read the secrets from Azure Key Vault:
 
 ```python
-from pydantic import BaseModel
-from wirio_settings import SettingsManager
-
-
 class ApplicationSettings(BaseModel):
-    database_password: str
+    openai_api_key: str
+    openai_model: str
+    timeout_seconds: int
+    postgresql_connection_string: str
 
 
 application_settings = (
@@ -97,15 +190,271 @@ application_settings = (
 )
 ```
 
-## All providers
+Realize that Azure Key Vault only can store PascalCase or kebab-case secrets, but as they are normalized to snake_case, they're mapped to the Pydantic model fields without any extra code.
+
+> [!NOTE]
+> We only need to add the secret store provider when we're not developing in local, so we usually add an `if` statement to check the environment and then adding the provider.
+
+### 6. Summary
+
+We have a single `ApplicationSettings` model that works in local and in production, with no extra code. The settings are loaded from the right provider depending on the environment, and we can add more providers if needed.
+
+For a complete recommended usage, see [Recommended usage](#recommended-usage).
+
+## Core concepts
+
+### Providers and priority
+
+A provider is a source of settings, such as a YAML file, the environment variables, or a secret store. `wirio-settings` supports multiple providers at the same time, and it merges them into a single flat set of keys.
+
+When the same key exists in several providers, **the last added provider wins**:
+
+```python
+settings_manager = SettingsManager()  # Adds the default providers
+settings_manager.add_azure_key_vault(  # Overrides the defaults
+    "https://example.vault.azure.net/"
+)
+```
+
+### Default providers
+
+`SettingsManager` adds the following providers, in this order:
+
+1. `settings.yaml`
+2. `settings.{environment}.yaml`
+3. Environment variables
+
+Considerations:
+
+- The files are optional. If a file is not found, it's skipped.
+- The environment variables have a higher priority than the files, because their provider is added last.
+- Any provider we add afterwards has a higher priority than all the defaults.
+
+To start from an empty settings manager, disable the defaults:
+
+```python
+settings_manager = SettingsManager(add_default_providers=False)
+```
+
+We can also add the defaults later with `add_default_providers()`, for example to place them above a provider we added first.
+
+### Environments
+
+By default, `SettingsManager` reads the `WIRIO_ENVIRONMENT` environment variable to determine the environment name, and it defaults to `local` when the variable is not set. For example, `WIRIO_ENVIRONMENT=production` loads `settings.production.yaml`, which is optional.
+
+To use an environment variable with a different name, pass `environment_key`:
+
+```python
+settings_manager = SettingsManager(environment_key="PYTHONAPP_ENVIRONMENT")
+```
+
+With `PYTHONAPP_ENVIRONMENT=production`, the default providers load `settings.production.yaml`.
+
+### Key naming and nesting
+
+Every provider has its own naming convention, and not every store allows the same characters in a key. `wirio-settings` normalizes all of them into the same shape:
+
+- Keys are converted to snake case. `APP_NAME`, `appName`, `AppName`, and `app-name` all map to `app_name`.
+- Sections are separated with `.`, as in `database.host` or `logging.log_level.default`.
+- Each provider declares how sections are written in its own store. For example:
+
+  | Provider                            | Section separator | Example               | Setting key     |
+  | ----------------------------------- | ----------------- | --------------------- | --------------- |
+  | YAML file, JSON file                | Nested objects    | `database: {host: …}` | `database.host` |
+  | Environment variables               | `__`              | `DATABASE__HOST`      | `database.host` |
+  | Azure Key Vault, GCP Secret Manager | `--`              | `Database--Host`      | `database.host` |
+  | AWS Secrets Manager                 | Nested JSON       | `{"database": {…}}`   | `database.host` |
+  | Key-per-file directory              | None              | `database.host` file  | `database.host` |
+
+Sequences are flattened with their index, so the first item of the `servers` list is `servers.0`.
+
+### Content root
+
+Relative file paths are resolved against the content root, which is the current working directory by default. To resolve them against another directory, pass an absolute `content_root_path`:
+
+```python
+settings_manager = SettingsManager(content_root_path="/opt/orders-api")
+```
+
+## Reading settings
+
+### Read one value
+
+Use `get_required_value` when the key must exist. It raises a `KeyError` when the key is missing:
+
+```python
+openai_api_key = settings_manager.get_required_value("openai_api_key")
+```
+
+Use `get_value` for optional keys. It returns `None` when the key is missing:
+
+```python
+openai_api_key = settings_manager.get_value("openai_api_key")
+```
+
+### Typed values
+
+By default, the settings system returns values as strings. To validate and convert to another type, pass the type as a second argument:
+
+```python
+maximum_retries = settings_manager.get_required_value("maximum_retries", int)
+enable_cache = settings_manager.get_value("enable_cache", bool)
+```
+
+The conversion is done internally by Pydantic, so an invalid value raises a validation error. Lists and dictionaries are read from several keys, so they are best read through a [model](#lists-and-dictionaries) instead of a single value.
+
+### Pydantic models
+
+`get_model` builds a model from the settings, mapping each field name to a setting key:
+
+```python
+from pydantic import BaseModel
+from wirio_settings import SettingsManager
+
+
+class ApplicationSettings(BaseModel):
+    app_name: str
+    port: int | None = None
+
+
+application_settings = SettingsManager().get_model(ApplicationSettings)
+```
+
+- If a field has a default, that default is used when no value is found. Here, `port` defaults to `None` when missing.
+- If a required field is missing, `get_model` raises a `KeyError`.
+
+### Nested models
+
+A field annotated with another model is bound to the section with the same name:
+
+```yaml
+database:
+  host: localhost
+  port: 5432
+```
+
+```python
+class DatabaseSettings(BaseModel):
+    host: str
+    port: int
+
+
+class ApplicationSettings(BaseModel):
+    database: DatabaseSettings
+```
+
+### Lists and dictionaries
+
+Lists are read from indexed keys, and dictionaries are read from the children of a section. Both work with scalars and with models:
+
+```yaml
+ports:
+  - 8080
+  - 8081
+
+servers:
+  - name: api
+    retries: 3
+  - name: worker
+
+services:
+  api:
+    url: https://api.example.com
+  worker:
+    url: https://worker.example.com
+```
+
+```python
+class Server(BaseModel):
+    name: str
+    retries: int = 3
+
+
+class Service(BaseModel):
+    url: str
+
+
+class ApplicationSettings(BaseModel):
+    ports: list[int]
+    servers: list[Server]
+    services: dict[str, Service]
+```
+
+### Sections
+
+Use `get_section` to read a group of settings that share a prefix. For example, we can read the next YAML:
+
+```yaml
+logging:
+  log_level: WARNING
+```
+
+```python
+logging_section = settings_manager.get_section("logging")
+log_level = logging_section.get_required_value("log_level")
+```
+
+A section behaves like the settings manager itself, so it supports getting values, subsections and Pydantic models.
+
+```python
+logging_settings = settings_manager.get_section("logging").get_model(LoggingSettings)
+```
+
+`get_section` raises a `KeyError` when the key is not a section.
+
+## Recommended usage
+
+We have all pieces, but must have take into account that are several important connections that only have to be added when we're already deployed the application, and it's not only related to settings. When we're in local, we won't access secret stores, instrument libraries nor send telemetry to the cloud, and for that we must add a check.
+
+For example, if we use the `WIRIO_ENVIRONMENT` environment variable to detect the environment, we can add the secret store provider only when it's not `local`:
+
+```python
+from os
+
+from fastapi import FastAPI
+from wirio_settings import SettingsManager
+
+
+settings_manager = SettingsManager()
+
+if os.getenv("WIRIO_ENVIRONMENT", "local") != "local":
+    settings_manager.add_azure_key_vault(settings_manager.get_required_value("key_vault_url"))
+
+    # Add telemetry, etc.
+
+application_settings = settings_manager.get_model(ApplicationSettings)
+app = FastAPI()
+```
+
+`wirio-settings` uses by default the `WIRIO_ENVIRONMENT` environment variable to detect the environment, but we can use a different environment variable with `environment_key`:
+
+```python
+from os
+
+from fastapi import FastAPI
+from wirio_settings import SettingsManager
+
+
+settings_manager = SettingsManager(environment_key="PYTHONAPP_ENVIRONMENT")
+
+if os.getenv("PYTHONAPP_ENVIRONMENT", "local") != "local":
+    settings_manager.add_azure_key_vault(settings_manager.get_required_value("key_vault_url"))
+
+    # Add telemetry, etc.
+
+application_settings = settings_manager.get_model(ApplicationSettings)
+app = FastAPI()
+```
+
+## Providers
 
 ### YAML file
 
 ```python
-settings_manager.add_yaml_file("file.yaml")
+settings_manager.add_yaml_file("settings.yaml")
 ```
 
-Comments are supported in YAML files.
+Comments are supported in YAML files. The filename may be a relative path, such as `../settings.yaml`, which is resolved against the [content root](#content-root). Absolute paths are used as they are.
 
 Options:
 
@@ -115,10 +464,10 @@ Options:
 ### JSON file
 
 ```python
-settings_manager.add_json_file("file.json")
+settings_manager.add_json_file("settings.json")
 ```
 
-Comments are not supported in JSON files.
+Comments are not supported in JSON files. The filename may be a relative path, such as `../settings.json`, which is resolved against the [content root](#content-root). Absolute paths are used as they are.
 
 Options:
 
@@ -131,6 +480,8 @@ Options:
 settings_manager.add_environment_variables()
 ```
 
+Keys are normalized to snake case, and `__` is replaced with `.`. For example, `DATABASE__HOST` maps to `database.host`.
+
 ### Azure Key Vault
 
 ```python
@@ -138,6 +489,8 @@ settings_manager.add_azure_key_vault(
     "https://example.vault.azure.net",
 )
 ```
+
+Secret names use `--` for sections, so `Database--Host` maps to `database.host`.
 
 If no explicit credentials are provided, `DefaultAzureCredential` is used.
 
@@ -148,7 +501,7 @@ If no explicit credentials are provided, `DefaultAzureCredential` is used.
 3. Developer tools credential (Azure CLI / Azure Developer CLI)
 4. Managed identity credential. This is the System-assigned managed identity by default. If we want to use a User-assigned managed identity, set the `AZURE_CLIENT_ID` environment variable.
 
-If you want to use explicit service principal credentials, provide all three values:
+To use explicit service principal credentials, provide all three values:
 
 ```python
 settings_manager.add_azure_key_vault(
@@ -164,17 +517,7 @@ When using explicit credentials, `tenant_id`, `client_id`, and `client_secret` m
 > [!NOTE]
 > **Azure permissions:** Usually, the `Key Vault Secrets User` role is used to read secrets.
 
-To periodically refresh the loaded secrets, use the `reload_interval` parameter. The provider waits that long between refresh attempts and keeps the last successfully loaded settings if a refresh fails.
-
-```python
-from datetime import timedelta
-
-
-settings_manager.add_azure_key_vault(
-    "https://example.vault.azure.net",
-    reload_interval=timedelta(minutes=5),
-)
-```
+To periodically refresh the loaded secrets, use the `reload_interval` parameter, described in [Reload on an interval](#reload-on-an-interval).
 
 ### AWS Secrets Manager
 
@@ -198,11 +541,20 @@ settings_manager.add_aws_secrets_manager(
 )
 ```
 
+Options:
+
+- `region` selects the AWS region.
+- `profile` selects a shared configuration profile.
+- `session_token` is used together with temporary credentials.
+- `url` overrides the service endpoint, which is useful when testing against a local emulator.
+
 ### GCP Secret Manager
 
 ```python
 settings_manager.add_gcp_secret_manager("project-id")
 ```
+
+Secret names use `--` for sections, so `Database--Host` maps to `database.host`.
 
 If no credentials are provided, [Application Default Credentials (ADC)](https://docs.cloud.google.com/docs/authentication/application-default-credentials) are used.
 We can also pass custom GCP credentials with the `credentials_json` parameter.
@@ -210,10 +562,10 @@ We can also pass custom GCP credentials with the `credentials_json` parameter.
 ### Key-per-file directory
 
 ```python
-settings_manager.add_key_per_file("secrets")
+settings_manager.add_key_per_file("/run/secrets")
 ```
 
-Given a directory, each file name becomes a setting key and the file content becomes the setting value.
+Given a directory, each file name becomes a setting key and the file content becomes the setting value. The directory path must be absolute, because it is not resolved against the [content root](#content-root).
 
 Options:
 
@@ -224,158 +576,51 @@ This provider is useful when secrets are mounted as files by the runtime instead
 
 Common use cases:
 
-- Kubernetes with [Secrets Store CSI Driver](https://secrets-store-csi-driver.sigs.k8s.io/) where providers such as Azure Key Vault mount each secret as a file.
-- Docker/Kubernetes secret mounts (for example, `/run/secrets`).
+- Kubernetes with [Secrets Store CSI Driver](https://secrets-store-csi-driver.sigs.k8s.io/) where providers such as Azure Key Vault mount each secret as a file into a volume.
+- Docker secret mounts (for example, `/run/secrets`).
 - Platform-managed secret volumes in production environments where file-based delivery is preferred.
 
 Example directory:
 
 ```
-secrets/
+/run/secrets/
     database_password
     openai_api_key
 ```
 
-Then values are available as `database_password` and `openai_api_key`.
+Then the values are available as `database_password` and `openai_api_key`.
 
-## Configuration
+This provider does not translate any separator, so the file name is used as the setting key. To read a nested key, include the `.` in the file name, as in `database.host`.
 
-### Provider priority
+## Automatic reloads
 
-`wirio-settings` supports multiple providers. When the same key exists in multiple providers, the last added providers have more priority.
+Long-running applications, such as web servers or background jobs, can keep their settings up to date without restarting or redeploying.
 
-The following providers are loaded, by default, in this order:
+### Reload on file change
 
-1. `settings.yaml`
-2. `settings.{environment}.yaml`.
-3. Environment variables
-
-Considerations:
-
-- Files are optional. If a file is not found, it's skipped.
-- `{environment}` is the value of the `WIRIO_ENVIRONMENT` environment variable. If the variable is not set, its value is `local`. This would load, for example, `settings.production.yaml` if `WIRIO_ENVIRONMENT=production`. It standardizes the environment detection and allows us to store all settings in code, with version control.
-- In the default settings, environment variables have higher priority than YAML files because the provider is added after them. This means that if a key exists in both `settings.yaml` and environment variables, the value from environment variables will be used.
-- If we add more providers, those will have higher priority than the defaults. For example, if we add Azure Key Vault as a provider, it will override the defaults.
-
-  ```python
-  SettingsManager().add_azure_key_vault("https://example.vault.azure.net/")
-  ```
-
-### Naming convention
-
-Each provider (environment variables, YAML, Azure Key Vault...) has its own naming convention for keys. `wirio-settings` uses snake case for settings keys. When loading from providers, keys are normalized to snake case. For example, the `APP_NAME` environment variable maps to `app_name`.
-
-### Environment key
-
-By default, `SettingsManager` reads `WIRIO_ENVIRONMENT` to determine the environment name. For example, `WIRIO_ENVIRONMENT=production` loads `settings.production.yaml`. If the variable is not set, the environment defaults to `local`. The environment-specific file is optional.
-
-To use an environment variable with a different name, pass `environment_key` when creating the `SettingsManager` instance:
+The file and directory providers watch their source when `reload_on_change=True`:
 
 ```python
-settings_manager = SettingsManager(environment_key="PYTHONAPP_ENVIRONMENT")
+settings_manager.add_yaml_file("settings.yaml", reload_on_change=True)
 ```
 
-With `PYTHONAPP_ENVIRONMENT=production`, the default providers load `settings.production.yaml`.
+### Reload on an interval
 
-### Recommended usage
-
-It depends on your usage, but the recommended setup is having the following files:
-
-- `settings.yaml` with the shared settings.
-- `settings.{environment}.yaml` with the environment-specific settings. For example, `settings.production.yaml`, `settings.staging.yaml`, `settings.local.yaml`, etc.
-
-Then, we declare the settings manager, loading the default providers:
+Azure Key Vault refreshes its secrets in the background when `reload_interval` is set. The provider waits that long between refresh attempts, and it keeps the last successfully loaded settings if a refresh fails:
 
 ```python
-settings_manager = SettingsManager()
-```
+from datetime import timedelta
 
-Now, `settings_manager` has settings loaded.
 
-Let's say our API is deployed in production, so we have read the `key_vault_url` setting from `settings.production.yaml`. We can now add Azure Key Vault as a provider and read the rest of the settings from there:
-
-```python
 settings_manager.add_azure_key_vault(
-    settings_manager.get_required_value("key_vault_url")
+    "https://example.vault.azure.net",
+    reload_interval=timedelta(minutes=5),
 )
 ```
 
-After that, we have all settings to construct our Pydantic model:
-
-```python
-application_settings = settings_manager.get_model(ApplicationSettings)
-```
-
-## Reading settings
-
-### Read one value
-
-- Use `get_required_value` when the key must exist.
-
-```python
-openai_api_key = settings_manager.get_required_value("openai_api_key")
-```
-
-By default, the settings system returns values as strings. To validate and convert to another type, pass the type as a second argument.
-
-```python
-timeout_seconds = settings_manager.get_required_value("maximum_retries", int)
-```
-
-- Use `get_value` for optional keys.
-
-```python
-openai_api_key = settings_manager.get_value("openai_api_key")
-timeout_seconds = settings_manager.get_value("maximum_retries", int)
-```
-
-### Defaults and required fields
-
-If a model field has a default, that default is used when no value is found.
-
-```python
-from pydantic import BaseModel
-
-
-class ApplicationSettings(BaseModel):
-    app_name: str
-    port: int | None = None
-```
-
-Here, `port` defaults to `None` when missing.
-If a required field is missing, `get_model` raises `KeyError`.
-
-### Sections
-
-Use `get_section` to read a section. For example, we can read the next YAML:
-
-```yaml
-logging:
-  log_level: WARNING
-```
-
-```python
-log_level = settings_manager.get_section("logging").get_required_value("log_level")
-```
-
-`SettingsSection` supports:
-
-- The section value itself with `section.get_required_value()` or `section.get_required_value(type)`.
-- A child value with `section.get_required_value("child.key")` or `section.get_required_value("child.key", type)`.
-
-If a section has only children and no value at its own path, `section.get_value()` returns `None`.
-
-### Nested keys
-
-Nested keys use `.`:
-
-- `database.host`
-- `database.port`
-- `logging.log_level.default`
-
 ### Pydantic model reloads
 
-Models returned by `get_model()` are automatically updated when a configured provider reloads its values. This is useful for long-running applications such as web servers or background jobs that need to keep their settings up to date without restarting or redeploying.
+Models returned by `get_model()` are automatically updated when a provider reloads its values, so there is no need to call `get_model()` again:
 
 ```python
 from pydantic import BaseModel
@@ -393,7 +638,9 @@ application_settings = (
 )
 ```
 
-When `settings.yaml` changes its contents, `application_settings.port` is updated without calling `get_model()` again. If the refreshed values do not validate against the model, the existing model values are retained.
+When `settings.yaml` changes its contents, `application_settings.port` is updated in place. If the refreshed values do not validate against the model, the existing model values are retained.
+
+## Troubleshooting
 
 ### Debug settings
 
@@ -402,3 +649,12 @@ Use `debug_repr()` to inspect settings and their providers. When several provide
 ```python
 print(settings_manager.debug_repr())
 ```
+
+### Common errors
+
+| Error                                           | Cause                                                                                      |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `KeyError: Missing setting value for key '…'`   | No provider contains the key. Check the spelling, the section separator, and the priority. |
+| `ValueError: Setting value for key '…' is None` | The key exists, but it has no value. For example, a YAML key declared without a value.     |
+| `KeyError: Setting key '…' is not a section`    | `get_section` was called with a key that has no children.                                  |
+| A validation error from Pydantic                | The value exists but it cannot be converted to the requested type.                         |

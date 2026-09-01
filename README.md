@@ -423,7 +423,7 @@ Now, we have all the pieces in place, but some of the integrations should only b
 
 This might sound like an extra layer of complexity, but it's what we must do independently of the settings library we use.
 
-For example, if we use the `WIRIO_ENVIRONMENT` environment variable to detect the current environment, we can add a secret volume on this way:
+For example, if we use the `WIRIO_ENVIRONMENT` environment variable to detect the current environment, we can add a secret volume in this way:
 
 ```python
 from os
@@ -434,7 +434,7 @@ from wirio_settings import SettingsManager
 
 settings_manager = SettingsManager()
 
-if settings_manager.get_value("wirio_environment") != "local":
+if os.getenv("WIRIO_ENVIRONMENT", "local") != "local":
     settings_manager.add_key_per_file("/run/secrets")
 
     # Enable telemetry, etc.

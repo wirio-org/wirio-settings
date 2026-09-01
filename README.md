@@ -10,15 +10,15 @@
 
 ## Overview
 
-Every Python application — whether it's a simple API, notebook or multi-agent pipeline — needs the same thing under the hood: settings. Model names, URLs, database passwords, timeouts, feature flags. In any real app you have to work with settings — the question is why `wirio-settings`.
+Every Python application — whether it's a simple API, notebook or multi-agent pipeline — needs the same thing under the hood: settings. Model names, URLs, database passwords, timeouts, feature flags. In any real app we have to work with settings — the question is why `wirio-settings`.
 
-Here's why: your application settings, one line, done right. No more scattered `os.environ` calls, no more silent typos in environment variable names, no more manual `.env` parsing — just a typed Pydantic model, loaded from wherever your settings actually live and always up to date.
+Here's why: our application settings, one line, done right. No more scattered `os.environ` calls, no more silent typos in environment variable names, no more manual `.env` parsing — just a typed Pydantic model, loaded from wherever our settings actually live and always up to date.
 
 - **Great defaults from day one:** It automatically looks for settings files and environment variables, with recommended configurations and one line of code.
 - **Rust-powered core:** Built with Rust under the hood for speed, reliability, and low runtime overhead.
 - **Secret stores:** Azure Key Vault, AWS Secrets Manager and GCP Secret Manager integrations are available with one line of code, with safe authentication.
 - **Automatic reloads:** Keep settings up to date by automatically reloading them, with no need to restart the application or deploy a new version.
-- **Pydantic models:** Load your application settings directly into models.
+- **Pydantic models:** Load application settings directly into models.
 - **A practical replacement:** Replace `pydantic-settings` and `python-dotenv` with one unified settings library.
 - **Roadmap:** Planned capabilities include pluggable configuration stores, feature flags, prefixes, filters, custom delimiters and aliases.
 
@@ -87,7 +87,7 @@ The file name is standardized by well-known frameworks and tools such as Claude 
 
 ### 2. Read settings
 
-Create a `settings.local.yaml` file in your working directory (it's usually the root of the repository) with the following contents:
+We create a `settings.local.yaml` file in our working directory (it's usually the root of the repository) with the following contents:
 
 ```yaml
 openai_api_key: secretkey
@@ -117,7 +117,7 @@ We also can load optional settings with `get_value`, which returns `None` when t
 Take into account that, independently of the origin of the setting, it'll always be converted to snake_case because it's the Python convention. For example, the environment variable `POSTGRESQL_CONNECTION_STRING` maps to the key `postgresql_connection_string`.
 
 > [!NOTE]
-> If you're comfortable with this simplified approach, or you're prototyping (for example from a Jupyter notebook), you can stop here. The rest of the tutorial is about production-ready practices.
+> If we're comfortable with this simplified approach, or we're prototyping (for example from a Jupyter notebook), we can stop here. The rest of the mini-tutorial is about production-ready practices.
 
 ### 3. Bind the settings to a Pydantic model
 

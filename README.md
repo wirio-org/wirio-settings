@@ -112,7 +112,7 @@ openai_api_key = settings_manager.get_required_value("openai_api_key")
 
 Values are returned as strings unless we pass a type as the second argument, which validates and converts the value.
 
-We also can load optional settings with `get_value`, which returns `None` when the is missing.
+We also can load optional settings with `get_value`, which returns `None` when the setting is missing.
 
 Take into account that, independently of the origin of the setting, it'll always be converted to snake_case because it's the Python convention. For example, the environment variable `POSTGRESQL_CONNECTION_STRING` maps to the key `postgresql_connection_string`.
 
@@ -199,7 +199,9 @@ Realize that Azure Key Vault only can store PascalCase or kebab-case secrets, bu
 
 We have a single `ApplicationSettings` model that works in local and in production, with no extra code. The settings are loaded from the right provider depending on the environment, and we can add more providers if needed.
 
-For a complete recommended usage, see [Recommended usage](#recommended-usage).
+The next sections are very important to understand how the settings system works, and they include topics such as the core concepts, how to read values, or the providers themselves.
+
+For a complete recommended usage of how to use `wirio-settings` in production, see [Recommended usage](#recommended-usage).
 
 ## Core concepts
 
@@ -404,9 +406,24 @@ logging_settings = settings_manager.get_section("logging").get_model(LoggingSett
 
 ## Recommended usage
 
-We have all the pieces, but we must consider that several important integrations should be added only after we deploy the application, not only settings-related integrations. In a local environment, we do not access secret stores, instrument libraries, or send telemetry to the cloud, so we must add a check.
+If we use environment variables for sensitive and non-sensitive settings, we don't have to do anything.
 
-For example, if we use the `WIRIO_ENVIRONMENT` environment variable to detect the environment, we can add the secret store provider only when it's not `local`:
+```python
+application_settings = SettingsManager().get_model(ApplicationSettings)
+```
+
+But we should read non-sensitive settings from settings files (`settings.{environment}.yaml`) tracked in version control.
+
+To do that, we can add the `WIRIO_ENVIRONMENT` environment variable to the deployed application. For example, `WIRIO_ENVIRONMENT=production`, and the `settings.production.yaml` file will be loaded automatically.
+
+> [!NOTE]
+> If we want to use another environment variable, we can pass `environment_key` to `SettingsManager`, as explained in [Environments](#environments).
+
+Now, we have all the pieces in place, but some of the integrations should only be activated when the application is deployed. In local, we don't want to touch secret stores, instrument libraries, send telemetry to the cloud, use HSTS, add CORS, enable caching, use some authentication mechanisms, etc. so we have to add a simple environment check.
+
+This might sound like an extra layer of complexity, but it's what we must do independently of the settings library we use.
+
+For example, if we use the `WIRIO_ENVIRONMENT` environment variable to detect the current environment, we can add a secret volume on this way:
 
 ```python
 from os
@@ -417,30 +434,10 @@ from wirio_settings import SettingsManager
 
 settings_manager = SettingsManager()
 
-if os.getenv("WIRIO_ENVIRONMENT", "local") != "local":
-    settings_manager.add_azure_key_vault(settings_manager.get_required_value("key_vault_url"))
+if settings_manager.get_value("wirio_environment") != "local":
+    settings_manager.add_key_per_file("/run/secrets")
 
-    # Add telemetry, etc.
-
-application_settings = settings_manager.get_model(ApplicationSettings)
-app = FastAPI()
-```
-
-`wirio-settings` uses by default the `WIRIO_ENVIRONMENT` environment variable to detect the environment, but we can use a different environment variable with `environment_key`:
-
-```python
-from os
-
-from fastapi import FastAPI
-from wirio_settings import SettingsManager
-
-
-settings_manager = SettingsManager(environment_key="PYTHONAPP_ENVIRONMENT")
-
-if os.getenv("PYTHONAPP_ENVIRONMENT", "local") != "local":
-    settings_manager.add_azure_key_vault(settings_manager.get_required_value("key_vault_url"))
-
-    # Add telemetry, etc.
+    # Enable telemetry, etc.
 
 application_settings = settings_manager.get_model(ApplicationSettings)
 app = FastAPI()

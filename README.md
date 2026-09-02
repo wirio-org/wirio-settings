@@ -19,7 +19,7 @@ Here's why: our application settings, one line, done right. No more scattered `o
 - **Secret stores:** Azure Key Vault, AWS Secrets Manager and GCP Secret Manager integrations are available with one line of code, with safe authentication.
 - **Automatic reloads:** Keep settings up to date by automatically reloading them, with no need to restart the application or deploy a new version.
 - **Pydantic models:** Load application settings directly into models.
-- **A practical replacement:** Replace `pydantic-settings` and `python-dotenv` with one unified settings library.
+- **A practical replacement:** Replace `pydantic-settings` and `python-dotenv` with one centralized, provider-agnostic (no vendor lock-in) settings library .
 - **Roadmap:** Planned capabilities include pluggable configuration stores, feature flags, prefixes, filters, custom delimiters and aliases.
 
 ## Table of contents
@@ -55,7 +55,7 @@ Here's why: our application settings, one line, done right. No more scattered `o
   - [Azure Key Vault](#azure-key-vault)
   - [AWS Secrets Manager](#aws-secrets-manager)
   - [GCP Secret Manager](#gcp-secret-manager)
-  - [Key-per-file directory](#key-per-file-directory)
+  - [Setting per file](#setting-per-file)
 - [Automatic reloads](#automatic-reloads)
   - [Reload on file change](#reload-on-file-change)
   - [Reload on an interval](#reload-on-an-interval)
@@ -83,7 +83,7 @@ We'll use `SettingsManager`, which by default reads:
 
 YAML is a modern alternative to `.env` files that supports typed values and structured settings.
 
-The file name is standardized by well-known frameworks and tools such as Claude Code and GitHub Copilot, enabling environment-specific configuration. As we will see later, `local` is the environment we use when developing on our machines.
+The file name is standardized by well-known frameworks and tools such as Claude Code and GitHub Copilot, enabling environment-specific configuration. As we'll see later, `local` is the environment we use when developing on our machines.
 
 ### 2. Read settings
 
@@ -93,7 +93,7 @@ We create a `settings.local.yaml` file in our working directory (it's usually th
 openai_api_key: secretkey
 openai_model: gpt-5
 timeout_seconds: 30
-postgresql_connection_string: postgresql+asyncpg://user:password@localhost/db
+postgresql_connection_string: postgresql+asyncpg://user:password@localhost/database
 ```
 
 > [!WARNING]
@@ -121,7 +121,7 @@ Take into account that, independently of the origin of the setting, it'll always
 
 ### 3. Bind the settings to a Pydantic model
 
-Reading key by key is fine for a couple of values. For an application, we usually want one validated object instead of using Magic Strings anti-pattern:
+Reading key by key is fine for a couple of values. For an application, we usually want one validated object instead of using the Magic Strings anti-pattern:
 
 ```python
 from pydantic import BaseModel
@@ -154,23 +154,23 @@ So, we just create a settings file for each environment we want to support. For 
 
 The environment will be detected (details in [Environments](#environments)) and the proper file will be loaded automatically.
 
-Talking about `settings.yaml` file, it's used for shared settings that are common to all environments. For example, we may want to use the same OpenAI model in all environments.
+Talking about the `settings.yaml` file, it's used for shared settings that are common to all environments. For example, we may want to use the same OpenAI model in all environments. Using this file we can avoid repeating the same value in all the environment-specific files.
 
 Now our settings are tracked in version control, and we can have different values for each environment without changing the application code or giving developers excessive cloud permissions just to change a setting.
 
 > [!WARNING]
-> Never commit secrets to version control. The settings files should contain only non-sensitive values. To load secrets when we deploy (when we're not developing in local), we will use a secret store (e.g. Azure Key Vault or AWS Secrets Manager) or a different mechanism, as explained in the next section.
+> Never commit secrets to version control. The tracked settings files should contain only non-sensitive values. To load secrets when we deploy (when we're not developing in local), we'll use a secret store (e.g. Azure Key Vault or AWS Secrets Manager) or a different mechanism, as explained in the next section.
 
 ### 5. Read the secrets securely
 
 When we're not developing in local, we want to read secrets from a secure location instead of exposing them in a file.
 
-Choose the provider that matches how the application receives its secrets:
+Choose the provider (more in [Providers](#providers)) that matches how the application receives its secrets. Some common providers are:
 
 - [Azure Key Vault](#azure-key-vault) for Azure workloads.
 - [AWS Secrets Manager](#aws-secrets-manager) for AWS workloads.
-- [GCP Secret Manager](#gcp-secret-manager) for Google Cloud workloads.
-- [Key-per-file directories](#key-per-file-directory) when the runtime mounts secrets as files, such as Docker or Kubernetes secret volumes.
+- [GCP Secret Manager](#gcp-secret-manager) for GCP workloads.
+- [Setting per file](#setting-per-file-directory) when the runtime mounts secrets as files, such as Docker or Kubernetes secret volumes.
 - [Environment variables](#environment-variables) when the deployment platform injects secret values, often through a cloud secret store link or using Kubernetes External Secrets Operator. The application reads the injected value; the platform is responsible for resolving the secret store reference.
 
 For example, we can read the secrets from Azure Key Vault:
@@ -266,7 +266,7 @@ Every provider has its own naming convention, and not every store allows the sam
   | Environment variables               | `__`              | `DATABASE__HOST`      | `database.host` |
   | Azure Key Vault, GCP Secret Manager | `--`              | `Database--Host`      | `database.host` |
   | AWS Secrets Manager                 | Nested JSON       | `{"database": {…}}`   | `database.host` |
-  | Key-per-file directory              | None              | `database.host` file  | `database.host` |
+  | Setting per file                    | None              | `database.host` file  | `database.host` |
 
 Sequences are flattened with their index, so the first item of the `servers` list is `servers.0`.
 
@@ -435,7 +435,7 @@ from wirio_settings import SettingsManager
 settings_manager = SettingsManager()
 
 if os.getenv("WIRIO_ENVIRONMENT", "local") != "local":
-    settings_manager.add_key_per_file("/run/secrets")
+    settings_manager.add_setting_per_file("/run/secrets")
 
     # Enable telemetry, etc.
 
@@ -556,10 +556,10 @@ Secret names use `--` for sections, so `Database--Host` maps to `database.host`.
 If no credentials are provided, [Application Default Credentials (ADC)](https://docs.cloud.google.com/docs/authentication/application-default-credentials) are used.
 We can also pass custom GCP credentials with the `credentials_json` parameter.
 
-### Key-per-file directory
+### Setting per file
 
 ```python
-settings_manager.add_key_per_file("/run/secrets")
+settings_manager.add_setting_per_file("/run/secrets")
 ```
 
 Given a directory, each file name becomes a setting key and the file content becomes the setting value. The directory path must be absolute, because it is not resolved against the [content root](#content-root).

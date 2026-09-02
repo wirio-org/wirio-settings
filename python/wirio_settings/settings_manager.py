@@ -11,9 +11,9 @@ from wirio_settings._wirio_settings import (
     EnvironmentVariablesSettingsSource,
     GcpSecretManagerSettingsSource,
     JsonFileSettingsSource,
-    KeyPerFileSettingsSource,
     ModelRegistry,
     SettingLookup,
+    SettingPerFileSettingsSource,
     SettingsPath,
     SettingsProvider,
     SettingsSource,
@@ -129,7 +129,7 @@ class SettingsManager(SettingsRoot):
         )
         return self
 
-    def add_key_per_file(
+    def add_setting_per_file(
         self,
         directory_path: str,
         *,
@@ -138,7 +138,7 @@ class SettingsManager(SettingsRoot):
     ) -> Self:
         """Add settings using files from a directory. File names are used as the key, file contents are used as the value."""
         self.add(
-            KeyPerFileSettingsSource(
+            SettingPerFileSettingsSource(
                 directory_path=directory_path,
                 optional=optional,
                 reload_on_change=reload_on_change,

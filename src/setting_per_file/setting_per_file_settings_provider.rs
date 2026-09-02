@@ -12,7 +12,7 @@ use crate::core::{
 };
 
 #[pyclass(extends = PythonSettingsProvider, frozen, str)]
-pub struct KeyPerFileSettingsProvider {
+pub struct SettingPerFileSettingsProvider {
     data: Arc<ArcSwap<Py<PyDict>>>,
     path_provider: PathProvider,
     reload_on_change: bool,
@@ -21,7 +21,7 @@ pub struct KeyPerFileSettingsProvider {
 }
 
 #[pymethods]
-impl KeyPerFileSettingsProvider {
+impl SettingPerFileSettingsProvider {
     #[pyo3(signature = () -> "dict[str, str | None]")]
     fn data(&self, py: Python<'_>) -> Py<PyDict> {
         SettingsProvider::data(self, py)
@@ -41,7 +41,7 @@ impl KeyPerFileSettingsProvider {
     }
 }
 
-impl KeyPerFileSettingsProvider {
+impl SettingPerFileSettingsProvider {
     pub fn new(py: Python<'_>, path_provider: PathProvider, reload_on_change: bool) -> Self {
         Self {
             data: Arc::new(ArcSwap::from_pointee(PyDict::new(py).unbind())),
@@ -180,7 +180,7 @@ impl KeyPerFileSettingsProvider {
     }
 }
 
-impl SettingsProvider for KeyPerFileSettingsProvider {
+impl SettingsProvider for SettingPerFileSettingsProvider {
     fn data(&self, py: Python<'_>) -> Py<PyDict> {
         let data = self.data.load();
         data.clone_ref(py)
@@ -195,7 +195,7 @@ impl SettingsProvider for KeyPerFileSettingsProvider {
     }
 }
 
-impl fmt::Display for KeyPerFileSettingsProvider {
+impl fmt::Display for SettingPerFileSettingsProvider {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.get_type_name())
     }
@@ -203,7 +203,7 @@ impl fmt::Display for KeyPerFileSettingsProvider {
 
 #[cfg(test)]
 mod tests {
-    use super::KeyPerFileSettingsProvider;
+    use super::SettingPerFileSettingsProvider;
     use crate::core::{ModelRegistry, PathProvider, SettingsProvider};
     use pyo3::{
         Py, Python,
@@ -213,7 +213,7 @@ mod tests {
     use tempfile::tempdir;
 
     fn assert_data(
-        provider: &KeyPerFileSettingsProvider,
+        provider: &SettingPerFileSettingsProvider,
         expected_data: &BTreeMap<String, Option<String>>,
     ) {
         Python::attach(|py| {
@@ -247,7 +247,7 @@ mod tests {
         .await
         .unwrap();
         let provider = Python::attach(|py| {
-            KeyPerFileSettingsProvider::new(
+            SettingPerFileSettingsProvider::new(
                 py,
                 PathProvider::from_directory(temporary_directory.path().to_str().unwrap(), false)
                     .unwrap(),
@@ -278,7 +278,7 @@ mod tests {
         let temporary_directory = tempdir().unwrap();
         let missing_directory_path = temporary_directory.path().join("missing");
         let provider = Python::attach(|py| {
-            KeyPerFileSettingsProvider::new(
+            SettingPerFileSettingsProvider::new(
                 py,
                 PathProvider::from_directory(missing_directory_path.to_str().unwrap(), true)
                     .unwrap(),
@@ -298,7 +298,7 @@ mod tests {
         let temporary_directory = tempdir().unwrap();
         let missing_directory_path = temporary_directory.path().join("missing");
         let provider = Python::attach(|py| {
-            KeyPerFileSettingsProvider::new(
+            SettingPerFileSettingsProvider::new(
                 py,
                 PathProvider::from_directory(missing_directory_path.to_str().unwrap(), false)
                     .unwrap(),
@@ -326,7 +326,7 @@ mod tests {
         let file_path = temporary_directory.path().join("not-a-directory");
         tokio::fs::write(&file_path, "value").await.unwrap();
         let provider = Python::attach(|py| {
-            KeyPerFileSettingsProvider::new(
+            SettingPerFileSettingsProvider::new(
                 py,
                 PathProvider::from_directory(file_path.to_str().unwrap(), false).unwrap(),
                 false,
@@ -348,7 +348,7 @@ mod tests {
 
         let invalid_directory_path = PathBuf::from("/\0invalid");
         let provider = Python::attach(|py| {
-            KeyPerFileSettingsProvider::new(
+            SettingPerFileSettingsProvider::new(
                 py,
                 PathProvider::from_directory(invalid_directory_path.to_str().unwrap(), false)
                     .unwrap(),
@@ -368,7 +368,7 @@ mod tests {
 
         let directory_path = std::env::current_dir().unwrap();
         let display = Python::attach(|py| {
-            KeyPerFileSettingsProvider::new(
+            SettingPerFileSettingsProvider::new(
                 py,
                 PathProvider::from_directory(directory_path.to_str().unwrap(), false).unwrap(),
                 false,
@@ -376,33 +376,33 @@ mod tests {
             .to_string()
         });
 
-        assert_eq!(display, "KeyPerFileSettingsProvider");
+        assert_eq!(display, "SettingPerFileSettingsProvider");
     }
 
     #[test]
     fn test_trim_trailing_line_feed() {
-        let value = KeyPerFileSettingsProvider::trim_new_line(String::from("value\n"));
+        let value = SettingPerFileSettingsProvider::trim_new_line(String::from("value\n"));
 
         assert_eq!(value, "value");
     }
 
     #[test]
     fn test_trim_trailing_carriage_return_and_line_feed() {
-        let value = KeyPerFileSettingsProvider::trim_new_line(String::from("value\r\n"));
+        let value = SettingPerFileSettingsProvider::trim_new_line(String::from("value\r\n"));
 
         assert_eq!(value, "value");
     }
 
     #[test]
     fn test_preserve_value_without_trailing_new_line() {
-        let value = KeyPerFileSettingsProvider::trim_new_line(String::from("value"));
+        let value = SettingPerFileSettingsProvider::trim_new_line(String::from("value"));
 
         assert_eq!(value, "value");
     }
 
     #[test]
     fn test_preserve_additional_trailing_new_line() {
-        let value = KeyPerFileSettingsProvider::trim_new_line(String::from("value\n\n"));
+        let value = SettingPerFileSettingsProvider::trim_new_line(String::from("value\n\n"));
 
         assert_eq!(value, "value\n");
     }
@@ -418,7 +418,7 @@ mod tests {
             .block_on(tokio::fs::write(&file_path, "initial"))
             .unwrap();
         let provider = Python::attach(|py| {
-            KeyPerFileSettingsProvider::new(
+            SettingPerFileSettingsProvider::new(
                 py,
                 PathProvider::from_directory(temporary_directory.path().to_str().unwrap(), false)
                     .unwrap(),
@@ -464,7 +464,7 @@ mod tests {
             .block_on(tokio::fs::write(&file_path, "initial"))
             .unwrap();
         let provider = Python::attach(|py| {
-            KeyPerFileSettingsProvider::new(
+            SettingPerFileSettingsProvider::new(
                 py,
                 PathProvider::from_directory(temporary_directory.path().to_str().unwrap(), false)
                     .unwrap(),
@@ -487,7 +487,7 @@ mod tests {
             let callback_reference = PyWeakrefReference::new(&callback).unwrap().unbind();
             let model_registry = Py::new(py, ModelRegistry::new(py, callback_reference)).unwrap();
             let temporary_directory = tempdir().unwrap();
-            let provider = KeyPerFileSettingsProvider::new(
+            let provider = SettingPerFileSettingsProvider::new(
                 py,
                 PathProvider::from_directory(temporary_directory.path().to_str().unwrap(), false)
                     .unwrap(),

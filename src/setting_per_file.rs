@@ -1,0 +1,5 @@
+mod setting_per_file_settings_provider;
+mod setting_per_file_settings_source;
+
+pub use setting_per_file_settings_provider::SettingPerFileSettingsProvider;
+pub use setting_per_file_settings_source::SettingPerFileSettingsSource;

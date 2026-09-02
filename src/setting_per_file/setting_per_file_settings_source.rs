@@ -1,17 +1,17 @@
 use crate::{
     core::{PathProvider, PythonSettingsProvider, PythonSettingsSource, SettingsSource},
-    key_per_file::KeyPerFileSettingsProvider,
+    setting_per_file::SettingPerFileSettingsProvider,
 };
 use pyo3::prelude::*;
 
 #[pyclass(extends = PythonSettingsSource, frozen)]
-pub struct KeyPerFileSettingsSource {
+pub struct SettingPerFileSettingsSource {
     path_provider: PathProvider,
     reload_on_change: bool,
 }
 
 #[pymethods]
-impl KeyPerFileSettingsSource {
+impl SettingPerFileSettingsSource {
     #[new]
     pub fn new_python(
         directory_path: &str,
@@ -31,12 +31,12 @@ impl KeyPerFileSettingsSource {
     }
 }
 
-impl SettingsSource for KeyPerFileSettingsSource {
+impl SettingsSource for SettingPerFileSettingsSource {
     fn build(&self, py: Python<'_>) -> PyResult<Py<PythonSettingsProvider>> {
         Py::new(
             py,
             PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(
-                KeyPerFileSettingsProvider::new(
+                SettingPerFileSettingsProvider::new(
                     py,
                     self.path_provider.clone(),
                     self.reload_on_change,
@@ -51,7 +51,7 @@ impl SettingsSource for KeyPerFileSettingsSource {
 mod tests {
     use crate::core::PathProvider;
 
-    use super::KeyPerFileSettingsSource;
+    use super::SettingPerFileSettingsSource;
     use pyo3::Python;
     use pyo3::types::PyAnyMethods;
 
@@ -59,7 +59,7 @@ mod tests {
     fn test_build_provider() {
         Python::initialize();
         Python::attach(|py| {
-            let source = KeyPerFileSettingsSource {
+            let source = SettingPerFileSettingsSource {
                 path_provider: PathProvider::from_directory(
                     std::env::current_dir().unwrap().to_str().unwrap(),
                     false,
@@ -73,7 +73,7 @@ mod tests {
             assert!(
                 provider
                     .bind(py)
-                    .is_instance_of::<crate::key_per_file::KeyPerFileSettingsProvider>()
+                    .is_instance_of::<crate::setting_per_file::SettingPerFileSettingsProvider>()
             );
         });
     }

@@ -87,7 +87,9 @@ class TestIntegration:
             == expected_nested_value
         )
 
-    def test_load_settings_using_key_per_file_directory(self, tmp_path: Path) -> None:
+    def test_load_settings_using_setting_per_file_directory(
+        self, tmp_path: Path
+    ) -> None:
         expected_app_name = "wirio"
         expected_log_level = "WARNING"
         expected_password = "secret-value"
@@ -96,7 +98,7 @@ class TestIntegration:
         tmp_path.joinpath("database_password").write_text(f"{expected_password}\n")
         settings_manager = SettingsManager(add_default_providers=False)
 
-        settings_manager.add_key_per_file(directory_path=str(tmp_path))
+        settings_manager.add_setting_per_file(directory_path=str(tmp_path))
 
         assert settings_manager.get_required_value("app_name") == expected_app_name
         assert (

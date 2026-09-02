@@ -92,6 +92,7 @@ impl ModelRegistry {
             let models = runtime.block_on(Arc::clone(&self.models).lock_owned());
 
             Python::attach(|py| {
+                Self::remove_garbage_collected_models(py, models.clone_ref(py))?;
                 let model_reference = PyWeakrefReference::new(model.bind(py))?.unbind();
                 let model = RegisteredModel::new_for_tracking(model_reference, section_path);
                 models.bind(py).append(Py::new(py, model)?)?;
@@ -273,6 +274,36 @@ mod tests {
             let models = registry.models(py)?;
 
             assert_eq!(models.bind(py).len(), 0);
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn test_remove_garbage_collected_models_when_adding_model() {
+        Python::initialize();
+
+        Python::attach(|py| -> PyResult<()> {
+            let module = PyModule::from_code(
+                py,
+                c"def callback():\n    pass\n\nclass Model:\n    pass\n",
+                c"",
+                c"",
+            )?;
+            let registry = create_registry(py, &module)?;
+
+            {
+                let model = module.getattr("Model")?.call0()?;
+                registry.add_model(py, &model, None)?;
+            }
+
+            let model = module.getattr("Model")?.call0()?;
+            registry.add_model(py, &model, None)?;
+
+            let models = registry.models(py)?;
+            let model_count = models.bind(py).len();
+
+            assert_eq!(model_count, 1);
             Ok(())
         })
         .unwrap();

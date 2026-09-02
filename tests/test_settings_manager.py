@@ -13,9 +13,9 @@ from wirio_settings._wirio_settings import (
     AwsSecretsManagerSettingsSource,
     AzureKeyVaultSettingsSource,
     GcpSecretManagerSettingsSource,
-    KeyPerFileSettingsSource,
     ModelRegistry,
     SettingLookup,
+    SettingPerFileSettingsSource,
     SettingsProvider,
     SettingsSource,
 )
@@ -370,7 +370,7 @@ class TestSettingsManager:
         source = add_patch.call_args.args[0]
         assert isinstance(source, GcpSecretManagerSettingsSource)
 
-    def test_add_key_per_file(self, mocker: MockerFixture, tmp_path: Path) -> None:
+    def test_add_setting_per_file(self, mocker: MockerFixture, tmp_path: Path) -> None:
         directory_path = str(tmp_path / "secrets")
         settings_manager = SettingsManager(add_default_providers=False)
         add_patch = mocker.patch.object(
@@ -379,14 +379,14 @@ class TestSettingsManager:
             autospec=True,
         )
 
-        settings_manager.add_key_per_file(
+        settings_manager.add_setting_per_file(
             directory_path=directory_path,
             optional=True,
         )
 
         add_patch.assert_called_once()
         source = add_patch.call_args.args[0]
-        assert isinstance(source, KeyPerFileSettingsSource)
+        assert isinstance(source, SettingPerFileSettingsSource)
 
     def test_use_default_factory_for_missing_optional_value_of_a_model(self) -> None:
         class Settings(BaseModel):
@@ -1140,7 +1140,7 @@ class TestSettingsManager:
         assert initial_value == expected_initial_value
         assert actual_value == expected_updated_value
 
-    def test_reload_key_per_file_when_directory_files_are_updated(
+    def test_reload_setting_per_file_when_directory_files_are_updated(
         self, tmp_path: Path
     ) -> None:
         expected_initial_value = "initial"
@@ -1149,7 +1149,7 @@ class TestSettingsManager:
         settings_file_path.write_text(expected_initial_value, encoding="utf-8")
         settings_manager = SettingsManager(add_default_providers=False)
 
-        settings_manager.add_key_per_file(
+        settings_manager.add_setting_per_file(
             directory_path=str(tmp_path),
             reload_on_change=True,
         )

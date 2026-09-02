@@ -170,7 +170,7 @@ Choose the provider (more in [Providers](#providers)) that matches how the appli
 - [Azure Key Vault](#azure-key-vault) for Azure workloads.
 - [AWS Secrets Manager](#aws-secrets-manager) for AWS workloads.
 - [GCP Secret Manager](#gcp-secret-manager) for GCP workloads.
-- [Setting per file](#setting-per-file-directory) when the runtime mounts secrets as files, such as Docker or Kubernetes secret volumes.
+- [Setting per file](#setting-per-file) when the runtime mounts secrets as files, such as Docker or Kubernetes secret volumes.
 - [Environment variables](#environment-variables) when the deployment platform injects secret values, often through a cloud secret store link or using Kubernetes External Secrets Operator. The application reads the injected value; the platform is responsible for resolving the secret store reference.
 
 For example, we can read the secrets from Azure Key Vault:

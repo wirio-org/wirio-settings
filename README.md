@@ -19,7 +19,7 @@ Here's why: our application settings, one line, done right. No more scattered `o
 - **Secret stores:** Azure Key Vault, AWS Secrets Manager and GCP Secret Manager integrations are available with one line of code, with safe authentication.
 - **Automatic reloads:** Keep settings up to date by automatically reloading them, with no need to restart the application or deploy a new version.
 - **Pydantic models:** Load application settings directly into models.
-- **A practical replacement:** Replace `pydantic-settings` and `python-dotenv` with one centralized, provider-agnostic (no vendor lock-in) settings library .
+- **A practical replacement:** Replace `pydantic-settings` and `python-dotenv` with one centralized, provider-agnostic (no vendor lock-in) settings library.
 - **Roadmap:** Planned capabilities include pluggable configuration stores, feature flags, prefixes, filters, custom delimiters and aliases.
 
 ## Table of contents

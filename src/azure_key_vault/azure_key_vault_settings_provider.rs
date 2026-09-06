@@ -1,8 +1,9 @@
 use arc_swap::ArcSwap;
 use azure_identity::ClientSecretCredential;
+use azure_security_keyvault_secrets::ResourceExt;
+use azure_security_keyvault_secrets::SecretClient;
 use azure_security_keyvault_secrets::SecretClientOptions;
-use azure_security_keyvault_secrets::models::Secret;
-use azure_security_keyvault_secrets::{ResourceExt, SecretClient, models::SecretProperties};
+use azure_security_keyvault_secrets::models::{Secret, SecretProperties};
 use futures::TryStreamExt;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
@@ -15,6 +16,7 @@ use tokio::sync::{Mutex, OnceCell};
 use tokio_util::sync::CancellationToken;
 
 use crate::azure_key_vault::default_azure_credential::DefaultAzureCredential;
+use crate::azure_key_vault::parallel_secret_loader::ParallelSecretLoader;
 use crate::azure_key_vault::remove_user_agent::RemoveUserAgent;
 use crate::core::{ModelRegistry, PythonSettingsProvider, SettingLookup, SettingsProvider};
 
@@ -173,6 +175,35 @@ impl AzureKeyVaultSettingsProvider {
         tenant_id.is_some() || client_id.is_some() || client_secret.is_some()
     }
 
+    fn add_secret_to_loader(
+        secret_properties: &SecretProperties,
+        loaded_secrets: &mut BTreeMap<String, Secret>,
+        new_loaded_secrets: &mut BTreeMap<String, Secret>,
+        parallel_secret_loader: &mut ParallelSecretLoader,
+    ) -> PyResult<()> {
+        if !Self::is_secret_enabled(secret_properties) {
+            return Ok(());
+        }
+
+        let secret_name = Self::extract_secret_name(secret_properties)?;
+
+        if let Some(loaded_secret) = loaded_secrets.get(&secret_name)
+            && Self::is_secret_up_to_date(loaded_secret, secret_properties)
+        {
+            let loaded_secret = loaded_secrets.remove(&secret_name).ok_or_else(|| {
+                PyRuntimeError::new_err(
+                    "Cached Azure Key Vault secret disappeared while reloading secrets",
+                )
+            })?;
+
+            new_loaded_secrets.insert(secret_name, loaded_secret);
+            return Ok(());
+        }
+
+        parallel_secret_loader.add_secret_to_load(secret_name);
+        Ok(())
+    }
+
     fn is_secret_enabled(secret_properties: &SecretProperties) -> bool {
         secret_properties
             .attributes
@@ -202,77 +233,47 @@ impl AzureKeyVaultSettingsProvider {
                 .and_then(|attributes| attributes.updated)
     }
 
-    async fn add_secret(
-        secret_client: &SecretClient,
-        loaded_secrets: Option<&BTreeMap<String, Secret>>,
-        secret_properties: SecretProperties,
-        new_loaded_secrets: &mut BTreeMap<String, Secret>,
-        url: &str,
-    ) -> PyResult<()> {
-        if !Self::is_secret_enabled(&secret_properties) {
-            return Ok(());
-        }
-
-        let secret_name = Self::extract_secret_name(&secret_properties)?;
-        let loaded_secret =
-            loaded_secrets.and_then(|loaded_secrets| loaded_secrets.get(&secret_name));
-
-        if let Some(loaded_secret) = loaded_secret
-            && Self::is_secret_up_to_date(loaded_secret, &secret_properties)
-        {
-            new_loaded_secrets.insert(secret_name, loaded_secret.clone());
-            return Ok(());
-        }
-
-        let retrieved_secret = Self::retrieve_secret(secret_client, &secret_name, url).await?;
-        new_loaded_secrets.insert(secret_name, retrieved_secret);
-        Ok(())
-    }
-
-    async fn retrieve_secret(
-        secret_client: &SecretClient,
-        secret_name: &str,
-        url: &str,
-    ) -> PyResult<Secret> {
-        let secret_response = secret_client.get_secret(secret_name, None).await.map_err(
-            |error| {
-                PyRuntimeError::new_err(format!(
-                    "Failed to read secret '{secret_name}' from Azure Key Vault '{url}': {error}",
-                ))
-            },
-        )?;
-        secret_response.into_model().map_err(|error| {
-            PyRuntimeError::new_err(format!(
-                "Failed to deserialize Azure Key Vault secret '{secret_name}': {error}",
-            ))
-        })
-    }
-
     fn update_secrets(
         secrets_cache: &ArcSwap<SecretsCache>,
-        new_loaded_secrets: BTreeMap<String, Secret>,
+        loaded_secrets_cache: &SecretsCache,
+        mut new_loaded_secrets: BTreeMap<String, Secret>,
+        loaded_secrets: &BTreeMap<String, Secret>,
+        new_loaded_secrets_from_loader: BTreeMap<String, Secret>,
         model_registry: &OnceCell<Py<ModelRegistry>>,
     ) -> PyResult<()> {
-        let mut secret_values = new_loaded_secrets
-            .iter()
-            .map(|(secret_name, secret)| (secret_name.clone(), secret.value.clone()))
-            .collect::<BTreeMap<String, Option<String>>>();
-        Self::normalize_keys(&mut secret_values);
+        let has_loaded_secrets = !new_loaded_secrets_from_loader.is_empty();
+        let has_removed_secrets = !loaded_secrets.is_empty();
 
-        let updated_secrets_cache = Python::attach(|py| -> PyResult<SecretsCache> {
-            let data = PyDict::new(py);
+        // Reload is needed if we're loading new secrets that weren't previously cached,
+        // or if we're removing secrets that were previously cached but are no longer present in the Azure Key Vault
+        if has_loaded_secrets || has_removed_secrets {
+            new_loaded_secrets.extend(new_loaded_secrets_from_loader);
+            let mut secret_values = new_loaded_secrets
+                .iter()
+                .map(|(secret_name, secret)| (secret_name.clone(), secret.value.clone()))
+                .collect::<BTreeMap<String, Option<String>>>();
+            Self::normalize_keys(&mut secret_values);
 
-            for (secret_name, secret_value) in secret_values {
-                data.set_item(secret_name, secret_value)?;
+            let updated_secrets_cache = Python::attach(|py| -> PyResult<SecretsCache> {
+                let data = PyDict::new(py);
+
+                for (secret_name, secret_value) in secret_values {
+                    data.set_item(secret_name, secret_value)?;
+                }
+
+                Ok(SecretsCache {
+                    data: data.unbind(),
+                    loaded_secrets: Some(new_loaded_secrets),
+                })
+            })?;
+            secrets_cache.store(Arc::new(updated_secrets_cache));
+            let is_first_load = loaded_secrets_cache.loaded_secrets.is_none();
+
+            if !is_first_load {
+                Python::attach(|py| Self::on_reload(py, model_registry));
             }
+        }
 
-            Ok(SecretsCache {
-                data: data.unbind(),
-                loaded_secrets: Some(new_loaded_secrets),
-            })
-        })?;
-        secrets_cache.store(Arc::new(updated_secrets_cache));
-        Python::attach(|py| Self::on_reload(py, model_registry));
         Ok(())
     }
 
@@ -330,7 +331,11 @@ impl AzureKeyVaultSettingsProvider {
                 })?;
         let mut new_loaded_secrets: BTreeMap<String, Secret> = BTreeMap::new();
         let loaded_secrets_cache = secrets_cache.load_full();
-        let loaded_secrets = loaded_secrets_cache.loaded_secrets.as_ref();
+        let mut loaded_secrets = loaded_secrets_cache
+            .loaded_secrets
+            .clone()
+            .unwrap_or_default();
+        let mut parallel_secret_loader = ParallelSecretLoader::new(secret_client);
 
         while let Some(secret_properties) =
             secret_properties_pager.try_next().await.map_err(|error| {
@@ -339,17 +344,23 @@ impl AzureKeyVaultSettingsProvider {
                 ))
             })?
         {
-            Self::add_secret(
-                secret_client,
-                loaded_secrets,
-                secret_properties,
+            Self::add_secret_to_loader(
+                &secret_properties,
+                &mut loaded_secrets,
                 &mut new_loaded_secrets,
-                url,
-            )
-            .await?;
+                &mut parallel_secret_loader,
+            )?;
         }
 
-        Self::update_secrets(secrets_cache, new_loaded_secrets, model_registry)
+        let new_loaded_secrets_from_loader = parallel_secret_loader.load_all_secrets(url).await?;
+        Self::update_secrets(
+            secrets_cache,
+            &loaded_secrets_cache,
+            new_loaded_secrets,
+            &loaded_secrets,
+            new_loaded_secrets_from_loader,
+            model_registry,
+        )
     }
 }
 
@@ -373,10 +384,9 @@ impl SettingsProvider for AzureKeyVaultSettingsProvider {
     }
 
     async fn reload(&self) -> PyResult<()> {
-        let secret_client = Arc::clone(&self.secret_client);
         let secrets_cache = Arc::clone(&self.secrets_cache);
         Self::reload_secrets(
-            &secret_client,
+            &self.secret_client,
             &secrets_cache,
             &self.url,
             &self.model_registry,
@@ -402,6 +412,7 @@ impl fmt::Display for AzureKeyVaultSettingsProvider {
 #[cfg(test)]
 mod tests {
     use super::{AzureKeyVaultSettingsProvider, SecretsCache};
+    use crate::azure_key_vault::parallel_secret_loader::ParallelSecretLoader;
     use crate::core::{ModelRegistry, SettingsProvider};
     use arc_swap::ArcSwap;
     use async_trait::async_trait;
@@ -456,10 +467,6 @@ mod tests {
                 self.response_body.clone(),
             ))
         }
-    }
-
-    fn create_secret_client_mock(url: &str) -> SecretClient {
-        SecretClient::new(url, Arc::new(CredentialMock), None).unwrap()
     }
 
     #[test]
@@ -680,33 +687,38 @@ mod tests {
         ));
     }
 
-    #[tokio::test]
-    async fn test_skip_disabled_secret_when_adding_secret() {
-        let secret_client = create_secret_client_mock("https://example.vault.azure.net");
+    #[test]
+    fn test_skip_disabled_secret_when_adding_to_loader() {
         let mut secret_properties = SecretProperties::default();
         secret_properties.attributes = Some(SecretAttributes {
             enabled: Some(false),
             ..Default::default()
         });
-        let mut new_loaded_secrets = BTreeMap::new();
-
-        AzureKeyVaultSettingsProvider::add_secret(
-            &secret_client,
-            None,
-            secret_properties,
-            &mut new_loaded_secrets,
+        let secret_client = SecretClient::new(
             "https://example.vault.azure.net",
+            Arc::new(CredentialMock),
+            None,
         )
-        .await
+        .unwrap();
+        let mut parallel_secret_loader = ParallelSecretLoader::new(&secret_client);
+        let mut new_loaded_secrets = BTreeMap::new();
+        let mut loaded_secrets = BTreeMap::new();
+
+        AzureKeyVaultSettingsProvider::add_secret_to_loader(
+            &secret_properties,
+            &mut loaded_secrets,
+            &mut new_loaded_secrets,
+            &mut parallel_secret_loader,
+        )
         .unwrap();
 
+        assert!(parallel_secret_loader.is_empty());
         assert!(new_loaded_secrets.is_empty());
     }
 
-    #[tokio::test]
-    async fn test_reuse_cached_secret_when_adding_up_to_date_secret() {
+    #[test]
+    fn test_reuse_cached_secret_when_adding_to_loader() {
         let expected_cache_value = "cached-value";
-        let secret_client = create_secret_client_mock("https://example.vault.azure.net");
         let update_time = azure_core::time::OffsetDateTime::UNIX_EPOCH;
         let secret_name: String = String::from("cached-secret");
         let mut cached_secret = Secret::default();
@@ -715,7 +727,7 @@ mod tests {
             updated: Some(update_time),
             ..Default::default()
         });
-        let loaded_secrets = BTreeMap::from([(secret_name.clone(), cached_secret)]);
+        let mut loaded_secrets = BTreeMap::from([(secret_name.clone(), cached_secret)]);
         let mut secret_properties = SecretProperties::default();
         secret_properties.id = Some(format!(
             "https://example.vault.azure.net/secrets/{secret_name}/version"
@@ -725,18 +737,25 @@ mod tests {
             updated: Some(update_time),
             ..Default::default()
         });
+        let secret_client = SecretClient::new(
+            "https://example.vault.azure.net",
+            Arc::new(CredentialMock),
+            None,
+        )
+        .unwrap();
+        let mut parallel_secret_loader = ParallelSecretLoader::new(&secret_client);
         let mut new_loaded_secrets = BTreeMap::new();
 
-        AzureKeyVaultSettingsProvider::add_secret(
-            &secret_client,
-            Some(&loaded_secrets),
-            secret_properties,
+        AzureKeyVaultSettingsProvider::add_secret_to_loader(
+            &secret_properties,
+            &mut loaded_secrets,
             &mut new_loaded_secrets,
-            "https://example.vault.azure.net",
+            &mut parallel_secret_loader,
         )
-        .await
         .unwrap();
 
+        assert!(parallel_secret_loader.is_empty());
+        assert!(loaded_secrets.is_empty());
         assert_eq!(
             new_loaded_secrets
                 .get(&secret_name)
@@ -745,7 +764,7 @@ mod tests {
         );
     }
     #[tokio::test]
-    async fn test_retrieve_secret_when_cached_secret_is_missing() {
+    async fn test_retrieve_secret_when_loading_uncached_secret() {
         let expected_secret_name = "missing-secret";
         let expected_secret_value = "retrieved-value";
         let url = "https://example.vault.azure.net";
@@ -761,28 +780,13 @@ mod tests {
         let secret_client =
             SecretClient::new(url, Arc::new(CredentialMock), Some(secret_client_options)).unwrap();
 
-        let mut secret_properties = SecretProperties::default();
-        secret_properties.id = Some(format!(
-            "https://example.vault.azure.net/secrets/{expected_secret_name}/version"
-        ));
-        secret_properties.attributes = Some(SecretAttributes {
-            enabled: Some(true),
-            ..Default::default()
-        });
-        let mut new_loaded_secrets = BTreeMap::new();
-
-        AzureKeyVaultSettingsProvider::add_secret(
-            &secret_client,
-            None,
-            secret_properties,
-            &mut new_loaded_secrets,
-            url,
-        )
-        .await
-        .unwrap();
+        let mut parallel_secret_loader = ParallelSecretLoader::new(&secret_client);
+        parallel_secret_loader.add_secret_to_load(expected_secret_name.to_owned());
+        let loaded_secrets_from_loader =
+            parallel_secret_loader.load_all_secrets(url).await.unwrap();
 
         assert_eq!(
-            new_loaded_secrets
+            loaded_secrets_from_loader
                 .get(expected_secret_name)
                 .and_then(|secret| secret.value.as_deref()),
             Some(expected_secret_value)

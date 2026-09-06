@@ -366,10 +366,8 @@ impl AzureKeyVaultSettingsProvider {
 
 impl Drop for AzureKeyVaultSettingsProvider {
     fn drop(&mut self) {
-        let schedule_reload_cancellation_token = self
-            .schedule_reload_cancellation_token
-            .blocking_lock()
-            .take();
+        let schedule_reload_cancellation_token =
+            self.schedule_reload_cancellation_token.get_mut().take();
 
         if let Some(cancellation_token) = schedule_reload_cancellation_token {
             cancellation_token.cancel();

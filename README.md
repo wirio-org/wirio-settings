@@ -16,7 +16,7 @@ Here's why: our application settings, one line, done right. No more scattered `o
 
 - **Great defaults from day one:** It automatically looks for settings files and environment variables, with recommended configurations and one line of code.
 - **Rust-powered core:** Built with Rust under the hood for speed, reliability, and low runtime overhead.
-- **Secret stores:** Azure Key Vault, AWS Secrets Manager and GCP Secret Manager integrations are available with one line of code, with safe authentication.
+- **Secret stores:** Load secrets and certificates from Azure Key Vault, AWS Secrets Manager and GCP Secret Manager, with one line of code and safe authentication.
 - **Automatic reloads:** Keep settings up to date by automatically reloading them, with no need to restart the application or deploy a new version.
 - **Pydantic models:** Load application settings directly into models.
 - **A practical replacement:** Replace `pydantic-settings` and `python-dotenv` with one centralized, provider-agnostic (no vendor lock-in) settings library.
@@ -480,6 +480,8 @@ settings_manager.add_environment_variables()
 Keys are normalized to snake case, and `__` is replaced with `.`. For example, `DATABASE__HOST` maps to `database.host`.
 
 ### Azure Key Vault
+
+Read secrets and [certificates](https://learn.microsoft.com/en-us/azure/key-vault/certificates/about-certificates#composition-of-a-certificate) from Azure Key Vault.
 
 ```python
 settings_manager.add_azure_key_vault(

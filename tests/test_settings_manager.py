@@ -10,7 +10,9 @@ import pytest
 from pydantic import BaseModel, Field, SecretStr
 from pytest_mock import MockerFixture
 from wirio_settings._wirio_settings import (
+    AwsCredential,
     AwsSecretsManagerSettingsSource,
+    AzureCredential,
     AzureKeyVaultSettingsSource,
     GcpSecretManagerSettingsSource,
     ModelRegistry,
@@ -303,9 +305,9 @@ class TestSettingsManager:
 
     def test_add_azure_key_vault(self, mocker: MockerFixture) -> None:
         key_vault_url = "https://example.vault.azure.net"
-        client_id = "client-id"
-        client_secret = "client-secret"
-        tenant_id = "tenant-id"
+        credential = AzureCredential.ClientSecret(
+            "tenant-id", "client-id", "client-secret"
+        )
         settings_manager = SettingsManager(add_default_providers=False)
         add_patch = mocker.patch.object(
             settings_manager,
@@ -315,9 +317,7 @@ class TestSettingsManager:
 
         settings_manager.add_azure_key_vault(
             url=key_vault_url,
-            client_id=client_id,
-            client_secret=client_secret,
-            tenant_id=tenant_id,
+            credential=credential,
         )
 
         add_patch.assert_called_once()
@@ -328,10 +328,7 @@ class TestSettingsManager:
         expected_secret_id = "dev/TestApp"
         expected_region = "eu-west-1"
         expected_url = "https://secretsmanager.eu-west-1.amazonaws.com"
-        expected_access_key_id = "access-key"
-        expected_secret_access_key = "secret-key"
-        expected_session_token = "session-token"
-        expected_profile = "integration"
+        credential = AwsCredential.Session("access-key", "secret-key", "session-token")
         settings_manager = SettingsManager(add_default_providers=False)
         add_patch = mocker.patch.object(
             settings_manager,
@@ -341,13 +338,26 @@ class TestSettingsManager:
 
         settings_manager.add_aws_secrets_manager(
             secret_id=expected_secret_id,
+            credential=credential,
             region=expected_region,
             url=expected_url,
-            access_key_id=expected_access_key_id,
-            secret_access_key=expected_secret_access_key,
-            session_token=expected_session_token,
-            profile=expected_profile,
         )
+
+        add_patch.assert_called_once()
+        source = add_patch.call_args.args[0]
+        assert isinstance(source, AwsSecretsManagerSettingsSource)
+
+    def test_add_aws_secrets_manager_with_default_credential(
+        self, mocker: MockerFixture
+    ) -> None:
+        settings_manager = SettingsManager(add_default_providers=False)
+        add_patch = mocker.patch.object(
+            settings_manager,
+            settings_manager.add.__name__,
+            autospec=True,
+        )
+
+        settings_manager.add_aws_secrets_manager("dev/TestApp")
 
         add_patch.assert_called_once()
         source = add_patch.call_args.args[0]
@@ -1417,3 +1427,19 @@ class TestSettingsManager:
         required_value = settings_manager.get_required_value("api_key", SecretStr)
         assert isinstance(required_value, SecretStr)
         assert required_value.get_secret_value() == expected_api_key
+
+    def test_add_azure_key_vault_using_default_credential(
+        self, mocker: MockerFixture
+    ) -> None:
+        settings_manager = SettingsManager(add_default_providers=False)
+        add_patch = mocker.patch.object(
+            settings_manager,
+            settings_manager.add.__name__,
+            autospec=True,
+        )
+
+        settings_manager.add_azure_key_vault("https://example.vault.azure.net")
+
+        add_patch.assert_called_once()
+        source = add_patch.call_args.args[0]
+        assert isinstance(source, AzureKeyVaultSettingsSource)

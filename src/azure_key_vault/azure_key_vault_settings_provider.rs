@@ -1,8 +1,6 @@
 use arc_swap::ArcSwap;
-use azure_identity::ClientSecretCredential;
 use azure_security_keyvault_secrets::ResourceExt;
 use azure_security_keyvault_secrets::SecretClient;
-use azure_security_keyvault_secrets::SecretClientOptions;
 use azure_security_keyvault_secrets::models::{Secret, SecretProperties};
 use futures::TryStreamExt;
 use pyo3::exceptions::PyRuntimeError;
@@ -15,9 +13,7 @@ use std::time::Duration;
 use tokio::sync::{Mutex, OnceCell};
 use tokio_util::sync::CancellationToken;
 
-use crate::azure_key_vault::default_azure_credential::DefaultAzureCredential;
 use crate::azure_key_vault::parallel_secret_loader::ParallelSecretLoader;
-use crate::azure_key_vault::remove_user_agent::RemoveUserAgent;
 use crate::core::{ModelRegistry, PythonSettingsProvider, SettingLookup, SettingsProvider};
 
 #[pyclass(extends = PythonSettingsProvider, frozen, str)]
@@ -61,9 +57,7 @@ impl AzureKeyVaultSettingsProvider {
     pub fn new(
         py: Python<'_>,
         url: String,
-        tenant_id: Option<String>,
-        client_id: Option<String>,
-        client_secret: Option<String>,
+        secret_client: Arc<SecretClient>,
         reload_interval: Option<Duration>,
     ) -> PyResult<Self> {
         if let Some(reload_interval) = reload_interval
@@ -74,105 +68,17 @@ impl AzureKeyVaultSettingsProvider {
             ));
         }
 
-        let secret_client = Self::create_secret_client(&url, tenant_id, client_id, client_secret)?;
         Ok(Self {
             secrets_cache: Arc::new(ArcSwap::from_pointee(SecretsCache {
                 data: PyDict::new(py).unbind(),
                 loaded_secrets: None,
             })),
             url,
-            secret_client: Arc::new(secret_client),
+            secret_client,
             reload_interval,
             schedule_reload_cancellation_token: Mutex::new(None),
             model_registry: Arc::new(OnceCell::new()),
         })
-    }
-
-    fn create_secret_client(
-        url: &str,
-        tenant_id: Option<String>,
-        client_id: Option<String>,
-        client_secret: Option<String>,
-    ) -> PyResult<SecretClient> {
-        Self::validate_explicit_credentials(
-            tenant_id.as_deref(),
-            client_id.as_deref(),
-            client_secret.as_deref(),
-        )?;
-
-        if Self::has_explicit_credentials(
-            tenant_id.as_deref(),
-            client_id.as_deref(),
-            client_secret.as_deref(),
-        ) {
-            let tenant_id = tenant_id.ok_or_else(|| {
-                PyRuntimeError::new_err("Missing 'tenant_id' for explicit Azure credentials")
-            })?;
-            let client_id = client_id.ok_or_else(|| {
-                PyRuntimeError::new_err("Missing 'client_id' for explicit Azure credentials")
-            })?;
-            let client_secret = client_secret.ok_or_else(|| {
-                PyRuntimeError::new_err("Missing 'client_secret' for explicit Azure credentials")
-            })?;
-            let credential = ClientSecretCredential::new(
-                &tenant_id,
-                client_id,
-                client_secret.into(),
-                None,
-            )
-            .map_err(|error| {
-                PyRuntimeError::new_err(format!(
-                    "Failed to create explicit Azure credential for Azure Key Vault: {error}"
-                ))
-            })?;
-            let remove_user_agent = Arc::new(RemoveUserAgent);
-
-            // Construct client options with our policy, that runs after the built-in per-call UserAgentPolicy
-            let mut secret_client_options = SecretClientOptions::default();
-            secret_client_options
-                .client_options
-                .per_call_policies
-                .push(remove_user_agent);
-
-            return SecretClient::new(url, credential, Some(secret_client_options)).map_err(
-                |error| {
-                    PyRuntimeError::new_err(format!(
-                        "Failed to create Azure Key Vault client for '{url}': {error}",
-                    ))
-                },
-            );
-        }
-
-        let credential = DefaultAzureCredential::new();
-        SecretClient::new(url, credential, None).map_err(|error| {
-            PyRuntimeError::new_err(format!(
-                "Failed to create Azure Key Vault client for '{url}': {error}",
-            ))
-        })
-    }
-
-    fn validate_explicit_credentials(
-        tenant_id: Option<&str>,
-        client_id: Option<&str>,
-        client_secret: Option<&str>,
-    ) -> PyResult<()> {
-        if Self::has_explicit_credentials(tenant_id, client_id, client_secret)
-            && (tenant_id.is_none() || client_id.is_none() || client_secret.is_none())
-        {
-            return Err(PyRuntimeError::new_err(
-                "'tenant_id', 'client_id', and 'client_secret' must all be provided when using explicit Azure credentials",
-            ));
-        }
-
-        Ok(())
-    }
-
-    fn has_explicit_credentials(
-        tenant_id: Option<&str>,
-        client_id: Option<&str>,
-        client_secret: Option<&str>,
-    ) -> bool {
-        tenant_id.is_some() || client_id.is_some() || client_secret.is_some()
     }
 
     fn add_secret_to_loader(
@@ -467,6 +373,17 @@ mod tests {
         }
     }
 
+    fn create_secret_client() -> Arc<SecretClient> {
+        Arc::new(
+            SecretClient::new(
+                "https://example.vault.azure.net",
+                Arc::new(CredentialMock),
+                None,
+            )
+            .unwrap(),
+        )
+    }
+
     #[test]
     fn test_replace_double_dash_with_dot_in_secret_name() {
         let normalized_key = AzureKeyVaultSettingsProvider::normalize_section_separator(
@@ -483,27 +400,12 @@ mod tests {
         Python::attach(|py| {
             let url = String::from("https://example.vault.azure.net");
             let expected_display = format!("AzureKeyVaultSettingsProvider {{url: {url}}}");
-            let display = AzureKeyVaultSettingsProvider::new(py, url, None, None, None, None)
+            let display = AzureKeyVaultSettingsProvider::new(py, url, create_secret_client(), None)
                 .unwrap()
                 .to_string();
 
             assert_eq!(display, expected_display);
         });
-    }
-
-    #[test]
-    fn test_validate_explicit_credentials_require_all_fields() {
-        let error = AzureKeyVaultSettingsProvider::validate_explicit_credentials(
-            Some("tenant-id"),
-            Some("client-id"),
-            None,
-        )
-        .unwrap_err();
-
-        assert_eq!(
-            error.to_string(),
-            "RuntimeError: 'tenant_id', 'client_id', and 'client_secret' must all be provided when using explicit Azure credentials"
-        );
     }
 
     #[test]
@@ -549,9 +451,7 @@ mod tests {
             let result = AzureKeyVaultSettingsProvider::new(
                 py,
                 String::from("https://example.vault.azure.net"),
-                None,
-                None,
-                None,
+                create_secret_client(),
                 Some(Duration::ZERO),
             );
 
@@ -571,9 +471,7 @@ mod tests {
             AzureKeyVaultSettingsProvider::new(
                 py,
                 String::from("https://example.vault.azure.net"),
-                None,
-                None,
-                None,
+                create_secret_client(),
                 Some(Duration::from_secs(1)),
             )
         });
@@ -588,9 +486,7 @@ mod tests {
             let provider = AzureKeyVaultSettingsProvider::new(
                 py,
                 String::from("https://example.vault.azure.net"),
-                None,
-                None,
-                None,
+                create_secret_client(),
                 None,
             )
             .unwrap();
@@ -616,9 +512,7 @@ mod tests {
             let provider = AzureKeyVaultSettingsProvider::new(
                 py,
                 String::from("https://example.vault.azure.net"),
-                None,
-                None,
-                None,
+                create_secret_client(),
                 Some(Duration::from_secs(1)),
             )
             .unwrap();
@@ -853,9 +747,7 @@ mod tests {
             let provider = AzureKeyVaultSettingsProvider::new(
                 py,
                 String::from("https://example.vault.azure.net"),
-                None,
-                None,
-                None,
+                create_secret_client(),
                 None,
             )
             .unwrap();

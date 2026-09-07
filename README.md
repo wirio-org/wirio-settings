@@ -60,6 +60,11 @@ Here's why: our application settings, one line, done right. No more scattered `o
   - [Reload on file change](#reload-on-file-change)
   - [Reload on an interval](#reload-on-an-interval)
   - [Pydantic model reloads](#pydantic-model-reloads)
+- [Authentication](#authentication)
+  - [Default authentication](#default-authentication)
+  - [Azure credentials](#azure-credentials)
+  - [AWS credentials](#aws-credentials)
+  - [GCP credentials](#gcp-credentials)
 - [Troubleshooting](#troubleshooting)
   - [Debug settings](#debug-settings)
   - [Common errors](#common-errors)
@@ -491,27 +496,7 @@ settings_manager.add_azure_key_vault(
 
 Secret names use `--` for sections, so `Database--Host` maps to `database.host`.
 
-If no explicit credentials are provided, `DefaultAzureCredential` is used.
-
-`DefaultAzureCredential` tries credentials in this order and uses the first one that succeeds:
-
-1. Environment credential (`AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`)
-2. Workload identity credential
-3. Developer tools credential (Azure CLI / Azure Developer CLI)
-4. Managed identity credential. This is the System-assigned managed identity by default. If we want to use a User-assigned managed identity, set the `AZURE_CLIENT_ID` environment variable.
-
-To use explicit service principal credentials, provide all three values:
-
-```python
-settings_manager.add_azure_key_vault(
-    "https://example.vault.azure.net",
-    client_id="...",
-    client_secret="...",
-    tenant_id="...",
-)
-```
-
-When using explicit credentials, `tenant_id`, `client_id`, and `client_secret` must all be provided.
+For authentication options, see [Azure credentials](#azure-credentials).
 
 > [!NOTE]
 > **Azure permissions:** Usually, the `Key Vault Secrets User` role is used to read secrets.
@@ -528,23 +513,11 @@ settings_manager.add_aws_secrets_manager(
 
 The secret value must be a JSON object. `wirio-settings` reads and flattens that JSON into settings keys.
 
-By default, the provider uses the [credential provider chain](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/credproviders.html#credproviders-default-credentials-provider-chain). For example, the IAM role, the shared AWS configuration profile, or `AWS_*` environment variables.
-
-If explicit credentials are provided, they override environment authentication for this provider instance:
-
-```python
-settings_manager.add_aws_secrets_manager(
-    secret_id="secret-id",
-    access_key_id="...",
-    secret_access_key="...",
-)
-```
+For authentication options, see [AWS credentials](#aws-credentials).
 
 Options:
 
 - `region` selects the AWS region.
-- `profile` selects a shared configuration profile.
-- `session_token` is used together with temporary credentials.
 - `url` overrides the service endpoint, which is useful when testing against a local emulator.
 
 ### GCP Secret Manager
@@ -555,8 +528,7 @@ settings_manager.add_gcp_secret_manager("project-id")
 
 Secret names use `--` for sections, so `Database--Host` maps to `database.host`.
 
-If no credentials are provided, [Application Default Credentials (ADC)](https://docs.cloud.google.com/docs/authentication/application-default-credentials) are used.
-We can also pass custom GCP credentials with the `credentials_json` parameter.
+For authentication options, see [GCP credentials](#gcp-credentials).
 
 ### Setting per file
 
@@ -637,7 +609,77 @@ application_settings = (
 )
 ```
 
-When `settings.yaml` changes its contents, `application_settings.port` is updated in place. If the refreshed values do not validate against the model, the existing model values are retained.
+When `settings.yaml` changes its contents, `application_settings.port` is updated in place. If the refreshed values don't validate against the model, the existing model values are retained.
+
+## Authentication
+
+Each cloud provider uses its official SDK for authentication. The name of an authentication mechanism (and the way of adding it) can differ between providers and programming languages, even when it represents the same type of authentication mechanism. `wirio-settings` provides a simple and readable way to select the authentication mechanism, and it passes it to the provider SDK.
+
+### Default authentication
+
+Default authentication is the simplest option: we provide no authentication code and the identity is discovered automatically by the provider SDK. This is the recommended option for most applications, because it works in local and in production without any extra code.
+
+When we need a more explicit, stronger, and faster authentication path, we can pass the provider's authentication mechanism directly. This constrains the identity the application may use and avoids credential-provider discovery.
+
+### Azure credentials
+
+Azure uses its default credential chain when we don't pass an `AzureCredential`.
+
+The credential provider chain tries credentials in this order and uses the first one that succeeds:
+
+1. Environment credential (`AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`)
+2. Workload identity credential
+3. Developer tools credential (Azure CLI / Azure Developer CLI)
+4. Managed identity credential. This is the System-assigned managed identity by default. If we want to use a User-assigned managed identity, set the `AZURE_CLIENT_ID` environment variable.
+
+Use `AzureCredential` to select an authentication mechanism:
+
+- `Default()` uses the default Azure credential provider chain.
+- `AzureCli()` authenticates through the Azure CLI.
+- `AzureDeveloperCli()` authenticates through the Azure Developer CLI.
+- `ClientSecret(tenant_id, client_id, client_secret)` uses service principal credentials.
+- `ManagedIdentityCredential()` uses a managed identity.
+- `WorkloadIdentityCredential()` uses a workload identity.
+
+For example, to use explicit service principal credentials:
+
+```python
+from wirio_settings import AzureCredential
+
+settings_manager.add_azure_key_vault(
+    "https://example.vault.azure.net",
+    AzureCredential.ClientSecret("tenant-id", "client-id", "client-secret"),
+)
+```
+
+### AWS credentials
+
+AWS uses its default credential provider chain when we don't pass an `AwsCredential`.
+
+The [credential provider chain](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/credproviders.html#credproviders-default-credentials-provider-chain) can use an IAM role, the shared AWS configuration profile, or `AWS_*` environment variables.
+
+Use `AwsCredential` to select an authentication mechanism:
+
+- `Default()` uses the default AWS credential provider chain.
+- `EnvironmentVariable()` only reads `AWS_*` environment variables.
+- `Key(access_key_id, secret_access_key)` uses long-lived access keys.
+- `ProfileFile(profile_name=None)` uses the default profile when no name is supplied.
+- `Session(access_key_id, secret_access_key, session_token)` uses temporary credentials.
+
+For example, to use explicit access keys:
+
+```python
+from wirio_settings import AwsCredential
+
+settings_manager.add_aws_secrets_manager(
+    "secret-id",
+    AwsCredential.Key("access_key_id", "secret-access-key"),
+)
+```
+
+### GCP credentials
+
+GCP uses Application Default Credentials (ADC) when we don't pass credentials. To use a specific authentication mechanism, pass its JSON credentials with the `credentials_json` parameter.
 
 ## Troubleshooting
 

@@ -36,10 +36,16 @@ mod _wirio_settings {
     pub use crate::aws_secrets_manager::AwsSecretsManagerSettingsProvider;
 
     #[pymodule_export]
+    pub use crate::aws_secrets_manager::PythonAwsCredential;
+
+    #[pymodule_export]
     pub use crate::azure_key_vault::AzureKeyVaultSettingsSource;
 
     #[pymodule_export]
     pub use crate::azure_key_vault::AzureKeyVaultSettingsProvider;
+
+    #[pymodule_export]
+    pub use crate::azure_key_vault::PythonAzureCredential;
 
     #[pymodule_export]
     pub use crate::environment_variables::EnvironmentVariablesSettingsSource;

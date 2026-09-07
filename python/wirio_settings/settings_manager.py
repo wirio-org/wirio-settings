@@ -6,7 +6,9 @@ from weakref import WeakMethod
 from pydantic import BaseModel, TypeAdapter
 
 from wirio_settings._wirio_settings import (
+    AwsCredential,
     AwsSecretsManagerSettingsSource,
+    AzureCredential,
     AzureKeyVaultSettingsSource,
     EnvironmentVariablesSettingsSource,
     GcpSecretManagerSettingsSource,
@@ -149,29 +151,21 @@ class SettingsManager(SettingsRoot):
     def add_azure_key_vault(
         self,
         url: str,
+        credential: AzureCredential | None = None,
         *,
-        tenant_id: str | None = None,
-        client_id: str | None = None,
-        client_secret: str | None = None,
         reload_interval: timedelta | None = None,
     ) -> Self:
         """Add a settings provider that reads setting values from Azure Key Vault.
 
         Args:
             url: Azure Key Vault URL.
-            tenant_id: Azure tenant ID.
-            client_id: Azure client ID.
-            client_secret: Azure client secret.
+            credential: Azure credential. `Default` credential is used when omitted.
             reload_interval: Time between background refresh attempts. If omitted, settings are loaded once.
-
         """
+        credential = AzureCredential.Default() if credential is None else credential
         self.add(
             AzureKeyVaultSettingsSource(
-                url=url,
-                tenant_id=tenant_id,
-                client_id=client_id,
-                client_secret=client_secret,
-                reload_interval=reload_interval,
+                url=url, credential=credential, reload_interval=reload_interval
             )
         )
         return self
@@ -179,24 +173,26 @@ class SettingsManager(SettingsRoot):
     def add_aws_secrets_manager(
         self,
         secret_id: str,
-        region: str | None = None,
+        credential: AwsCredential | None = None,
         *,
+        region: str | None = None,
         url: str | None = None,
-        access_key_id: str | None = None,
-        secret_access_key: str | None = None,
-        session_token: str | None = None,
-        profile: str | None = None,
     ) -> Self:
-        """Add a settings provider that reads setting values from AWS Secrets Manager."""
+        """Add a settings provider that reads setting values from AWS Secrets Manager.
+
+        Args:
+            secret_id: AWS Secrets Manager secret ID.
+            credential: AWS credential. `Default` credential is used when omitted.
+            region: AWS region.
+            url: Service endpoint override, useful with a local emulator.
+        """
+        credential = AwsCredential.Default() if credential is None else credential
         self.add(
             AwsSecretsManagerSettingsSource(
                 secret_id=secret_id,
+                credential=credential,
                 region=region,
                 url=url,
-                access_key_id=access_key_id,
-                secret_access_key=secret_access_key,
-                session_token=session_token,
-                profile=profile,
             )
         )
         return self

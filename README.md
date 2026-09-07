@@ -625,25 +625,30 @@ When we need a more explicit, stronger, and faster authentication path, we can p
 
 Azure uses its default credential chain when we don't pass an `AzureCredential`.
 
-The crdential provider chain tries credentials in this order and uses the first one that succeeds:
+The credential provider chain tries credentials in this order and uses the first one that succeeds:
 
 1. Environment credential (`AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`)
 2. Workload identity credential
 3. Developer tools credential (Azure CLI / Azure Developer CLI)
 4. Managed identity credential. This is the System-assigned managed identity by default. If we want to use a User-assigned managed identity, set the `AZURE_CLIENT_ID` environment variable.
 
-To use explicit service principal credentials, create a `ClientSecretCredential`:
+Use `AzureCredential` to select an authentication mechanism:
+
+- `Default()` uses the default Azure credential provider chain.
+- `AzureCli()` authenticates through the Azure CLI.
+- `AzureDeveloperCli()` authenticates through the Azure Developer CLI.
+- `ClientSecret(tenant_id, client_id, client_secret)` uses service principal credentials.
+- `ManagedIdentityCredential()` uses a managed identity.
+- `WorkloadIdentityCredential()` uses a workload identity.
+
+For example, to use explicit service principal credentials:
 
 ```python
 from wirio_settings import AzureCredential
 
 settings_manager.add_azure_key_vault(
     "https://example.vault.azure.net",
-    credential=AzureCredential.ClientSecret(
-        tenant_id="...",
-        client_id="...",
-        client_secret="...",
-    ),
+    AzureCredential.ClientSecret("tenant-id", "client-id", "client-secret"),
 )
 ```
 
@@ -655,25 +660,22 @@ The [credential provider chain](https://docs.aws.amazon.com/sdk-for-rust/latest/
 
 Use `AwsCredential` to select an authentication mechanism:
 
+- `Default()` uses the default AWS credential provider chain.
+- `EnvironmentVariable()` only reads `AWS_*` environment variables.
+- `Key(access_key_id, secret_access_key)` uses long-lived access keys.
+- `ProfileFile(profile_name=None)` uses the default profile when no name is supplied.
+- `Session(access_key_id, secret_access_key, session_token)` uses temporary credentials.
+
+For example, to use explicit access keys:
+
 ```python
 from wirio_settings import AwsCredential
 
 settings_manager.add_aws_secrets_manager(
-    secret_id="secret-id",
-    credential=AwsCredential.Key(
-        access_key_id="...",
-        secret_access_key="...",
-    ),
+    "secret-id",
+    AwsCredential.Key("access_key_id", "secret-access-key"),
 )
 ```
-
-`AwsCredential` provides these options:
-
-- `Default()` uses the default AWS credential provider chain.
-- `EnvironmentVariable()` only reads `AWS_*` environment variables.
-- `Basic(access_key_id, secret_access_key)` uses long-lived access keys.
-- `Profile(profile_name=None)` uses the default profile when no name is supplied.
-- `Session(access_key_id, secret_access_key, session_token)` uses temporary credentials.
 
 ### GCP credentials
 

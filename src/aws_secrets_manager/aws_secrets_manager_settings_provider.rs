@@ -1,7 +1,5 @@
 use arc_swap::ArcSwap;
-use aws_config::{BehaviorVersion, Region};
 use aws_sdk_secretsmanager::Client;
-use aws_sdk_secretsmanager::config::{Builder as SecretsManagerConfigBuilder, Credentials};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -19,12 +17,7 @@ use crate::core::{
 pub struct AwsSecretsManagerSettingsProvider {
     data: ArcSwap<Py<PyDict>>,
     secret_id: String,
-    region: Option<String>,
-    url: Option<String>,
-    access_key_id: Option<String>,
-    secret_access_key: Option<String>,
-    session_token: Option<String>,
-    profile: Option<String>,
+    secrets_manager_client: Arc<Client>,
     model_registry: OnceCell<Py<ModelRegistry>>,
 }
 
@@ -49,87 +42,13 @@ impl AwsSecretsManagerSettingsProvider {
 }
 
 impl AwsSecretsManagerSettingsProvider {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        py: Python<'_>,
-        secret_id: String,
-        region: Option<String>,
-        url: Option<String>,
-        access_key_id: Option<String>,
-        secret_access_key: Option<String>,
-        session_token: Option<String>,
-        profile: Option<String>,
-    ) -> Self {
+    pub fn new(py: Python<'_>, secret_id: String, secrets_manager_client: Arc<Client>) -> Self {
         Self {
             data: ArcSwap::from_pointee(PyDict::new(py).unbind()),
             secret_id,
-            region,
-            url,
-            access_key_id,
-            secret_access_key,
-            session_token,
-            profile,
+            secrets_manager_client,
             model_registry: OnceCell::new(),
         }
-    }
-
-    fn validate_explicit_credentials(&self) -> PyResult<()> {
-        if self.has_explicit_credentials()
-            && (self.access_key_id.is_none() || self.secret_access_key.is_none())
-        {
-            return Err(PyRuntimeError::new_err(
-                "Both 'access_key_id' and 'secret_access_key' must be provided when using explicit AWS credentials",
-            ));
-        }
-
-        Ok(())
-    }
-
-    fn has_explicit_credentials(&self) -> bool {
-        self.access_key_id.is_some()
-            || self.secret_access_key.is_some()
-            || self.session_token.is_some()
-    }
-
-    async fn create_secrets_manager_client(&self) -> PyResult<Client> {
-        self.validate_explicit_credentials()?;
-
-        let mut config_loader = aws_config::defaults(BehaviorVersion::latest());
-
-        if let Some(region) = &self.region {
-            config_loader = config_loader.region(Region::new(region.clone()));
-        }
-
-        if let Some(profile) = &self.profile {
-            config_loader = config_loader.profile_name(profile);
-        }
-
-        if self.has_explicit_credentials() {
-            let credentials = Credentials::new(
-                self.access_key_id.clone().ok_or_else(|| {
-                    PyRuntimeError::new_err("Missing 'access_key_id' for explicit AWS credentials")
-                })?,
-                self.secret_access_key.clone().ok_or_else(|| {
-                    PyRuntimeError::new_err(
-                        "Missing 'secret_access_key' for explicit AWS credentials",
-                    )
-                })?,
-                self.session_token.clone(),
-                None,
-                "wirio-settings",
-            );
-            config_loader = config_loader.credentials_provider(credentials);
-        }
-
-        let sdk_config = config_loader.load().await;
-        let mut secrets_manager_config_builder = SecretsManagerConfigBuilder::from(&sdk_config);
-
-        if let Some(url) = &self.url {
-            secrets_manager_config_builder = secrets_manager_config_builder.endpoint_url(url);
-        }
-
-        let secrets_manager_config = secrets_manager_config_builder.build();
-        Ok(Client::from_conf(secrets_manager_config))
     }
 
     fn parse_secret_string(secret_string: &str) -> PyResult<BTreeMap<String, Option<String>>> {
@@ -154,8 +73,8 @@ impl SettingsProvider for AwsSecretsManagerSettingsProvider {
     }
 
     async fn reload(&self) -> PyResult<()> {
-        let secrets_manager_client = self.create_secrets_manager_client().await?;
-        let get_secret_value_response = secrets_manager_client
+        let get_secret_value_response = self
+            .secrets_manager_client
             .get_secret_value()
             .secret_id(&self.secret_id)
             .send()
@@ -194,13 +113,31 @@ impl fmt::Display for AwsSecretsManagerSettingsProvider {
 #[cfg(test)]
 mod tests {
     use super::AwsSecretsManagerSettingsProvider;
+    use crate::aws_secrets_manager::{AwsSecretsManagerSettingsSource, PythonAwsCredential};
     use crate::core::{ModelRegistry, SettingsProvider};
+    use aws_sdk_secretsmanager::Client;
     use pyo3::{
         Py, Python,
         types::{PyAnyMethods, PyModule, PyWeakrefReference},
     };
     use serde_json::json;
     use std::collections::BTreeMap;
+    use std::sync::Arc;
+
+    async fn create_secrets_manager_client() -> Arc<Client> {
+        Arc::new(
+            AwsSecretsManagerSettingsSource::create_secrets_manager_client(
+                &PythonAwsCredential::Session {
+                    access_key_id: String::from("access-key"),
+                    secret_access_key: String::from("secret-key"),
+                    session_token: String::from("session-token"),
+                },
+                Some(String::from("eu-west-1")),
+                Some(String::from("http://127.0.0.1:9")),
+            )
+            .await,
+        )
+    }
 
     #[test]
     fn test_parse_secret_string() {
@@ -242,31 +179,6 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_explicit_credentials_require_access_key_and_secret() {
-        Python::initialize();
-
-        let provider = Python::attach(|py| {
-            AwsSecretsManagerSettingsProvider::new(
-                py,
-                String::from("dev/secret-id"),
-                None,
-                None,
-                Some(String::from("access-key")),
-                None,
-                None,
-                None,
-            )
-        });
-
-        let error = provider.validate_explicit_credentials().unwrap_err();
-
-        assert_eq!(
-            error.to_string(),
-            "RuntimeError: Both 'access_key_id' and 'secret_access_key' must be provided when using explicit AWS credentials"
-        );
-    }
-
-    #[test]
     fn test_fail_when_secret_json_is_invalid() {
         Python::initialize();
 
@@ -280,89 +192,16 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_fail_when_session_token_is_provided_without_access_key_and_secret() {
-        Python::initialize();
-
-        let provider = Python::attach(|py| {
-            AwsSecretsManagerSettingsProvider::new(
-                py,
-                String::from("dev/secret-id"),
-                None,
-                None,
-                None,
-                None,
-                Some(String::from("session-token")),
-                None,
-            )
-        });
-
-        let error = provider.validate_explicit_credentials().unwrap_err();
-
-        assert_eq!(
-            error.to_string(),
-            "RuntimeError: Both 'access_key_id' and 'secret_access_key' must be provided when using explicit AWS credentials"
-        );
-    }
-
-    #[test]
-    fn test_not_validate_explicit_credentials_when_no_explicit_credentials_are_provided() {
-        Python::initialize();
-
-        let provider = Python::attach(|py| {
-            AwsSecretsManagerSettingsProvider::new(
-                py,
-                String::from("dev/secret-id"),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
-        });
-
-        let result = provider.validate_explicit_credentials();
-
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_create_secrets_manager_client_with_region_profile_url_and_credentials() {
-        Python::initialize();
-
-        let provider = Python::attach(|py| {
-            AwsSecretsManagerSettingsProvider::new(
-                py,
-                String::from("dev/secret-id"),
-                Some(String::from("eu-west-1")),
-                Some(String::from("http://127.0.0.1:9")),
-                Some(String::from("access-key")),
-                Some(String::from("secret-key")),
-                Some(String::from("session-token")),
-                Some(String::from("integration")),
-            )
-        });
-
-        let secrets_manager_client_result = provider.create_secrets_manager_client().await;
-
-        assert!(secrets_manager_client_result.is_ok());
-    }
-
     #[tokio::test]
     async fn test_fail_when_loading_secret_and_request_fails() {
         Python::initialize();
+        let secrets_manager_client = create_secrets_manager_client().await;
 
         let provider = Python::attach(|py| {
             AwsSecretsManagerSettingsProvider::new(
                 py,
                 String::from("dev/secret-id"),
-                Some(String::from("eu-west-1")),
-                Some(String::from("http://127.0.0.1:9")),
-                Some(String::from("access-key")),
-                Some(String::from("secret-key")),
-                None,
-                None,
+                secrets_manager_client,
             )
         });
 
@@ -373,20 +212,16 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn test_display_returns_type_name() {
+    #[tokio::test]
+    async fn test_display_returns_type_name() {
         Python::initialize();
+        let secrets_manager_client = create_secrets_manager_client().await;
 
         let display = Python::attach(|py| {
             AwsSecretsManagerSettingsProvider::new(
                 py,
                 String::from("dev/secret-id"),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
+                secrets_manager_client,
             )
             .to_string()
         });
@@ -394,9 +229,10 @@ mod tests {
         assert_eq!(display, "AwsSecretsManagerSettingsProvider");
     }
 
-    #[test]
-    fn test_set_model_registry() {
+    #[tokio::test]
+    async fn test_set_model_registry() {
         Python::initialize();
+        let secrets_manager_client = create_secrets_manager_client().await;
 
         Python::attach(|py| {
             let module = PyModule::from_code(py, c"def callback():\n    pass\n", c"", c"").unwrap();
@@ -406,12 +242,7 @@ mod tests {
             let provider = AwsSecretsManagerSettingsProvider::new(
                 py,
                 String::from("dev/secret-id"),
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
+                secrets_manager_client,
             );
 
             provider

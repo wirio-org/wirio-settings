@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 
 mod aws_secrets_manager;
-mod azure_key_vault;
+mod azure;
 mod core;
 mod environment_variables;
 mod gcp_secret_manager;
@@ -39,13 +39,13 @@ mod _wirio_settings {
     pub use crate::aws_secrets_manager::PythonAwsCredential;
 
     #[pymodule_export]
-    pub use crate::azure_key_vault::AzureKeyVaultSettingsSource;
+    pub use crate::azure::key_vault::AzureKeyVaultSettingsSource;
 
     #[pymodule_export]
-    pub use crate::azure_key_vault::AzureKeyVaultSettingsProvider;
+    pub use crate::azure::key_vault::AzureKeyVaultSettingsProvider;
 
     #[pymodule_export]
-    pub use crate::azure_key_vault::PythonAzureCredential;
+    pub use crate::azure::identity::PythonAzureCredential;
 
     #[pymodule_export]
     pub use crate::environment_variables::EnvironmentVariablesSettingsSource;

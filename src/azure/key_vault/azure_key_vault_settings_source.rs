@@ -1,6 +1,6 @@
 use super::remove_user_agent::RemoveUserAgent;
 use crate::{
-    azure_key_vault::{AzureKeyVaultSettingsProvider, PythonAzureCredential},
+    azure::{identity::PythonAzureCredential, key_vault::AzureKeyVaultSettingsProvider},
     core::{PythonSettingsProvider, PythonSettingsSource, SettingsSource},
 };
 use azure_security_keyvault_secrets::{SecretClient, SecretClientOptions};
@@ -81,7 +81,7 @@ impl SettingsSource for AzureKeyVaultSettingsSource {
 #[cfg(test)]
 mod tests {
     use super::AzureKeyVaultSettingsSource;
-    use crate::azure_key_vault::PythonAzureCredential;
+    use crate::azure::identity::PythonAzureCredential;
     use pyo3::Python;
     use pyo3::types::PyAnyMethods;
     use std::sync::Arc;
@@ -112,7 +112,7 @@ mod tests {
             assert!(
                 provider
                     .bind(py)
-                    .is_instance_of::<crate::azure_key_vault::AzureKeyVaultSettingsProvider>()
+                    .is_instance_of::<crate::azure::key_vault::AzureKeyVaultSettingsProvider>()
             );
         });
     }

@@ -4,7 +4,7 @@ mod aws;
 mod azure;
 mod core;
 mod environment_variables;
-mod gcp_secret_manager;
+mod gcp;
 mod json_file;
 mod setting_per_file;
 mod yaml_file;
@@ -54,10 +54,10 @@ mod _wirio_settings {
     pub use crate::environment_variables::EnvironmentVariablesSettingsProvider;
 
     #[pymodule_export]
-    pub use crate::gcp_secret_manager::GcpSecretManagerSettingsSource;
+    pub use crate::gcp::secret_manager::GcpSecretManagerSettingsSource;
 
     #[pymodule_export]
-    pub use crate::gcp_secret_manager::GcpSecretManagerSettingsProvider;
+    pub use crate::gcp::secret_manager::GcpSecretManagerSettingsProvider;
 
     #[pymodule_export]
     pub use crate::json_file::JsonFileSettingsSource;

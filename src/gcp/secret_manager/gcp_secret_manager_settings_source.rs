@@ -1,6 +1,6 @@
 use crate::{
     core::{PythonSettingsProvider, PythonSettingsSource, SettingsSource},
-    gcp_secret_manager::GcpSecretManagerSettingsProvider,
+    gcp::secret_manager::GcpSecretManagerSettingsProvider,
 };
 use pyo3::prelude::*;
 
@@ -65,7 +65,7 @@ mod tests {
             assert!(
                 provider
                     .bind(py)
-                    .is_instance_of::<crate::gcp_secret_manager::GcpSecretManagerSettingsProvider>(
+                    .is_instance_of::<crate::gcp::secret_manager::GcpSecretManagerSettingsProvider>(
                     )
             );
         });

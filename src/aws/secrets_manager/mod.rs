@@ -1,7 +1,5 @@
 mod aws_secrets_manager_settings_provider;
 mod aws_secrets_manager_settings_source;
-mod python_aws_credential;
 
 pub use aws_secrets_manager_settings_provider::AwsSecretsManagerSettingsProvider;
 pub use aws_secrets_manager_settings_source::AwsSecretsManagerSettingsSource;
-pub use python_aws_credential::PythonAwsCredential;

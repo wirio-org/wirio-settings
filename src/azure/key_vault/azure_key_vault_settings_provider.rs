@@ -13,7 +13,7 @@ use std::time::Duration;
 use tokio::sync::{Mutex, OnceCell};
 use tokio_util::sync::CancellationToken;
 
-use crate::azure_key_vault::parallel_secret_loader::ParallelSecretLoader;
+use crate::azure::key_vault::parallel_secret_loader::ParallelSecretLoader;
 use crate::core::{ModelRegistry, PythonSettingsProvider, SettingLookup, SettingsProvider};
 
 #[pyclass(extends = PythonSettingsProvider, frozen, str)]
@@ -316,7 +316,7 @@ impl fmt::Display for AzureKeyVaultSettingsProvider {
 #[cfg(test)]
 mod tests {
     use super::{AzureKeyVaultSettingsProvider, SecretsCache};
-    use crate::azure_key_vault::parallel_secret_loader::ParallelSecretLoader;
+    use crate::azure::key_vault::parallel_secret_loader::ParallelSecretLoader;
     use crate::core::{ModelRegistry, SettingsProvider};
     use arc_swap::ArcSwap;
     use async_trait::async_trait;

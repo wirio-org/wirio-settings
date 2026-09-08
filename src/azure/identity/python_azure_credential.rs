@@ -1,4 +1,4 @@
-use crate::azure_key_vault::default_azure_credential::DefaultAzureCredential;
+use crate::azure::identity::DefaultAzureCredential;
 use azure_core::credentials::TokenCredential;
 use azure_identity::{
     AzureCliCredential, AzureDeveloperCliCredential, ClientSecretCredential,

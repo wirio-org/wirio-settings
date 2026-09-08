@@ -113,7 +113,9 @@ impl fmt::Display for AwsSecretsManagerSettingsProvider {
 #[cfg(test)]
 mod tests {
     use super::AwsSecretsManagerSettingsProvider;
-    use crate::aws_secrets_manager::{AwsSecretsManagerSettingsSource, PythonAwsCredential};
+    use crate::aws::{
+        identity::PythonAwsCredential, secrets_manager::AwsSecretsManagerSettingsSource,
+    };
     use crate::core::{ModelRegistry, SettingsProvider};
     use aws_sdk_secretsmanager::Client;
     use pyo3::{

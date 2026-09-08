@@ -1,5 +1,5 @@
 use crate::{
-    aws_secrets_manager::{AwsSecretsManagerSettingsProvider, PythonAwsCredential},
+    aws::{identity::PythonAwsCredential, secrets_manager::AwsSecretsManagerSettingsProvider},
     core::{PythonSettingsProvider, PythonSettingsSource, SettingsSource},
 };
 use aws_config::{BehaviorVersion, Region};
@@ -83,7 +83,7 @@ impl SettingsSource for AwsSecretsManagerSettingsSource {
 #[cfg(test)]
 mod tests {
     use super::AwsSecretsManagerSettingsSource;
-    use crate::aws_secrets_manager::PythonAwsCredential;
+    use crate::aws::identity::PythonAwsCredential;
     use pyo3::Python;
     use pyo3::types::PyAnyMethods;
     use std::sync::Arc;
@@ -112,7 +112,7 @@ mod tests {
 
             assert!(provider
                 .bind(py)
-                .is_instance_of::<crate::aws_secrets_manager::AwsSecretsManagerSettingsProvider>());
+                .is_instance_of::<crate::aws::secrets_manager::AwsSecretsManagerSettingsProvider>());
         });
     }
 }

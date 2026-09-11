@@ -21,7 +21,7 @@ Here's why: our application settings, one line, done right. No more scattered `o
 - **Pydantic models:** Load application settings directly into models.
 - **Configuration stores:** Load settings from a pluggable configuration store, such as Azure App Configuration.
 - **A practical replacement:** Replace `pydantic-settings` and `python-dotenv` with one centralized, provider-agnostic (no vendor lock-in) settings library.
-- **Roadmap:** Planned capabilities include more configuration stores, feature flags, prefixes, filters, custom delimiters and aliases.
+- **Roadmap:** Planned capabilities include more configuration stores, object storages, feature flags, push refresh, prefixes, filters, custom delimiters and aliases.
 
 ## Table of contents
 

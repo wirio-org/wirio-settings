@@ -59,21 +59,21 @@ class SettingsSection(Settings):
         return self._root._register_model(model, self._path)
 
     @override
-    def get_value[TField](
+    def try_get_value[TField](
         self,
         key: str,
         value_type: type[TField] | type[str] = str,
     ) -> TField | None:
         child_path = f"{self._path}{SettingsPath.KEY_DELIMITER}{key}"
         typed_value_type = cast("type[TField]", value_type)
-        return self._root.get_value(child_path, typed_value_type)
+        return self._root.try_get_value(child_path, typed_value_type)
 
     @override
-    def get_required_value[TField](
+    def get_value[TField](
         self,
         key: str,
         value_type: type[TField] | type[str] = str,
     ) -> TField:
         child_path = f"{self._path}{SettingsPath.KEY_DELIMITER}{key}"
         typed_value_type = cast("type[TField]", value_type)
-        return self._root.get_required_value(child_path, typed_value_type)
+        return self._root.get_value(child_path, typed_value_type)

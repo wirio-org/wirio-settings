@@ -13,14 +13,14 @@ class Settings(ABC):
     """A level in the settings hierarchy."""
 
     @abstractmethod
-    def get_value[TField](
+    def try_get_value[TField](
         self,
         key: str,
         value_type: type[TField] | type[str] = str,
     ) -> TField | None: ...
 
     @abstractmethod
-    def get_required_value[TField](
+    def get_value[TField](
         self,
         key: str,
         value_type: type[TField] | type[str] = str,

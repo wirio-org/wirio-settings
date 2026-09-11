@@ -114,12 +114,12 @@ from wirio_settings import SettingsManager
 
 settings_manager = SettingsManager()
 
-openai_api_key = settings_manager.get_required_value("openai_api_key")
+openai_api_key = settings_manager.get_value("openai_api_key")
 ```
 
 Values are returned as strings unless we pass a type as the second argument, which validates and converts the value.
 
-We also can load optional settings with `get_value`, which returns `None` when the setting is missing.
+We also can load optional settings with `try_get_value`, which returns `None` when the setting is missing.
 
 Take into account that, independently of the origin of the setting, it'll always be converted to snake_case because it's the Python convention. For example, the environment variable `POSTGRESQL_CONNECTION_STRING` maps to the key `postgresql_connection_string`.
 
@@ -289,16 +289,16 @@ settings_manager = SettingsManager(content_root_path="/opt/orders-api")
 
 ### Read one value
 
-Use `get_required_value` when the key must exist. It raises a `KeyError` when the key is missing:
-
-```python
-openai_api_key = settings_manager.get_required_value("openai_api_key")
-```
-
-Use `get_value` for optional keys. It returns `None` when the key is missing:
+Use `get_value` when the key must exist. It raises a `KeyError` when the key is missing:
 
 ```python
 openai_api_key = settings_manager.get_value("openai_api_key")
+```
+
+Use `try_get_value` for optional keys. It returns `None` when the key is missing or its value is `None`:
+
+```python
+openai_api_key = settings_manager.try_get_value("openai_api_key")
 ```
 
 ### Typed values
@@ -306,8 +306,8 @@ openai_api_key = settings_manager.get_value("openai_api_key")
 By default, the settings system returns values as strings. To validate and convert to another type, pass the type as a second argument:
 
 ```python
-maximum_retries = settings_manager.get_required_value("maximum_retries", int)
-enable_cache = settings_manager.get_value("enable_cache", bool)
+maximum_retries = settings_manager.get_value("maximum_retries", int)
+enable_cache = settings_manager.try_get_value("enable_cache", bool)
 ```
 
 The conversion is done internally by Pydantic, so an invalid value raises a validation error. Lists and dictionaries are read from several keys, so they are best read through a [model](#lists-and-dictionaries) instead of a single value.
@@ -400,7 +400,7 @@ logging:
 
 ```python
 logging_section = settings_manager.get_section("logging")
-log_level = logging_section.get_required_value("log_level")
+log_level = logging_section.get_value("log_level")
 ```
 
 A section behaves like the settings manager itself, so it supports getting values, subsections and Pydantic models.

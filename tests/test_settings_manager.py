@@ -80,57 +80,6 @@ class _Settings(BaseModel):
 
 
 class TestSettingsManager:
-    def test_get_required_value(self) -> None:
-        expected_setting_value = "wirio"
-        settings_manager = SettingsManager(add_default_providers=False)
-        settings_manager.add(
-            _DictionarySettingsSource({"app_name": expected_setting_value})
-        )
-
-        setting_value = settings_manager.get_required_value("app_name")
-
-        assert isinstance(setting_value, str)
-        assert setting_value == expected_setting_value
-
-    def test_get_required_value_specifying_type(self) -> None:
-        expected_setting_value = 1
-        settings_manager = SettingsManager(add_default_providers=False)
-        settings_manager.add(
-            _DictionarySettingsSource({"number": str(expected_setting_value)})
-        )
-
-        setting_value = settings_manager.get_required_value("number", int)
-
-        assert isinstance(setting_value, int)
-        assert setting_value == expected_setting_value
-
-    def test_fail_when_getting_missing_required_value(self) -> None:
-        settings_manager = SettingsManager(add_default_providers=False)
-        settings_manager.add(_DictionarySettingsSource({"app_name": "wirio"}))
-
-        with pytest.raises(KeyError) as exception_info:
-            settings_manager.get_required_value("port")
-
-        assert exception_info.value.args[0] == "Missing setting value for key 'port'"
-
-    def test_fail_when_getting_required_value_with_invalid_type(self) -> None:
-        settings_manager = SettingsManager(add_default_providers=False)
-        settings_manager.add(_DictionarySettingsSource({"number": "not-a-number"}))
-
-        with pytest.raises(ValueError) as exception_info:
-            settings_manager.get_required_value("number", int)
-
-        assert "validation error" in str(exception_info.value)
-
-    def test_fail_when_required_value_is_none(self) -> None:
-        settings_manager = SettingsManager(add_default_providers=False)
-        settings_manager.add(_DictionarySettingsSource({"app_name": None}))
-
-        with pytest.raises(ValueError) as exception_info:
-            settings_manager.get_required_value("app_name")
-
-        assert str(exception_info.value) == "Setting value for key 'app_name' is None"
-
     def test_get_value(self) -> None:
         expected_setting_value = "wirio"
         settings_manager = SettingsManager(add_default_providers=False)
@@ -141,32 +90,6 @@ class TestSettingsManager:
         setting_value = settings_manager.get_value("app_name")
 
         assert isinstance(setting_value, str)
-        assert setting_value == expected_setting_value
-
-    def test_get_none_value_when_getting_value_with_none_value(self) -> None:
-        expected_setting_value = None
-        settings_manager = SettingsManager(add_default_providers=False)
-        settings_manager.add(
-            _DictionarySettingsSource({"app_name": expected_setting_value})
-        )
-
-        setting_value = settings_manager.get_value("app_name")
-
-        assert setting_value is None
-        assert setting_value == expected_setting_value
-
-    def test_get_none_value_when_getting_value_with_none_value_and_value_type_is_specified(
-        self,
-    ) -> None:
-        expected_setting_value = None
-        settings_manager = SettingsManager(add_default_providers=False)
-        settings_manager.add(
-            _DictionarySettingsSource({"app_name": expected_setting_value})
-        )
-
-        setting_value = settings_manager.get_value("app_name", int)
-
-        assert setting_value is None
         assert setting_value == expected_setting_value
 
     def test_get_value_specifying_type(self) -> None:
@@ -181,11 +104,88 @@ class TestSettingsManager:
         assert isinstance(setting_value, int)
         assert setting_value == expected_setting_value
 
+    def test_fail_when_getting_missing_required_value(self) -> None:
+        settings_manager = SettingsManager(add_default_providers=False)
+        settings_manager.add(_DictionarySettingsSource({"app_name": "wirio"}))
+
+        with pytest.raises(KeyError) as exception_info:
+            settings_manager.get_value("port")
+
+        assert exception_info.value.args[0] == "Missing setting value for key 'port'"
+
+    def test_fail_when_getting_required_value_with_invalid_type(self) -> None:
+        settings_manager = SettingsManager(add_default_providers=False)
+        settings_manager.add(_DictionarySettingsSource({"number": "not-a-number"}))
+
+        with pytest.raises(ValueError) as exception_info:
+            settings_manager.get_value("number", int)
+
+        assert "validation error" in str(exception_info.value)
+
+    def test_fail_when_required_value_is_none(self) -> None:
+        settings_manager = SettingsManager(add_default_providers=False)
+        settings_manager.add(_DictionarySettingsSource({"app_name": None}))
+
+        with pytest.raises(ValueError) as exception_info:
+            settings_manager.get_value("app_name")
+
+        assert str(exception_info.value) == "Setting value for key 'app_name' is None"
+
+    def test_try_get_value(self) -> None:
+        expected_setting_value = "wirio"
+        settings_manager = SettingsManager(add_default_providers=False)
+        settings_manager.add(
+            _DictionarySettingsSource({"app_name": expected_setting_value})
+        )
+
+        setting_value = settings_manager.try_get_value("app_name")
+
+        assert isinstance(setting_value, str)
+        assert setting_value == expected_setting_value
+
+    def test_get_none_value_when_getting_value_with_none_value(self) -> None:
+        expected_setting_value = None
+        settings_manager = SettingsManager(add_default_providers=False)
+        settings_manager.add(
+            _DictionarySettingsSource({"app_name": expected_setting_value})
+        )
+
+        setting_value = settings_manager.try_get_value("app_name")
+
+        assert setting_value is None
+        assert setting_value == expected_setting_value
+
+    def test_get_none_value_when_getting_value_with_none_value_and_value_type_is_specified(
+        self,
+    ) -> None:
+        expected_setting_value = None
+        settings_manager = SettingsManager(add_default_providers=False)
+        settings_manager.add(
+            _DictionarySettingsSource({"app_name": expected_setting_value})
+        )
+
+        setting_value = settings_manager.try_get_value("app_name", int)
+
+        assert setting_value is None
+        assert setting_value == expected_setting_value
+
+    def test_try_get_value_specifying_type(self) -> None:
+        expected_setting_value = 1
+        settings_manager = SettingsManager(add_default_providers=False)
+        settings_manager.add(
+            _DictionarySettingsSource({"number": str(expected_setting_value)})
+        )
+
+        setting_value = settings_manager.try_get_value("number", int)
+
+        assert isinstance(setting_value, int)
+        assert setting_value == expected_setting_value
+
     def test_get_none_when_getting_missing_value(self) -> None:
         settings_manager = SettingsManager(add_default_providers=False)
         settings_manager.add(_DictionarySettingsSource({"app_name": "wirio"}))
 
-        setting_value = settings_manager.get_value("port")
+        setting_value = settings_manager.try_get_value("port")
 
         assert setting_value is None
 
@@ -194,7 +194,7 @@ class TestSettingsManager:
         settings_manager.add(_DictionarySettingsSource({"number": "not-a-number"}))
 
         with pytest.raises(ValueError) as exception_info:
-            settings_manager.get_value("number", int)
+            settings_manager.try_get_value("number", int)
 
         assert "validation error" in str(exception_info.value)
 
@@ -674,7 +674,7 @@ class TestSettingsManager:
         settings_manager.add(_DictionarySettingsSource({"values": str(expected_float)}))
 
         settings = settings_manager.get_model(Settings)
-        float_value = settings_manager.get_required_value("values", float)
+        float_value = settings_manager.get_value("values", float)
 
         assert settings.values == expected_int_list
         assert float_value == expected_float
@@ -751,8 +751,8 @@ class TestSettingsManager:
         settings_manager = SettingsManager(add_default_providers=False)
         settings_manager.add(_DictionarySettingsSource({key: ""}))
 
-        value = settings_manager.get_value(key, str)
-        required_value = settings_manager.get_required_value(key, str)
+        value = settings_manager.try_get_value(key, str)
+        required_value = settings_manager.get_value(key, str)
 
         assert value == ""
         assert required_value == ""
@@ -833,8 +833,8 @@ class TestSettingsManager:
         settings_manager.add(_DictionarySettingsSource(setting_values))
 
         settings = settings_manager.get_model(model_class)
-        first_value = settings_manager.get_required_value("ports.0", field_type)
-        missing_value = settings_manager.get_value("ports.2", field_type)
+        first_value = settings_manager.get_value("ports.0", field_type)
+        missing_value = settings_manager.try_get_value("ports.2", field_type)
 
         assert settings.ports == expected_values
         assert isinstance(first_value, field_type)
@@ -856,8 +856,8 @@ class TestSettingsManager:
         settings_manager = SettingsManager(add_default_providers=False)
         settings_manager.add(_DictionarySettingsSource({key: ""}))
 
-        value = settings_manager.get_value(key, field_type)
-        required_value = settings_manager.get_required_value(key, field_type)
+        value = settings_manager.try_get_value(key, field_type)
+        required_value = settings_manager.get_value(key, field_type)
 
         assert value == []
         assert required_value == []
@@ -887,8 +887,8 @@ class TestSettingsManager:
         )
 
         settings = settings_manager.get_model(Settings)
-        first_server_name = settings_manager.get_required_value("servers.0.name")
-        second_server_retries = settings_manager.get_value("servers.1.retries", int)
+        first_server_name = settings_manager.get_value("servers.0.name")
+        second_server_retries = settings_manager.try_get_value("servers.1.retries", int)
 
         assert len(settings.servers) == expected_server_settings
         assert settings.servers[0].name == "api"
@@ -930,8 +930,8 @@ class TestSettingsManager:
         settings_manager.add(_DictionarySettingsSource(setting_values))
 
         settings = settings_manager.get_model(model_class)
-        http_value = settings_manager.get_required_value("ports.http", field_type)
-        missing_value = settings_manager.get_value("ports.ftp", field_type)
+        http_value = settings_manager.get_value("ports.http", field_type)
+        missing_value = settings_manager.try_get_value("ports.ftp", field_type)
 
         assert isinstance(settings, BaseModel)
         assert isinstance(settings.ports, dict)
@@ -964,8 +964,8 @@ class TestSettingsManager:
         )
 
         settings = settings_manager.get_model(Settings)
-        api_url = settings_manager.get_required_value("services.api.url")
-        worker_retries = settings_manager.get_value("services.worker.retries", int)
+        api_url = settings_manager.get_value("services.api.url")
+        worker_retries = settings_manager.try_get_value("services.worker.retries", int)
 
         assert len(settings.services) == expected_service_settings
         assert settings.services["api"].url == "https://api.example.com"
@@ -1127,7 +1127,7 @@ class TestSettingsManager:
             path="settings.yaml",
             reload_on_change=True,
         )
-        initial_value = settings_manager.get_required_value("value")
+        initial_value = settings_manager.get_value("value")
         settings_file_path.write_text(
             f'{{"value":"{expected_updated_value}"}}', encoding="utf-8"
         )
@@ -1137,7 +1137,7 @@ class TestSettingsManager:
 
         while actual_value != expected_updated_value and monotonic() < timeout_at:
             await asyncio.sleep(0.1)
-            actual_value = settings_manager.get_required_value("value")
+            actual_value = settings_manager.get_value("value")
 
         assert initial_value == expected_initial_value
         assert actual_value == expected_updated_value
@@ -1157,7 +1157,7 @@ class TestSettingsManager:
             path="settings.json",
             reload_on_change=True,
         )
-        initial_value = settings_manager.get_required_value("value")
+        initial_value = settings_manager.get_value("value")
         settings_file_path.write_text(
             f'{{"value":"{expected_updated_value}"}}', encoding="utf-8"
         )
@@ -1167,7 +1167,7 @@ class TestSettingsManager:
 
         while actual_value != expected_updated_value and monotonic() < timeout_at:
             await asyncio.sleep(0.1)
-            actual_value = settings_manager.get_required_value("value")
+            actual_value = settings_manager.get_value("value")
 
         assert initial_value == expected_initial_value
         assert actual_value == expected_updated_value
@@ -1185,14 +1185,14 @@ class TestSettingsManager:
             directory_path=str(tmp_path),
             reload_on_change=True,
         )
-        initial_value = settings_manager.get_required_value("value")
+        initial_value = settings_manager.get_value("value")
         settings_file_path.write_text(expected_updated_value, encoding="utf-8")
 
         actual_value = initial_value
         timeout_at = monotonic() + 5
         while actual_value != expected_updated_value and monotonic() < timeout_at:
             sleep(0.05)
-            actual_value = settings_manager.get_required_value("value")
+            actual_value = settings_manager.get_value("value")
 
         assert initial_value == expected_initial_value
         assert actual_value == expected_updated_value
@@ -1442,11 +1442,11 @@ class TestSettingsManager:
         assert isinstance(settings_model.api_key, SecretStr)
         assert settings_model.api_key.get_secret_value() == expected_api_key
 
-        optional_value = settings_manager.get_value("api_key", SecretStr)
+        optional_value = settings_manager.try_get_value("api_key", SecretStr)
         assert isinstance(optional_value, SecretStr)
         assert optional_value.get_secret_value() == expected_api_key
 
-        required_value = settings_manager.get_required_value("api_key", SecretStr)
+        required_value = settings_manager.get_value("api_key", SecretStr)
         assert isinstance(required_value, SecretStr)
         assert required_value.get_secret_value() == expected_api_key
 

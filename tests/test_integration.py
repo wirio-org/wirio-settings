@@ -21,11 +21,10 @@ class TestIntegration:
             secret_id=secret_id,
         )
 
-        assert settings_manager.get_required_value("secret_1") == expected_secret_1
-        assert settings_manager.get_required_value("secret_2") == expected_secret_2
+        assert settings_manager.get_value("secret_1") == expected_secret_1
+        assert settings_manager.get_value("secret_2") == expected_secret_2
         assert (
-            settings_manager.get_required_value("parent.nested_secret")
-            == expected_nested_secret
+            settings_manager.get_value("parent.nested_secret") == expected_nested_secret
         )
 
     @pytest.mark.skipif(
@@ -42,11 +41,10 @@ class TestIntegration:
             project_id=project_id,
         )
 
-        assert settings_manager.get_required_value("secret_1") == expected_secret_1
-        assert settings_manager.get_required_value("secret_2") == expected_secret_2
+        assert settings_manager.get_value("secret_1") == expected_secret_1
+        assert settings_manager.get_value("secret_2") == expected_secret_2
         assert (
-            settings_manager.get_required_value("parent.nested_secret")
-            == expected_nested_secret
+            settings_manager.get_value("parent.nested_secret") == expected_nested_secret
         )
 
     @pytest.mark.skipif(
@@ -61,11 +59,10 @@ class TestIntegration:
 
         settings_manager.add_azure_key_vault(url=key_vault_url)
 
-        assert settings_manager.get_required_value("secret_1") == expected_secret_1
-        assert settings_manager.get_required_value("secret_2") == expected_secret_2
+        assert settings_manager.get_value("secret_1") == expected_secret_1
+        assert settings_manager.get_value("secret_2") == expected_secret_2
         assert (
-            settings_manager.get_required_value("parent.nested_secret")
-            == expected_nested_secret
+            settings_manager.get_value("parent.nested_secret") == expected_nested_secret
         )
 
     @pytest.mark.skipif(
@@ -79,9 +76,9 @@ class TestIntegration:
 
         settings_manager.add_azure_app_configuration(endpoint=endpoint)
 
-        assert settings_manager.get_required_value("setting") == expected_setting
+        assert settings_manager.get_value("setting") == expected_setting
         assert (
-            settings_manager.get_required_value("parent.nested_setting")
+            settings_manager.get_value("parent.nested_setting")
             == expected_nested_setting
         )
 
@@ -96,11 +93,11 @@ class TestIntegration:
         settings_manager.add_environment_variables()
 
         assert (
-            settings_manager.get_required_value("test_integration_feature_flag_enabled")
+            settings_manager.get_value("test_integration_feature_flag_enabled")
             == expected_feature_flag
         )
         assert (
-            settings_manager.get_required_value("test_integration_parent.nested_value")
+            settings_manager.get_value("test_integration_parent.nested_value")
             == expected_nested_value
         )
 
@@ -117,15 +114,12 @@ class TestIntegration:
 
         settings_manager.add_setting_per_file(directory_path=str(tmp_path))
 
-        assert settings_manager.get_required_value("app_name") == expected_app_name
+        assert settings_manager.get_value("app_name") == expected_app_name
         assert (
-            settings_manager.get_required_value("logging__log_level__default")
+            settings_manager.get_value("logging__log_level__default")
             == expected_log_level
         )
-        assert (
-            settings_manager.get_required_value("database_password")
-            == expected_password
-        )
+        assert settings_manager.get_value("database_password") == expected_password
 
     def test_load_settings_using_yaml_file(self, tmp_path: Path) -> None:
         expected_app_name = "wirio"
@@ -145,10 +139,10 @@ logging:
 
         settings_manager.add_yaml_file(path=str(settings_file_path))
 
-        assert settings_manager.get_required_value("app_name") == expected_app_name
-        assert settings_manager.get_required_value("port") == expected_port
+        assert settings_manager.get_value("app_name") == expected_app_name
+        assert settings_manager.get_value("port") == expected_port
         assert (
-            settings_manager.get_required_value("logging.log_level.default")
+            settings_manager.get_value("logging.log_level.default")
             == expected_log_level
         )
 
@@ -196,18 +190,18 @@ sharedSetting: Integration YAML settings
         settings_manager = SettingsManager(content_root_path=str(tmp_path))
 
         assert (
-            settings_manager.get_required_value("from_yaml_settings")
+            settings_manager.get_value("from_yaml_settings")
             == expected_from_yaml_settings
         )
         assert (
-            settings_manager.get_required_value("from_integration_yaml_settings")
+            settings_manager.get_value("from_integration_yaml_settings")
             == expected_from_integration_yaml_settings
         )
         assert (
-            settings_manager.get_required_value("from_environment")
+            settings_manager.get_value("from_environment")
             == expected_from_environment_variables
         )
-        assert settings_manager.get_required_value("shared_setting") == shared_setting
+        assert settings_manager.get_value("shared_setting") == shared_setting
 
     def test_load_settings_using_custom_environment_key(
         self, tmp_path: Path, mocker: MockerFixture
@@ -228,7 +222,7 @@ log_level: {expected_log_level}
             content_root_path=str(tmp_path), environment_key=environment_key
         )
 
-        assert settings_manager.get_required_value("log_level") == expected_log_level
+        assert settings_manager.get_value("log_level") == expected_log_level
 
     def test_fall_back_to_local_environment_when_environment_key_is_not_set(
         self, tmp_path: Path, mocker: MockerFixture
@@ -247,7 +241,7 @@ log_level: {expected_log_level}
             content_root_path=str(tmp_path), environment_key=environment_key
         )
 
-        assert settings_manager.get_required_value("log_level") == expected_log_level
+        assert settings_manager.get_value("log_level") == expected_log_level
 
     def test_load_settings_using_default_environment_key_when_environment_key_is_not_set(
         self, tmp_path: Path, mocker: MockerFixture
@@ -265,4 +259,4 @@ log_level: {expected_log_level}
 
         settings_manager = SettingsManager(content_root_path=str(tmp_path))
 
-        assert settings_manager.get_required_value("log_level") == expected_log_level
+        assert settings_manager.get_value("log_level") == expected_log_level

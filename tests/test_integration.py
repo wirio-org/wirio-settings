@@ -71,6 +71,23 @@ class TestIntegration:
     @pytest.mark.skipif(
         os.environ.get("INTEGRATION_TEST") is None, reason="Integration test"
     )
+    def test_load_settings_using_azure_app_configuration(self) -> None:
+        endpoint = os.environ["AZURE_APP_CONFIGURATION_ENDPOINT"]
+        expected_setting = "setting-value"
+        expected_nested_setting = "nested-setting-value"
+        settings_manager = SettingsManager(add_default_providers=False)
+
+        settings_manager.add_azure_app_configuration(endpoint=endpoint)
+
+        assert settings_manager.get_required_value("setting") == expected_setting
+        assert (
+            settings_manager.get_required_value("parent.nested_setting")
+            == expected_nested_setting
+        )
+
+    @pytest.mark.skipif(
+        os.environ.get("INTEGRATION_TEST") is None, reason="Integration test"
+    )
     def test_load_settings_using_environment_variables(self) -> None:
         expected_feature_flag = "true"
         expected_nested_value = "nested-value"

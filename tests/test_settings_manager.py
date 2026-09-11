@@ -12,6 +12,7 @@ from pytest_mock import MockerFixture
 from wirio_settings._wirio_settings import (
     AwsCredential,
     AwsSecretsManagerSettingsSource,
+    AzureAppConfigurationSettingsSource,
     AzureCredential,
     AzureKeyVaultSettingsSource,
     GcpSecretManagerSettingsSource,
@@ -323,6 +324,27 @@ class TestSettingsManager:
         add_patch.assert_called_once()
         source = add_patch.call_args.args[0]
         assert isinstance(source, AzureKeyVaultSettingsSource)
+
+    def test_add_azure_app_configuration(self, mocker: MockerFixture) -> None:
+        endpoint = "https://example.azconfig.io"
+        credential = AzureCredential.ClientSecret(
+            "tenant-id", "client-id", "client-secret"
+        )
+        settings_manager = SettingsManager(add_default_providers=False)
+        add_patch = mocker.patch.object(
+            settings_manager,
+            settings_manager.add.__name__,
+            autospec=True,
+        )
+
+        settings_manager.add_azure_app_configuration(
+            endpoint=endpoint,
+            credential=credential,
+        )
+
+        add_patch.assert_called_once()
+        source = add_patch.call_args.args[0]
+        assert isinstance(source, AzureAppConfigurationSettingsSource)
 
     def test_add_aws_secrets_manager(self, mocker: MockerFixture) -> None:
         expected_secret_id = "dev/TestApp"
@@ -1443,3 +1465,19 @@ class TestSettingsManager:
         add_patch.assert_called_once()
         source = add_patch.call_args.args[0]
         assert isinstance(source, AzureKeyVaultSettingsSource)
+
+    def test_add_azure_app_configuration_using_default_credential(
+        self, mocker: MockerFixture
+    ) -> None:
+        settings_manager = SettingsManager(add_default_providers=False)
+        add_patch = mocker.patch.object(
+            settings_manager,
+            settings_manager.add.__name__,
+            autospec=True,
+        )
+
+        settings_manager.add_azure_app_configuration("https://example.azconfig.io")
+
+        add_patch.assert_called_once()
+        source = add_patch.call_args.args[0]
+        assert isinstance(source, AzureAppConfigurationSettingsSource)

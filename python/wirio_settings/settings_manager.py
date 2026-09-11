@@ -8,6 +8,7 @@ from pydantic import BaseModel, TypeAdapter
 from wirio_settings._wirio_settings import (
     AwsCredential,
     AwsSecretsManagerSettingsSource,
+    AzureAppConfigurationSettingsSource,
     AzureCredential,
     AzureKeyVaultSettingsSource,
     EnvironmentVariablesSettingsSource,
@@ -166,6 +167,26 @@ class SettingsManager(SettingsRoot):
         self.add(
             AzureKeyVaultSettingsSource(
                 url=url, credential=credential, reload_interval=reload_interval
+            )
+        )
+        return self
+
+    def add_azure_app_configuration(
+        self,
+        endpoint: str,
+        credential: AzureCredential | None = None,
+    ) -> Self:
+        """Add a settings provider that reads values from Azure App Configuration.
+
+        Args:
+            endpoint: Azure App Configuration endpoint.
+            credential: Azure credential. `Default` credential is used when omitted.
+        """
+        credential = AzureCredential.Default() if credential is None else credential
+        self.add(
+            AzureAppConfigurationSettingsSource(
+                endpoint=endpoint,
+                credential=credential,
             )
         )
         return self

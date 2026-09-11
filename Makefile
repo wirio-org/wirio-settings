@@ -45,6 +45,20 @@ azure-key-vault-integration-test:
 	az keyvault secret purge --vault-name "$$AZURE_KEY_VAULT_NAME" --name "Secret2" --output none
 	az keyvault secret purge --vault-name "$$AZURE_KEY_VAULT_NAME" --name "parent--nestedSecret" --output none
 
+# Prerequisites:
+# az login
+# az account set --subscription <subscription_id>
+# AZURE_APP_CONFIGURATION_NAME=<app_configuration_name> make azure-app-configuration-integration-test
+.PHONY: azure-app-configuration-integration-test
+azure-app-configuration-integration-test:
+	-az appconfig kv delete --name "$$AZURE_APP_CONFIGURATION_NAME" --key "Setting" --auth-mode login --yes --output none
+	-az appconfig kv delete --name "$$AZURE_APP_CONFIGURATION_NAME" --key "Parent:NestedSetting" --auth-mode login --yes --output none
+	az appconfig kv set --name "$$AZURE_APP_CONFIGURATION_NAME" --key "Setting" --value "setting-value" --auth-mode login --yes --output none
+	az appconfig kv set --name "$$AZURE_APP_CONFIGURATION_NAME" --key "Parent:NestedSetting" --value "nested-setting-value" --auth-mode login --yes --output none
+	INTEGRATION_TEST=1 AZURE_APP_CONFIGURATION_ENDPOINT="https://$$AZURE_APP_CONFIGURATION_NAME.azconfig.io" uv run -- pytest tests/test_integration.py::TestIntegration::test_load_settings_using_azure_app_configuration
+	az appconfig kv delete --name "$$AZURE_APP_CONFIGURATION_NAME" --key "Setting" --auth-mode login --yes --output none
+	az appconfig kv delete --name "$$AZURE_APP_CONFIGURATION_NAME" --key "Parent:NestedSetting" --auth-mode login --yes --output none
+
 # Prerequisite: aws login
 .PHONY: aws-secrets-manager-integration-test
 aws-secrets-manager-integration-test:

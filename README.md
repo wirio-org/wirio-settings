@@ -19,8 +19,9 @@ Here's why: our application settings, one line, done right. No more scattered `o
 - **Secret stores:** Load secrets and certificates from Azure Key Vault, AWS Secrets Manager and GCP Secret Manager, with one line of code and safe authentication.
 - **Automatic reloads:** Keep settings up to date by automatically reloading them, with no need to restart the application or deploy a new version.
 - **Pydantic models:** Load application settings directly into models.
+- **Configuration stores:** Load settings from a pluggable configuration store, such as Azure App Configuration.
 - **A practical replacement:** Replace `pydantic-settings` and `python-dotenv` with one centralized, provider-agnostic (no vendor lock-in) settings library.
-- **Roadmap:** Planned capabilities include pluggable configuration stores, feature flags, prefixes, filters, custom delimiters and aliases.
+- **Roadmap:** Planned capabilities include more configuration stores, feature flags, prefixes, filters, custom delimiters and aliases.
 
 ## Table of contents
 
@@ -53,6 +54,7 @@ Here's why: our application settings, one line, done right. No more scattered `o
   - [JSON file](#json-file)
   - [Environment variables](#environment-variables)
   - [Azure Key Vault](#azure-key-vault)
+  - [Azure App Configuration](#azure-app-configuration)
   - [AWS Secrets Manager](#aws-secrets-manager)
   - [GCP Secret Manager](#gcp-secret-manager)
   - [Setting per file](#setting-per-file)
@@ -262,7 +264,7 @@ With `PYTHONAPP_ENVIRONMENT=production`, the default providers load `settings.pr
 Every provider has its own naming convention, and not every store allows the same characters in a key. `wirio-settings` normalizes all of them into the same shape:
 
 - Keys are converted to snake case. `APP_NAME`, `appName`, `AppName`, and `app-name` all map to `app_name`.
-- Sections are separated with `.`, as in `database.host` or `logging.log_level.default`.
+- Sections are separated with `.`, as in `database.host` or `logging.log_level.default`. Some providers may use different separators internally, but they are normalized to `.` in the `SettingsManager`.
 - Each provider declares how sections are written in its own store. For example:
 
   | Provider                            | Section separator | Example               | Setting key     |
@@ -503,6 +505,23 @@ For authentication options, see [Azure credentials](#azure-credentials).
 
 To periodically refresh the loaded secrets, use the `reload_interval` parameter, described in [Reload on an interval](#reload-on-an-interval).
 
+### Azure App Configuration
+
+Read configurations from Azure App Configuration.
+
+```python
+settings_manager.add_azure_app_configuration(
+    "https://example.azconfig.io",
+)
+```
+
+Keys are normalized to snake case. Feature flags, labels, and key filters are not supported by this provider.
+
+For authentication options, see [Azure credentials](#azure-credentials).
+
+> [!NOTE]
+> **Azure permissions:** Usually, the `App Configuration Data Reader` role is used to read settings.
+
 ### AWS Secrets Manager
 
 ```python
@@ -679,7 +698,7 @@ settings_manager.add_aws_secrets_manager(
 
 ### GCP credentials
 
-GCP uses Application Default Credentials (ADC) when we don't pass credentials. To use a specific authentication mechanism, pass its JSON credentials with the `credentials_json` parameter.
+GCP uses [Application Default Credentials (ADC)](https://docs.cloud.google.com/docs/authentication/application-default-credentials) when we don't pass credentials. To use a specific authentication mechanism, pass its JSON credentials with the `credentials_json` parameter.
 
 ## Troubleshooting
 

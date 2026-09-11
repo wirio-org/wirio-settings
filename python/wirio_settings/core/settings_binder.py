@@ -112,7 +112,7 @@ class SettingsBinder:
             if not isinstance(mapping_value, SettingLookup.Missing):
                 return mapping_value
 
-        typed_value = settings.get_value(key, field_type.annotation)
+        typed_value = settings.try_get_value(key, field_type.annotation)
 
         if typed_value is None:
             return None
@@ -251,9 +251,9 @@ class SettingsBinder:
         raw_value: object | None
 
         if value_type is None:
-            raw_value = settings.get_value(key)
+            raw_value = settings.try_get_value(key)
         else:
-            raw_value = settings.get_value(key, value_type)
+            raw_value = settings.try_get_value(key, value_type)
 
         if raw_value is None:
             return SettingLookup.Missing()

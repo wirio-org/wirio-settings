@@ -22,7 +22,7 @@ class SettingsRoot(Settings, ABC):
     def get_section(self, key: str) -> "SettingsSection": ...
 
     @abstractmethod
-    def get_value[TField](
+    def try_get_value[TField](
         self,
         key: str,
         value_type: type[TField] | type[str] = str,

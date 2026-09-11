@@ -234,7 +234,7 @@ class SettingsManager(SettingsRoot):
         return self
 
     @override
-    def get_value[TField = str](
+    def try_get_value[TField = str](
         self,
         key: str,
         value_type: type[TField] | type[str] = str,
@@ -258,7 +258,7 @@ class SettingsManager(SettingsRoot):
         return cast("TField", TypeAdapter(value_type).validate_python(raw_value))
 
     @override
-    def get_required_value[TField = str](
+    def get_value[TField = str](
         self,
         key: str,
         value_type: type[TField] | type[str] = str,

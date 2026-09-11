@@ -87,8 +87,8 @@ class TestSettingsBinder:
         settings_manager = SettingsManager(add_default_providers=False)
         settings_manager.add(_DictionarySettingsSource({key: ""}))
 
-        value = settings_manager.get_value(key, str)
-        required_value = settings_manager.get_required_value(key, str)
+        value = settings_manager.try_get_value(key, str)
+        required_value = settings_manager.get_value(key, str)
 
         assert value == ""
         assert required_value == ""
@@ -185,8 +185,8 @@ class TestSettingsBinder:
         settings_manager.add(_DictionarySettingsSource(settings_values))
 
         settings = settings_manager.get_model(model_class)
-        first_value = settings_manager.get_required_value("ports.0", field_type)
-        missing_value = settings_manager.get_value("ports.2", field_type)
+        first_value = settings_manager.get_value("ports.0", field_type)
+        missing_value = settings_manager.try_get_value("ports.2", field_type)
 
         assert settings.ports == expected_values
         assert isinstance(first_value, field_type)
@@ -208,8 +208,8 @@ class TestSettingsBinder:
         settings_manager = SettingsManager(add_default_providers=False)
         settings_manager.add(_DictionarySettingsSource({key: ""}))
 
-        value = settings_manager.get_value(key, field_type)
-        required_value = settings_manager.get_required_value(key, field_type)
+        value = settings_manager.try_get_value(key, field_type)
+        required_value = settings_manager.get_value(key, field_type)
 
         assert value == []
         assert required_value == []
@@ -239,8 +239,8 @@ class TestSettingsBinder:
         )
 
         settings = settings_manager.get_model(Settings)
-        first_server_name = settings_manager.get_required_value("servers.0.name")
-        second_server_retries = settings_manager.get_value("servers.1.retries", int)
+        first_server_name = settings_manager.get_value("servers.0.name")
+        second_server_retries = settings_manager.try_get_value("servers.1.retries", int)
 
         assert len(settings.servers) == expected_server_settings
         assert settings.servers[0].name == "api"
@@ -282,8 +282,8 @@ class TestSettingsBinder:
         settings_manager.add(_DictionarySettingsSource(settings_values))
 
         settings = settings_manager.get_model(model_class)
-        http_value = settings_manager.get_required_value("ports.http", field_type)
-        missing_value = settings_manager.get_value("ports.ftp", field_type)
+        http_value = settings_manager.get_value("ports.http", field_type)
+        missing_value = settings_manager.try_get_value("ports.ftp", field_type)
 
         assert isinstance(settings, BaseModel)
         assert isinstance(settings.ports, dict)
@@ -316,8 +316,8 @@ class TestSettingsBinder:
         )
 
         settings = settings_manager.get_model(Settings)
-        api_url = settings_manager.get_required_value("services.api.url")
-        worker_retries = settings_manager.get_value("services.worker.retries", int)
+        api_url = settings_manager.get_value("services.api.url")
+        worker_retries = settings_manager.try_get_value("services.worker.retries", int)
 
         assert len(settings.services) == expected_service_settings
         assert settings.services["api"].url == "https://api.example.com"

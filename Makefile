@@ -51,7 +51,7 @@ azure-key-vault-integration-test:
 # AZURE_APP_CONFIGURATION_NAME=<app_configuration_name> make azure-app-configuration-integration-test
 .PHONY: azure-app-configuration-integration-test
 azure-app-configuration-integration-test:
-	-az appconfig kv delete --name "$$AZURE_APP_CONFIGURATION_NAME" --key "TestSetting" --auth-mode login --yes --output none
+	-az appconfig kv delete --name "$$AZURE_APP_CONFIGURATION_NAME" --key "Setting" --auth-mode login --yes --output none
 	-az appconfig kv delete --name "$$AZURE_APP_CONFIGURATION_NAME" --key "Parent:NestedSetting" --auth-mode login --yes --output none
 	az appconfig kv set --name "$$AZURE_APP_CONFIGURATION_NAME" --key "Setting" --value "setting-value" --auth-mode login --yes --output none
 	az appconfig kv set --name "$$AZURE_APP_CONFIGURATION_NAME" --key "Parent:NestedSetting" --value "nested-setting-value" --auth-mode login --yes --output none

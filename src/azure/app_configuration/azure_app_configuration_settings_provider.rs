@@ -77,10 +77,6 @@ impl SettingsProvider for AzureAppConfigurationSettingsProvider {
         Ok(())
     }
 
-    fn section_separator() -> Option<&'static str> {
-        Some(":")
-    }
-
     fn model_registry(&self) -> &OnceCell<Py<ModelRegistry>> {
         &self.model_registry
     }

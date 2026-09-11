@@ -45,6 +45,12 @@ mod _wirio_settings {
     pub use crate::azure::key_vault::AzureKeyVaultSettingsProvider;
 
     #[pymodule_export]
+    pub use crate::azure::app_configuration::AzureAppConfigurationSettingsSource;
+
+    #[pymodule_export]
+    pub use crate::azure::app_configuration::AzureAppConfigurationSettingsProvider;
+
+    #[pymodule_export]
     pub use crate::azure::identity::PythonAzureCredential;
 
     #[pymodule_export]

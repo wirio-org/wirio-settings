@@ -192,7 +192,7 @@ mod tests {
                 py,
                 br#"{"items": [
                     {"key": "ApplicationName", "value": "wirio"},
-                    {"key": "Logging:LogLevel", "value": "warning"}
+                    {"key": "Logging.LogLevel", "value": "warning"}
                 ]}"#,
                 StatusCode::Ok,
             )

@@ -7,12 +7,6 @@ use notify_debouncer_mini::notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_mini::{DebouncedEvent, new_debouncer};
 use tokio_util::sync::CancellationToken;
 
-#[cfg(windows)]
-const WINDOWS_HIDDEN_FILE_ATTRIBUTE: u32 = 0x0002;
-
-#[cfg(windows)]
-const WINDOWS_SYSTEM_FILE_ATTRIBUTE: u32 = 0x0004;
-
 pub struct PathWatcher {
     path: PathBuf,
     cancellation_token: Option<CancellationToken>,
@@ -20,6 +14,12 @@ pub struct PathWatcher {
 }
 
 impl PathWatcher {
+    #[cfg(windows)]
+    const WINDOWS_HIDDEN_FILE_ATTRIBUTE: u32 = 0x0002;
+
+    #[cfg(windows)]
+    const WINDOWS_SYSTEM_FILE_ATTRIBUTE: u32 = 0x0004;
+
     pub fn new(path: PathBuf) -> Self {
         Self {
             path,
@@ -94,7 +94,7 @@ impl PathWatcher {
 
     #[cfg(windows)]
     async fn is_hidden_path(path: &Path) -> bool {
-        Self::has_file_attribute(path, WINDOWS_HIDDEN_FILE_ATTRIBUTE).await
+        Self::has_file_attribute(path, Self::WINDOWS_HIDDEN_FILE_ATTRIBUTE).await
     }
 
     #[cfg(not(windows))]
@@ -104,7 +104,7 @@ impl PathWatcher {
 
     #[cfg(windows)]
     async fn is_system_path(path: &Path) -> bool {
-        Self::has_file_attribute(path, WINDOWS_SYSTEM_FILE_ATTRIBUTE).await
+        Self::has_file_attribute(path, Self::WINDOWS_SYSTEM_FILE_ATTRIBUTE).await
     }
 
     #[cfg(not(windows))]

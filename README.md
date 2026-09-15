@@ -21,7 +21,7 @@ Here's why: our application settings, one line, done right. No more scattered `o
 - **Pydantic models:** Load application settings directly into models.
 - **Configuration stores:** Load settings from a pluggable configuration store, such as Azure App Configuration.
 - **A practical replacement:** Replace `pydantic-settings` and `python-dotenv` with one centralized, provider-agnostic (no vendor lock-in) settings library.
-- **Roadmap:** Planned capabilities include more configuration stores, object storages, feature flags, push refresh, prefixes, filters, custom delimiters and aliases.
+- **Roadmap:** Planned capabilities include more configuration stores, CDN-accelerated delivery, object storages, feature flags, push refresh, Databricks support, prefixes, filters, custom delimiters and aliases.
 
 ## Table of contents
 
@@ -496,18 +496,21 @@ settings_manager.add_azure_key_vault(
 )
 ```
 
-Secret names use `--` for sections, so `Database--Host` maps to `database.host`.
-
-For authentication options, see [Azure credentials](#azure-credentials).
-
 > [!NOTE]
+> For authentication options, see [Azure credentials](#azure-credentials).
+>
 > **Azure permissions:** Usually, the `Key Vault Secrets User` role is used to read secrets.
+
+Secret names use `--` for sections, so `Database--Host` maps to `database.host`.
 
 To periodically refresh the loaded secrets, use the `reload_interval` parameter, described in [Reload on an interval](#reload-on-an-interval).
 
 ### Azure App Configuration
 
-Read configurations from Azure App Configuration.
+Read from Azure App Configuration:
+
+- Configurations (i.e., settings): Key-value pairs.
+- Enhanced feature flags.
 
 ```python
 settings_manager.add_azure_app_configuration(
@@ -515,12 +518,28 @@ settings_manager.add_azure_app_configuration(
 )
 ```
 
-Keys are normalized to snake case. Feature flags, labels, and key filters are not supported by this provider.
-
-For authentication options, see [Azure credentials](#azure-credentials).
-
 > [!NOTE]
+> For authentication options, see [Azure credentials](#azure-credentials).
+>
 > **Azure permissions:** Usually, the `App Configuration Data Reader` role is used to read settings.
+
+Configurations and enhanced feature flags are normalized to snake case.
+
+Enhanced feature flags are loaded as a JSON string at `feature_management`, ready for use with the official [`featuremanagement`](https://pypi.org/project/featuremanagement/) Microsoft package. For example, using a key instead of a Pydantic model:
+
+```python
+import json
+
+from featuremanagement import FeatureManager
+
+feature_manager = FeatureManager(
+    json.loads(settings_manager.get_value("feature_management"))
+)
+```
+
+As `feature_management` is a JSON string, it needs to be parsed before use, as shown in the example above, so don't create a `FeatureManager` singleton.
+
+To have a `FeatureManager` singleton, `wirio-settings` would have to provide a `SettingsManager.create_feature_manager()` method, which is currently not available. Technically speaking, it'd return a `FeatureManager` instance initialized with the parsed `feature_management` JSON string. It'd be parsed to a `FeatureManagerConfiguration` class (inheriting from `Mapping[str, Any]`), which would be refreshed whenever the `feature_management` JSON string is updated.
 
 ### AWS Secrets Manager
 
@@ -530,9 +549,10 @@ settings_manager.add_aws_secrets_manager(
 )
 ```
 
-The secret value must be a JSON object. `wirio-settings` reads and flattens that JSON into settings keys.
+> [!NOTE]
+> For authentication options, see [AWS credentials](#aws-credentials).
 
-For authentication options, see [AWS credentials](#aws-credentials).
+The secret value must be a JSON object. `wirio-settings` reads and flattens that JSON into settings keys.
 
 Options:
 
@@ -545,9 +565,10 @@ Options:
 settings_manager.add_gcp_secret_manager("project-id")
 ```
 
-Secret names use `--` for sections, so `Database--Host` maps to `database.host`.
+> [!NOTE]
+> For authentication options, see [GCP credentials](#gcp-credentials).
 
-For authentication options, see [GCP credentials](#gcp-credentials).
+Secret names use `--` for sections, so `Database--Host` maps to `database.host`.
 
 ### Setting per file
 

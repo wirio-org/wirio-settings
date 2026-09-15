@@ -1,6 +1,8 @@
 mod azure_app_configuration_client;
 mod azure_app_configuration_settings_provider;
 mod azure_app_configuration_settings_source;
+mod dtos;
+mod feature_management_input;
 
 pub use azure_app_configuration_settings_provider::AzureAppConfigurationSettingsProvider;
 pub use azure_app_configuration_settings_source::AzureAppConfigurationSettingsSource;

@@ -15,7 +15,7 @@ pub struct RegisteredModel {
     #[pyo3(get)]
     section_path: Option<Py<PyString>>,
 
-    // This field keeps a returned model alive for the lifetime of its Python-facing snapshot, so it doesn't get garbage collected while it's being processed
+    // This field keeps a returned model alive for the lifetime of its Python-facing snapshot, so it doesn't get garbage collected while it's being processed.
     _model: Option<Py<PyAny>>,
 }
 
@@ -77,7 +77,7 @@ impl ModelRegistry {
         }
     }
 
-    /// Adds a Pydantic model to the registry
+    /// Adds a Pydantic model to the registry.
     #[pyo3(signature = (model, section_path=None))]
     pub fn add_model(
         &self,

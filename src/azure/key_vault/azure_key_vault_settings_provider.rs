@@ -127,7 +127,7 @@ impl AzureKeyVaultSettingsProvider {
         Ok(secret_resource_id.name)
     }
 
-    /// Checks if the loaded secret is up to date with the queried secret properties
+    /// Checks if the loaded secret is up to date with the queried secret properties.
     fn is_secret_up_to_date(loaded_secret: &Secret, secret_properties: &SecretProperties) -> bool {
         loaded_secret
             .attributes

@@ -109,6 +109,15 @@ wheels = [
 ]
 
 [[package]]
+name = "featuremanagement"
+version = "2.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/da/ae/0f35f02c4df46bb744c80a12ec2e1b39aa119aba2d407da4a42e48b25fdf/featuremanagement-2.2.0.tar.gz", hash = "sha256:48805bae9402f572d0d3dcf8290e186dff933882785e713ac77e757bfc5718be", size = 27682, upload-time = "2026-07-16T22:05:11.424Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/53/99/7d0ff9667dd83caf39828cd40a51b7753098d0307a12f4efbb2f9fbdc0d6/featuremanagement-2.2.0-py3-none-any.whl", hash = "sha256:3239baed5d75d695e7c91f310a7fdf396577b8348786b54106f7637f8cf6f75b", size = 34646, upload-time = "2026-07-16T22:05:12.603Z" },
+]
+
+[[package]]
 name = "iniconfig"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -371,6 +380,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "coverage" },
+    { name = "featuremanagement" },
     { name = "maturin" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -386,6 +396,7 @@ requires-dist = [{ name = "pydantic", specifier = ">=2.13.4" }]
 [package.metadata.requires-dev]
 dev = [
     { name = "coverage", specifier = ">=7.15.2" },
+    { name = "featuremanagement", specifier = ">=2.2.0" },
     { name = "maturin", specifier = ">=1.14.1" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-asyncio", specifier = ">=1.4.0" },

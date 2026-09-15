@@ -18,8 +18,8 @@ Here's why: our application settings, one line, done right. No more scattered `o
 - **Rust-powered core:** Built with Rust under the hood for speed, reliability, and low runtime overhead.
 - **Secret stores:** Load secrets and certificates from Azure Key Vault, AWS Secrets Manager and GCP Secret Manager, with one line of code and safe authentication.
 - **Automatic reloads:** Keep settings up to date by automatically reloading them, with no need to restart the application or deploy a new version.
-- **Pydantic models:** Load application settings directly into models.
 - **Configuration stores:** Load settings and feature flags from pluggable configuration stores, such as Azure App Configuration.
+- **Pydantic models:** Load application settings directly into models.
 - **A practical replacement:** Replace `pydantic-settings` and `python-dotenv` with one centralized, provider-agnostic (no vendor lock-in) settings library.
 - **Roadmap:** Planned capabilities include more configuration stores, CDN-accelerated delivery, object storages, push refresh, Databricks support, prefixes, filters, custom delimiters and aliases.
 

@@ -9,7 +9,7 @@ use tokio::sync::OnceCell;
 
 use super::{ModelRegistry, SettingLookup};
 
-/// Provides setting values
+/// Provides setting values.
 #[pyclass(name = "SettingsProvider", subclass, frozen)]
 pub struct PythonSettingsProvider;
 

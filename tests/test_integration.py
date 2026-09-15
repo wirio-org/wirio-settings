@@ -1,7 +1,9 @@
+import json
 import os
 from pathlib import Path
 
 import pytest
+from featuremanagement import FeatureManager
 from pytest_mock import MockerFixture
 from wirio_settings import SettingsManager
 
@@ -68,10 +70,14 @@ class TestIntegration:
     @pytest.mark.skipif(
         os.environ.get("INTEGRATION_TEST") is None, reason="Integration test"
     )
-    def test_load_settings_using_azure_app_configuration(self) -> None:
+    def test_load_configurations_and_enhanced_feature_flags_using_azure_app_configuration(
+        self,
+    ) -> None:
         endpoint = os.environ["AZURE_APP_CONFIGURATION_ENDPOINT"]
         expected_setting = "setting-value"
         expected_nested_setting = "nested-setting-value"
+        expected_feature_flag = "enhanced_feature"
+        expected_variant_name = "enabled_variant"
         settings_manager = SettingsManager(add_default_providers=False)
 
         settings_manager.add_azure_app_configuration(endpoint=endpoint)
@@ -81,6 +87,17 @@ class TestIntegration:
             settings_manager.get_value("parent.nested_setting")
             == expected_nested_setting
         )
+        feature_management = json.loads(
+            settings_manager.get_value("feature_management")
+        )
+        feature_manager = FeatureManager(feature_management)
+
+        assert expected_feature_flag in feature_manager.list_feature_flag_names()
+        assert feature_manager.is_enabled(expected_feature_flag, "test-user")
+        variant = feature_manager.get_variant(expected_feature_flag, "test-user")
+
+        assert variant is not None
+        assert variant.name == expected_variant_name
 
     @pytest.mark.skipif(
         os.environ.get("INTEGRATION_TEST") is None, reason="Integration test"

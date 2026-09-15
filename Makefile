@@ -52,12 +52,15 @@ azure-key-vault-integration-test:
 .PHONY: azure-app-configuration-integration-test
 azure-app-configuration-integration-test:
 	-az appconfig kv delete --name "$$AZURE_APP_CONFIGURATION_NAME" --key "Setting" --auth-mode login --yes --output none
-	-az appconfig kv delete --name "$$AZURE_APP_CONFIGURATION_NAME" --key "Parent:NestedSetting" --auth-mode login --yes --output none
+	-az appconfig kv delete --name "$$AZURE_APP_CONFIGURATION_NAME" --key "Parent.NestedSetting" --auth-mode login --yes --output none
+	-az rest --method delete --url "https://$$AZURE_APP_CONFIGURATION_NAME.azconfig.io/ff/EnhancedFeature?api-version=2026-05-01-preview" --resource "https://azconfig.io" --output none
 	az appconfig kv set --name "$$AZURE_APP_CONFIGURATION_NAME" --key "Setting" --value "setting-value" --auth-mode login --yes --output none
-	az appconfig kv set --name "$$AZURE_APP_CONFIGURATION_NAME" --key "Parent:NestedSetting" --value "nested-setting-value" --auth-mode login --yes --output none
-	INTEGRATION_TEST=1 AZURE_APP_CONFIGURATION_ENDPOINT="https://$$AZURE_APP_CONFIGURATION_NAME.azconfig.io" uv run -- pytest tests/test_integration.py::TestIntegration::test_load_settings_using_azure_app_configuration
+	az appconfig kv set --name "$$AZURE_APP_CONFIGURATION_NAME" --key "Parent.NestedSetting" --value "nested-setting-value" --auth-mode login --yes --output none
+	az rest --method put --url "https://$$AZURE_APP_CONFIGURATION_NAME.azconfig.io/ff/EnhancedFeature?api-version=2026-05-01-preview" --resource "https://azconfig.io" --headers "Content-Type=application/json; profile=\"https://azconfig.io/mime-profiles/ff\"; charset=utf-8" --body '{"enabled":true,"variants":[{"name":"enabled_variant","configuration_value":{}}],"allocation":{"default_when_enabled":"enabled_variant"}}' --output none
+	INTEGRATION_TEST=1 AZURE_APP_CONFIGURATION_ENDPOINT="https://$$AZURE_APP_CONFIGURATION_NAME.azconfig.io" uv run -- pytest tests/test_integration.py::TestIntegration::test_load_configurations_and_enhanced_feature_flags_using_azure_app_configuration
 	az appconfig kv delete --name "$$AZURE_APP_CONFIGURATION_NAME" --key "Setting" --auth-mode login --yes --output none
-	az appconfig kv delete --name "$$AZURE_APP_CONFIGURATION_NAME" --key "Parent:NestedSetting" --auth-mode login --yes --output none
+	az appconfig kv delete --name "$$AZURE_APP_CONFIGURATION_NAME" --key "Parent.NestedSetting" --auth-mode login --yes --output none
+	az rest --method delete --url "https://$$AZURE_APP_CONFIGURATION_NAME.azconfig.io/ff/EnhancedFeature?api-version=2026-05-01-preview" --resource "https://azconfig.io" --output none
 
 # Prerequisite: aws login
 .PHONY: aws-secrets-manager-integration-test

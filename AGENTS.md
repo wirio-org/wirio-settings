@@ -23,6 +23,8 @@ This is a Python package backed by a Rust PyO3 extension. Rust implementations a
 - Don't modify the `_wirio_settings.pyi` file manually. It is generated automatically by `maturin`. If you need to modify it, do so in the `lib.rs` file and then run `make generate-stubs` to regenerate the `.pyi` file.
 - When using PyO3, use macros instead of functions such as `add_function` or `add_submodule`.
 - To work with directories and files, use `tokio::fs` instead of `std::fs`. This is because `std::fs` is blocking, while `tokio::fs` is asynchronous and non-blocking. Using `std::fs` can lead to performance issues in asynchronous applications, as it can block the event loop and prevent other tasks from executing. Therefore, it's recommended to use `tokio::fs` for file system operations in asynchronous Rust applications.
+- When creating structs (and being DTOs) with nested structs, the parent structs should be placed before the nested structs in the code. This helps improve readability and maintainability by ensuring that the context of the nested structs is clear. Also, nested structs must be prefixed with the name of the parent struct to indicate the relationship. For example, if `Parent` has a nested struct `Child`, the nested struct should be named `ParentChild`, but not the field name.
+- Add a period to the end of each sentence in comments.
 
 ### Testing
 

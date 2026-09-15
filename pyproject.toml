@@ -35,6 +35,7 @@ Changelog = "https://github.com/wirio-org/wirio/releases-settings"
 [dependency-groups]
 dev = [
     "coverage>=7.15.2",
+    "featuremanagement>=2.2.0",
     "maturin>=1.14.1",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",

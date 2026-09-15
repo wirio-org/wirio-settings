@@ -1,3 +1,5 @@
+pub(crate) mod content_type;
+pub(crate) mod convention_changer;
 mod model_registry;
 mod path_provider;
 mod path_watcher;
@@ -6,8 +8,6 @@ mod setting_lookup;
 mod settings_path;
 mod settings_provider;
 mod settings_source;
-
-pub(crate) mod convention_changer;
 
 pub use model_registry::{ModelRegistry, RegisteredModel};
 pub(crate) use path_provider::PathProvider;

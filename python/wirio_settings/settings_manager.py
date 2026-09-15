@@ -176,7 +176,7 @@ class SettingsManager(SettingsRoot):
         endpoint: str,
         credential: AzureCredential | None = None,
     ) -> Self:
-        """Add a settings provider that reads values from Azure App Configuration.
+        """Add a settings provider that reads setting values from Azure App Configuration.
 
         Args:
             endpoint: Azure App Configuration endpoint.

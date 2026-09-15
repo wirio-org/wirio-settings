@@ -309,7 +309,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_fail_loading_configurations_when_response_is_invalid() {
+    async fn test_fail_loading_configurations_when_response_status_code_is_unsuccessful() {
         Python::initialize();
         let provider = Python::attach(|py| create_provider(py, StatusCode::BadRequest));
 

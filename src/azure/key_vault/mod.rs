@@ -1,7 +1,6 @@
 mod azure_key_vault_settings_provider;
 mod azure_key_vault_settings_source;
 mod parallel_secret_loader;
-mod remove_user_agent;
 
 pub use azure_key_vault_settings_provider::AzureKeyVaultSettingsProvider;
 pub use azure_key_vault_settings_source::AzureKeyVaultSettingsSource;

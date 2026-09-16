@@ -16,6 +16,7 @@ pub(crate) struct GetConfigurationsResponse {
 #[derive(Debug, Deserialize)]
 pub(crate) struct Configuration {
     pub(crate) key: String,
+    pub(crate) content_type: Option<String>,
     pub(crate) value: String,
 }
 

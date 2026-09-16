@@ -24,17 +24,17 @@ impl<'a> ParallelSecretLoader<'a> {
         self.secret_names.push(secret_name);
     }
 
-    pub(crate) async fn load_all_secrets(self, url: &str) -> PyResult<BTreeMap<String, Secret>> {
+    pub(crate) async fn load_all_secrets(self, uri: &str) -> PyResult<BTreeMap<String, Secret>> {
         let mut loaded_secrets = futures::stream::iter(
             self.secret_names
                 .into_iter()
-                .map(|secret_name| Self::retrieve_secret(self.secret_client, secret_name, url)),
+                .map(|secret_name| Self::retrieve_secret(self.secret_client, secret_name, uri)),
         )
         .buffer_unordered(Self::PARALLELISM_LEVEL);
         let mut new_loaded_secrets = BTreeMap::new();
 
-        while let Some((secret_name, secret)) = loaded_secrets.try_next().await? {
-            new_loaded_secrets.insert(secret_name, secret);
+        while let Some(retrieved_secret) = loaded_secrets.try_next().await? {
+            new_loaded_secrets.insert(retrieved_secret.name, retrieved_secret.secret);
         }
 
         Ok(new_loaded_secrets)
@@ -43,12 +43,12 @@ impl<'a> ParallelSecretLoader<'a> {
     async fn retrieve_secret(
         secret_client: &SecretClient,
         secret_name: String,
-        url: &str,
-    ) -> PyResult<(String, Secret)> {
+        uri: &str,
+    ) -> PyResult<RetrievedSecret> {
         let secret_response = secret_client.get_secret(&secret_name, None).await.map_err(
             |error| {
                 PyRuntimeError::new_err(format!(
-                    "Failed to read secret '{secret_name}' from Azure Key Vault '{url}': {error}",
+                    "Failed to read secret '{secret_name}' from Azure Key Vault '{uri}': {error}",
                 ))
             },
         )?;
@@ -59,13 +59,21 @@ impl<'a> ParallelSecretLoader<'a> {
             ))
         })?;
 
-        Ok((secret_name, secret))
+        Ok(RetrievedSecret {
+            name: secret_name,
+            secret,
+        })
     }
 
     #[cfg(test)]
     pub(crate) fn is_empty(&self) -> bool {
         self.secret_names.is_empty()
     }
+}
+
+struct RetrievedSecret {
+    name: String,
+    secret: Secret,
 }
 
 #[cfg(test)]
@@ -149,7 +157,7 @@ mod tests {
         let expected_secret_value = "retrieved-value";
         let active_requests = Arc::new(AtomicUsize::new(0));
         let maximum_active_requests = Arc::new(AtomicUsize::new(0));
-        let url = "https://example.vault.azure.net";
+        let uri = "https://example.vault.azure.net";
         let secret_client_options = SecretClientOptions {
             client_options: ClientOptions {
                 transport: Some(Transport::new(Arc::new(HttpClientMock {
@@ -161,13 +169,13 @@ mod tests {
             ..Default::default()
         };
         let secret_client =
-            SecretClient::new(url, Arc::new(CredentialMock), Some(secret_client_options)).unwrap();
+            SecretClient::new(uri, Arc::new(CredentialMock), Some(secret_client_options)).unwrap();
         let mut parallel_secret_loader = ParallelSecretLoader::new(&secret_client);
         parallel_secret_loader.add_secret_to_load(String::from(expected_first_secret_name));
         parallel_secret_loader.add_secret_to_load(String::from(expected_second_secret_name));
 
         let loaded_secrets_from_loader =
-            parallel_secret_loader.load_all_secrets(url).await.unwrap();
+            parallel_secret_loader.load_all_secrets(uri).await.unwrap();
 
         assert_eq!(
             loaded_secrets_from_loader.len(),

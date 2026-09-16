@@ -251,6 +251,7 @@ struct AzureKeyVaultReferencesByVaultReference {
 mod tests {
     use super::ParallelAzureKeyVaultReferenceLoader;
     use azure_core::http::Url;
+    use pyo3::*;
 
     #[test]
     fn test_extract_unversioned_secret_information() {
@@ -296,6 +297,22 @@ mod tests {
         assert_eq!(
             error.to_string(),
             "RuntimeError: Invalid Azure Key Vault reference URI 'https://example.vault.azure.net/keys/Secret1': expected '/secrets/<name>[/<version>]'"
+        );
+    }
+
+    #[test]
+    fn test_fail_extracting_secret_information_without_vault_host() {
+        Python::initialize();
+
+        let error = ParallelAzureKeyVaultReferenceLoader::extract_secret_information(
+            &Url::parse("file:///secrets/Secret1").unwrap(),
+        )
+        .err()
+        .unwrap();
+
+        assert_eq!(
+            error.to_string(),
+            "RuntimeError: Invalid Azure Key Vault reference URI 'file:///secrets/Secret1': missing vault host"
         );
     }
 }

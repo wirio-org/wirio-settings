@@ -1,5 +1,3 @@
-use pyo3::prelude::*;
-
 mod aws;
 mod azure;
 mod core;
@@ -8,6 +6,8 @@ mod gcp;
 mod json_file;
 mod setting_per_file;
 mod yaml_file;
+
+use pyo3::prelude::*;
 
 #[pymodule]
 mod _wirio_settings {

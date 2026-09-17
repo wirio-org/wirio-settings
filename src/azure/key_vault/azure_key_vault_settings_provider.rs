@@ -21,6 +21,7 @@ pub struct AzureKeyVaultSettingsProvider {
     secrets_cache: Arc<ArcSwap<SecretsCache>>,
     uri: String,
     secret_client: Arc<SecretClient>,
+    reload_enabled: bool,
     reload_interval: Option<Duration>,
     schedule_reload_cancellation_token: Mutex<Option<CancellationToken>>,
     model_registry: Arc<OnceCell<Py<ModelRegistry>>>,
@@ -44,7 +45,7 @@ impl AzureKeyVaultSettingsProvider {
 
     pub fn load(&self, py: Python<'_>) -> PyResult<()> {
         SettingsProvider::load(self, py)?;
-        self.schedule_reload(py, self.reload_interval);
+        self.schedule_reload(py);
         Ok(())
     }
 
@@ -58,9 +59,11 @@ impl AzureKeyVaultSettingsProvider {
         py: Python<'_>,
         uri: String,
         secret_client: Arc<SecretClient>,
+        reload_enabled: bool,
         reload_interval: Option<Duration>,
     ) -> PyResult<Self> {
-        if let Some(reload_interval) = reload_interval
+        if reload_enabled
+            && let Some(reload_interval) = reload_interval
             && reload_interval.is_zero()
         {
             return Err(PyRuntimeError::new_err(
@@ -75,6 +78,7 @@ impl AzureKeyVaultSettingsProvider {
             })),
             uri,
             secret_client,
+            reload_enabled,
             reload_interval,
             schedule_reload_cancellation_token: Mutex::new(None),
             model_registry: Arc::new(OnceCell::new()),
@@ -183,8 +187,12 @@ impl AzureKeyVaultSettingsProvider {
         Ok(())
     }
 
-    fn schedule_reload(&self, py: Python<'_>, reload_interval: Option<Duration>) {
-        let Some(reload_interval) = reload_interval else {
+    fn schedule_reload(&self, py: Python<'_>) {
+        if !self.reload_enabled {
+            return;
+        }
+
+        let Some(reload_interval) = self.reload_interval else {
             return;
         };
 
@@ -400,9 +408,10 @@ mod tests {
         Python::attach(|py| {
             let uri = String::from("https://example.vault.azure.net");
             let expected_display = format!("AzureKeyVaultSettingsProvider {{uri: {uri}}}");
-            let display = AzureKeyVaultSettingsProvider::new(py, uri, create_secret_client(), None)
-                .unwrap()
-                .to_string();
+            let display =
+                AzureKeyVaultSettingsProvider::new(py, uri, create_secret_client(), false, None)
+                    .unwrap()
+                    .to_string();
 
             assert_eq!(display, expected_display);
         });
@@ -452,6 +461,7 @@ mod tests {
                 py,
                 String::from("https://example.vault.azure.net"),
                 create_secret_client(),
+                true,
                 Some(Duration::ZERO),
             );
 
@@ -467,16 +477,20 @@ mod tests {
     fn test_allow_creating_provider_when_reload_interval_is_positive() {
         Python::initialize();
 
-        let result = Python::attach(|py| {
-            AzureKeyVaultSettingsProvider::new(
+        Python::attach(|py| {
+            let reload_interval = Duration::from_secs(1);
+            let provider = AzureKeyVaultSettingsProvider::new(
                 py,
                 String::from("https://example.vault.azure.net"),
                 create_secret_client(),
-                Some(Duration::from_secs(1)),
+                true,
+                Some(reload_interval),
             )
-        });
+            .unwrap();
 
-        assert!(result.is_ok());
+            assert!(provider.reload_enabled);
+            assert_eq!(provider.reload_interval, Some(reload_interval));
+        });
     }
 
     #[test]
@@ -487,20 +501,43 @@ mod tests {
                 py,
                 String::from("https://example.vault.azure.net"),
                 create_secret_client(),
+                true,
                 None,
             )
             .unwrap();
 
-            provider.schedule_reload(py, None);
+            provider.schedule_reload(py);
 
-            py.detach(|| {
-                assert!(
-                    provider
-                        .schedule_reload_cancellation_token
-                        .blocking_lock()
-                        .is_none()
-                );
-            });
+            assert!(
+                provider
+                    .schedule_reload_cancellation_token
+                    .blocking_lock()
+                    .is_none()
+            );
+        });
+    }
+
+    #[test]
+    fn test_skip_scheduling_reload_when_disabled() {
+        Python::initialize();
+        Python::attach(|py| {
+            let provider = AzureKeyVaultSettingsProvider::new(
+                py,
+                String::from("https://example.vault.azure.net"),
+                create_secret_client(),
+                false,
+                Some(Duration::from_secs(1)),
+            )
+            .unwrap();
+
+            provider.schedule_reload(py);
+
+            assert!(
+                provider
+                    .schedule_reload_cancellation_token
+                    .blocking_lock()
+                    .is_none()
+            );
         });
     }
 
@@ -513,11 +550,12 @@ mod tests {
                 py,
                 String::from("https://example.vault.azure.net"),
                 create_secret_client(),
+                true,
                 Some(Duration::from_secs(1)),
             )
             .unwrap();
 
-            provider.schedule_reload(py, provider.reload_interval);
+            provider.schedule_reload(py);
 
             let cancellation_token = provider
                 .schedule_reload_cancellation_token
@@ -748,6 +786,7 @@ mod tests {
                 py,
                 String::from("https://example.vault.azure.net"),
                 create_secret_client(),
+                false,
                 None,
             )
             .unwrap();

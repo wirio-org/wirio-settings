@@ -1125,7 +1125,7 @@ class TestSettingsManager:
 
         settings_manager.add_yaml_file(
             path="settings.yaml",
-            reload_on_change=True,
+            reload_enabled=True,
         )
         initial_value = settings_manager.get_value("value")
         settings_file_path.write_text(
@@ -1155,7 +1155,7 @@ class TestSettingsManager:
 
         settings_manager.add_json_file(
             path="settings.json",
-            reload_on_change=True,
+            reload_enabled=True,
         )
         initial_value = settings_manager.get_value("value")
         settings_file_path.write_text(
@@ -1183,7 +1183,7 @@ class TestSettingsManager:
 
         settings_manager.add_setting_per_file(
             directory_path=str(tmp_path),
-            reload_on_change=True,
+            reload_enabled=True,
         )
         initial_value = settings_manager.get_value("value")
         settings_file_path.write_text(expected_updated_value, encoding="utf-8")
@@ -1213,7 +1213,7 @@ class TestSettingsManager:
         settings_manager = SettingsManager(
             content_root_path=str(tmp_path), add_default_providers=False
         )
-        settings_manager.add_yaml_file("settings.yaml", reload_on_change=True)
+        settings_manager.add_yaml_file("settings.yaml", reload_enabled=True)
         settings = settings_manager.get_model(Settings)
 
         assert settings_manager._model_registry is not None
@@ -1258,7 +1258,7 @@ class TestSettingsManager:
         settings_manager = SettingsManager(
             content_root_path=str(tmp_path), add_default_providers=False
         )
-        settings_manager.add_yaml_file("settings.yaml", reload_on_change=True)
+        settings_manager.add_yaml_file("settings.yaml", reload_enabled=True)
         database_settings = settings_manager.get_section("database").get_model(
             DatabaseSettings
         )
@@ -1316,7 +1316,7 @@ class TestSettingsManager:
         settings_file_path = tmp_path / "settings.yaml"
         settings_file_path.write_text('{"port": 8080}', encoding="utf-8")
         settings_manager = SettingsManager(add_default_providers=False)
-        settings_manager.add_yaml_file(str(settings_file_path), reload_on_change=True)
+        settings_manager.add_yaml_file(str(settings_file_path), reload_enabled=True)
         settings = settings_manager.get_model(Settings)
         assert settings.port == expected_port
         del settings
@@ -1393,7 +1393,7 @@ class TestSettingsManager:
         settings_manager = SettingsManager(
             content_root_path=None, add_default_providers=False
         )
-        settings_manager.add_yaml_file(str(settings_file_path), reload_on_change=True)
+        settings_manager.add_yaml_file(str(settings_file_path), reload_enabled=True)
         settings = settings_manager.get_model(Settings)
         original_model_id = id(settings)
 

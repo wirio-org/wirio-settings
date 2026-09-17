@@ -17,7 +17,7 @@ use crate::core::{
 pub struct YamlFileSettingsProvider {
     data: Arc<ArcSwap<Py<PyDict>>>,
     path_provider: PathProvider,
-    reload_on_change: bool,
+    reload_enabled: bool,
     path_watcher: Mutex<Option<PathWatcher>>,
     model_registry: Arc<OnceCell<Py<ModelRegistry>>>,
 }
@@ -35,7 +35,7 @@ impl YamlFileSettingsProvider {
 
     pub fn load(&self, py: Python<'_>) -> PyResult<()> {
         SettingsProvider::load(self, py)?;
-        self.watch_file(py, self.reload_on_change)
+        self.watch_file(py, self.reload_enabled)
     }
 
     fn set_model_registry(&self, model_registry: PyRef<'_, ModelRegistry>) -> PyResult<()> {
@@ -44,11 +44,11 @@ impl YamlFileSettingsProvider {
 }
 
 impl YamlFileSettingsProvider {
-    pub fn new(py: Python<'_>, path_provider: PathProvider, reload_on_change: bool) -> Self {
+    pub fn new(py: Python<'_>, path_provider: PathProvider, reload_enabled: bool) -> Self {
         Self {
             data: Arc::new(ArcSwap::from_pointee(PyDict::new(py).unbind())),
             path_provider,
-            reload_on_change,
+            reload_enabled,
             path_watcher: Mutex::new(None),
             model_registry: Arc::new(OnceCell::new()),
         }
@@ -64,8 +64,8 @@ impl YamlFileSettingsProvider {
         })
     }
 
-    fn watch_file(&self, py: Python<'_>, reload_on_change: bool) -> PyResult<()> {
-        if !reload_on_change {
+    fn watch_file(&self, py: Python<'_>, reload_enabled: bool) -> PyResult<()> {
+        if !reload_enabled {
             return Ok(());
         }
 
@@ -590,7 +590,7 @@ port: 8080
     }
 
     #[test]
-    fn test_not_watch_yaml_file_when_reload_on_change_is_disabled() {
+    fn test_not_watch_yaml_file_when_reload_is_disabled() {
         Python::initialize();
 
         let temporary_directory = tempdir().unwrap();

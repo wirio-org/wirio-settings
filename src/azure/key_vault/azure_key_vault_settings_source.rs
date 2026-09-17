@@ -19,10 +19,11 @@ pub struct AzureKeyVaultSettingsSource {
 #[pymethods]
 impl AzureKeyVaultSettingsSource {
     #[new]
-    #[pyo3(signature = (uri, credential, reload_interval=None))]
+    #[pyo3(signature = (uri, credential, reload_enabled=false, reload_interval=None))]
     pub fn new_python(
         uri: String,
         credential: &PythonAzureCredential,
+        reload_enabled: bool,
         reload_interval: Option<Duration>,
     ) -> PyResult<PyClassInitializer<Self>> {
         let secret_client = Self::create_secret_client(&uri, credential)?;
@@ -31,7 +32,7 @@ impl AzureKeyVaultSettingsSource {
             PyClassInitializer::from(PythonSettingsSource::new()).add_subclass(Self {
                 uri,
                 secret_client: Arc::new(secret_client),
-                reload_interval,
+                reload_interval: reload_enabled.then_some(reload_interval).flatten(),
             }),
         )
     }

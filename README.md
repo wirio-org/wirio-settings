@@ -463,7 +463,7 @@ Comments are supported in YAML files. The filename may be a relative path, such 
 Options:
 
 - `optional=True` skips the file if it is missing. The file is required by default.
-- `reload_on_change=True` reloads values when the file changes.
+- `reload_enabled=True` reloads values when the file changes.
 
 ### JSON file
 
@@ -476,7 +476,7 @@ Comments are not supported in JSON files. The filename may be a relative path, s
 Options:
 
 - `optional=True` skips the file if it is missing. The file is required by default.
-- `reload_on_change=True` reloads values when the file changes.
+- `reload_enabled=True` reloads values when the file changes.
 
 ### Environment variables
 
@@ -581,7 +581,7 @@ Given a directory, each file name becomes a setting key and the file content bec
 Options:
 
 - `optional=True` skips the directory if it is missing. The directory is required by default.
-- `reload_on_change=True` reloads values when directory contents change.
+- `reload_enabled=True` reloads values when directory contents change.
 
 This provider is useful when secrets are mounted as files by the runtime instead of exposed as environment variables. It lets us keep application code unchanged while switching the secret delivery mechanism.
 
@@ -609,15 +609,15 @@ Long-running applications, such as web servers or background jobs, can keep thei
 
 ### Reload on file change
 
-The file and directory providers watch their source when `reload_on_change=True`:
+The file and directory providers watch their source when `reload_enabled=True`:
 
 ```python
-settings_manager.add_yaml_file("settings.yaml", reload_on_change=True)
+settings_manager.add_yaml_file("settings.yaml", reload_enabled=True)
 ```
 
 ### Reload on an interval
 
-Azure Key Vault refreshes its secrets in the background when `reload_interval` is set. The provider waits that long between refresh attempts, and it keeps the last successfully loaded settings if a refresh fails:
+Azure Key Vault refreshes its secrets in the background when `reload_enabled=True`. The provider waits for `reload_interval` between refresh attempts, and it keeps the last successfully loaded settings if a refresh fails:
 
 ```python
 from datetime import timedelta
@@ -625,6 +625,7 @@ from datetime import timedelta
 
 settings_manager.add_azure_key_vault(
     "https://example.vault.azure.net",
+    reload_enabled=True,
     reload_interval=timedelta(minutes=5),
 )
 ```
@@ -644,7 +645,7 @@ class ApplicationSettings(BaseModel):
 
 application_settings = (
     SettingsManager()
-    .add_yaml_file("settings.yaml", reload_on_change=True)
+    .add_yaml_file("settings.yaml", reload_enabled=True)
     .get_model(ApplicationSettings)
 )
 ```

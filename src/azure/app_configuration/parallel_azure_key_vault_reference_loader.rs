@@ -251,7 +251,7 @@ struct AzureKeyVaultReferencesByVaultReference {
 mod tests {
     use super::ParallelAzureKeyVaultReferenceLoader;
     use azure_core::http::Url;
-    use pyo3::*;
+    use pyo3::prelude::*;
 
     #[test]
     fn test_extract_unversioned_secret_information() {

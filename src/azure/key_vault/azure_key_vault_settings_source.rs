@@ -13,6 +13,7 @@ use std::time::Duration;
 pub struct AzureKeyVaultSettingsSource {
     uri: String,
     secret_client: Arc<SecretClient>,
+    reload_enabled: bool,
     reload_interval: Option<Duration>,
 }
 
@@ -32,7 +33,8 @@ impl AzureKeyVaultSettingsSource {
             PyClassInitializer::from(PythonSettingsSource::new()).add_subclass(Self {
                 uri,
                 secret_client: Arc::new(secret_client),
-                reload_interval: reload_enabled.then_some(reload_interval).flatten(),
+                reload_enabled,
+                reload_interval,
             }),
         )
     }
@@ -71,6 +73,7 @@ impl SettingsSource for AzureKeyVaultSettingsSource {
                     py,
                     self.uri.clone(),
                     Arc::clone(&self.secret_client),
+                    self.reload_enabled,
                     self.reload_interval,
                 )?,
             ),
@@ -83,8 +86,7 @@ impl SettingsSource for AzureKeyVaultSettingsSource {
 mod tests {
     use super::AzureKeyVaultSettingsSource;
     use crate::azure::identity::PythonAzureCredential;
-    use pyo3::Python;
-    use pyo3::types::PyAnyMethods;
+    use pyo3::prelude::*;
     use std::sync::Arc;
 
     #[test]
@@ -105,6 +107,7 @@ mod tests {
                     )
                     .unwrap(),
                 ),
+                reload_enabled: false,
                 reload_interval: None,
             };
 

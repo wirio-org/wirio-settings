@@ -11,8 +11,8 @@ use std::sync::Arc;
 #[pyclass(name = "AzureCredential", frozen)]
 pub enum PythonAzureCredential {
     Default(),
-    ManagedIdentityCredential(),
-    WorkloadIdentityCredential(),
+    ManagedIdentity(),
+    WorkloadIdentity(),
     AzureCli(),
     AzureDeveloperCli(),
     ClientSecret {
@@ -26,9 +26,9 @@ impl PythonAzureCredential {
     pub(crate) fn to_token_credential(&self) -> PyResult<Arc<dyn TokenCredential>> {
         let credential: Arc<dyn TokenCredential> = match self {
             Self::Default() => Ok(DefaultAzureCredential::new() as Arc<dyn TokenCredential>),
-            Self::ManagedIdentityCredential() => ManagedIdentityCredential::new(None)
+            Self::ManagedIdentity() => ManagedIdentityCredential::new(None)
                 .map(|credential| credential as Arc<dyn TokenCredential>),
-            Self::WorkloadIdentityCredential() => WorkloadIdentityCredential::new(None)
+            Self::WorkloadIdentity() => WorkloadIdentityCredential::new(None)
                 .map(|credential| credential as Arc<dyn TokenCredential>),
             Self::AzureCli() => AzureCliCredential::new(None)
                 .map(|credential| credential as Arc<dyn TokenCredential>),

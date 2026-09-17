@@ -155,7 +155,7 @@ class SettingsManager(SettingsRoot):
         credential: AzureCredential | None = None,
         *,
         reload_enabled: bool = False,
-        reload_interval: timedelta | None = timedelta(hours=1),
+        reload_interval: timedelta = timedelta(hours=1),
     ) -> Self:
         """Add a settings provider that reads setting values from Azure Key Vault.
 
@@ -163,7 +163,7 @@ class SettingsManager(SettingsRoot):
             uri: Azure Key Vault URI.
             credential: Azure credential. `Default` credential is used when omitted.
             reload_enabled: Whether to refresh settings in the background.
-            reload_interval: Time between background refresh attempts. If omitted, settings are loaded once.
+            reload_interval: Time between background refresh attempts.
         """
         credential = AzureCredential.Default() if credential is None else credential
         self.add(

@@ -118,7 +118,7 @@ class AzureKeyVaultSettingsProvider(SettingsProvider):
 
 @final
 class AzureKeyVaultSettingsSource(SettingsSource):
-    def __new__(cls, /, url: str, credential: AzureCredential, reload_interval: timedelta |None = None) -> AzureKeyVaultSettingsSource: ...
+    def __new__(cls, /, uri: str, credential: AzureCredential, reload_interval: timedelta |None = None) -> AzureKeyVaultSettingsSource: ...
     def build(self, /) -> SettingsProvider: ...
 
 @final
@@ -165,7 +165,7 @@ class ModelRegistry:
     def __new__(cls, /, reload_models_callback: ReferenceType) -> ModelRegistry: ...
     def add_model(self, /, model: Any, section_path: str |None = None) -> None:
         """
-        Adds a Pydantic model to the registry
+        Adds a Pydantic model to the registry.
         """
     def models(self, /) -> "list[RegisteredModel]":
         """
@@ -218,7 +218,7 @@ class SettingsPath:
 
 class SettingsProvider:
     """
-    Provides setting values
+    Provides setting values.
     """
     def __new__(cls, /) -> SettingsProvider: ...
     def data(self, /) -> "dict[str, str | None]": ...
@@ -228,7 +228,7 @@ class SettingsProvider:
 
 class SettingsSource:
     """
-    Source of setting values
+    Source of setting values.
     """
     def __new__(cls, /) -> SettingsSource: ...
     def build(self, /) -> SettingsProvider: ...

@@ -8,7 +8,7 @@ use crate::{
         EnhancedFeatureFlagTelemetry, EnhancedFeatureFlagVariant,
         EnhancedFeatureFlagVariantStatusOverride,
     },
-    core::content_type,
+    core::content_type::ContentType,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -184,7 +184,9 @@ impl From<EnhancedFeatureFlagVariant>
             configuration_value: variant.value.map(|value| {
                 if variant
                     .content_type
-                    .is_some_and(|content_type| content_type::get_media_type(&content_type) == content_type::APPLICATION_JSON_MEDIA_TYPE)
+                    .is_some_and(|content_type| {
+                        ContentType::new(&content_type).is_application_json()
+                    })
                 {
                     serde_json::from_str(&value).unwrap_or(Value::String(value))
                 } else {
@@ -344,22 +346,19 @@ mod tests {
 
     use serde_json::Value;
 
-    use crate::{
-        azure::app_configuration::{
-            dtos::{
-                EnhancedFeatureFlag, EnhancedFeatureFlagAllocation,
-                EnhancedFeatureFlagAllocationGroupAllocation,
-                EnhancedFeatureFlagAllocationPercentileAllocation,
-                EnhancedFeatureFlagAllocationUserAllocation, EnhancedFeatureFlagConditions,
-                EnhancedFeatureFlagConditionsFeatureFilter,
-                EnhancedFeatureFlagConditionsRequirementType, EnhancedFeatureFlagTelemetry,
-                EnhancedFeatureFlagVariant, EnhancedFeatureFlagVariantStatusOverride,
-            },
-            feature_management_input::{
-                FeatureManagementInput, FeatureManagementInputFeatureManagementFeatureFlag,
-            },
+    use crate::azure::app_configuration::{
+        dtos::{
+            EnhancedFeatureFlag, EnhancedFeatureFlagAllocation,
+            EnhancedFeatureFlagAllocationGroupAllocation,
+            EnhancedFeatureFlagAllocationPercentileAllocation,
+            EnhancedFeatureFlagAllocationUserAllocation, EnhancedFeatureFlagConditions,
+            EnhancedFeatureFlagConditionsFeatureFilter,
+            EnhancedFeatureFlagConditionsRequirementType, EnhancedFeatureFlagTelemetry,
+            EnhancedFeatureFlagVariant, EnhancedFeatureFlagVariantStatusOverride,
         },
-        core::content_type,
+        feature_management_input::{
+            FeatureManagementInput, FeatureManagementInputFeatureManagementFeatureFlag,
+        },
     };
 
     #[test]
@@ -390,13 +389,13 @@ mod tests {
                 EnhancedFeatureFlagVariant {
                     name: String::from("variant"),
                     value: Some(String::from("{\"key\":\"value\"}")),
-                    content_type: Some(String::from(content_type::APPLICATION_JSON_MEDIA_TYPE)),
+                    content_type: Some(String::from("application/json")),
                     status_override: Some(EnhancedFeatureFlagVariantStatusOverride::Enabled),
                 },
                 EnhancedFeatureFlagVariant {
                     name: String::from("numeric_variant"),
                     value: Some(String::from("1")),
-                    content_type: Some(String::from(content_type::APPLICATION_JSON_MEDIA_TYPE)),
+                    content_type: Some(String::from("application/json")),
                     status_override: None,
                 },
             ]),

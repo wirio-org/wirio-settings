@@ -305,7 +305,7 @@ class TestSettingsManager:
         assert sources[1] is source2
 
     def test_add_azure_key_vault(self, mocker: MockerFixture) -> None:
-        key_vault_url = "https://example.vault.azure.net"
+        key_vault_uri = "https://example.vault.azure.net"
         credential = AzureCredential.ClientSecret(
             "tenant-id", "client-id", "client-secret"
         )
@@ -317,7 +317,7 @@ class TestSettingsManager:
         )
 
         settings_manager.add_azure_key_vault(
-            url=key_vault_url,
+            uri=key_vault_uri,
             credential=credential,
         )
 

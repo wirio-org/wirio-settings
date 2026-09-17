@@ -1,16 +1,22 @@
 use crate::{
     azure::app_configuration::{
-        azure_app_configuration_client::AzureAppConfigurationClient,
+        azure_app_configuration_client::AzureAppConfigurationClient, dtos::Configuration,
         feature_management_input::FeatureManagementInput,
+        parallel_azure_key_vault_reference_loader::ParallelAzureKeyVaultReferenceLoader,
     },
     core::{
-        ModelRegistry, PythonSettingsProvider, SettingLookup, SettingsProvider, convention_changer,
+        ModelRegistry, PythonSettingsProvider, SettingLookup, SettingsProvider,
+        content_type::ContentType, convention_changer,
     },
 };
 use arc_swap::ArcSwap;
+use azure_core::{credentials::TokenCredential, http::Url};
+#[cfg(test)]
+use azure_security_keyvault_secrets::SecretClientOptions;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
@@ -21,7 +27,10 @@ pub struct AzureAppConfigurationSettingsProvider {
     data: ArcSwap<Py<PyDict>>,
     endpoint: String,
     client: Arc<AzureAppConfigurationClient>,
+    credential: Arc<dyn TokenCredential>,
     model_registry: OnceCell<Py<ModelRegistry>>,
+    #[cfg(test)]
+    key_vault_client_options: SecretClientOptions,
 }
 
 #[pymethods]
@@ -46,17 +55,20 @@ impl AzureAppConfigurationSettingsProvider {
 
 impl AzureAppConfigurationSettingsProvider {
     const FEATURE_MANAGEMENT_KEY: &str = "feature_management";
-
     pub(crate) fn new(
         py: Python<'_>,
         endpoint: String,
         client: Arc<AzureAppConfigurationClient>,
+        credential: Arc<dyn TokenCredential>,
     ) -> Self {
         Self {
             data: ArcSwap::from_pointee(PyDict::new(py).unbind()),
             endpoint,
             client,
+            credential,
             model_registry: OnceCell::new(),
+            #[cfg(test)]
+            key_vault_client_options: SecretClientOptions::default(),
         }
     }
 
@@ -70,14 +82,83 @@ impl AzureAppConfigurationSettingsProvider {
                 endpoint = self.endpoint
             ))
         })?;
-
-        settings.extend(
-            configurations
-                .into_iter()
-                .map(|configuration| (configuration.key, Some(configuration.value))),
-        );
+        Self::add_key_value_configurations(settings, &configurations);
+        self.add_key_vault_reference_configurations(settings, configurations)
+            .await?;
         Self::normalize_keys(settings);
         Ok(())
+    }
+
+    fn add_key_value_configurations(
+        settings: &mut BTreeMap<String, Option<String>>,
+        configurations: &[crate::azure::app_configuration::dtos::Configuration],
+    ) {
+        for configuration in configurations {
+            let is_key_value = configuration
+                .content_type
+                .as_deref()
+                .is_none_or(str::is_empty);
+
+            if is_key_value {
+                settings.insert(configuration.key.clone(), Some(configuration.value.clone()));
+            }
+        }
+    }
+
+    async fn add_key_vault_reference_configurations(
+        &self,
+        settings: &mut BTreeMap<String, Option<String>>,
+        configurations: Vec<Configuration>,
+    ) -> PyResult<()> {
+        #[cfg(test)]
+        let mut key_vault_reference_loader =
+            ParallelAzureKeyVaultReferenceLoader::with_client_options(
+                Arc::clone(&self.credential),
+                self.key_vault_client_options.clone(),
+            );
+        #[cfg(not(test))]
+        let mut key_vault_reference_loader =
+            ParallelAzureKeyVaultReferenceLoader::new(Arc::clone(&self.credential));
+
+        for configuration in configurations {
+            let is_key_vault_reference =
+                configuration
+                    .content_type
+                    .as_deref()
+                    .is_some_and(|content_type| {
+                        ContentType::new(content_type).is_key_vault_reference()
+                    });
+
+            if is_key_vault_reference {
+                let secret_reference_uri = Self::extract_secret_reference_uri(&configuration)?;
+                key_vault_reference_loader.add_reference(configuration.key, secret_reference_uri);
+            }
+        }
+
+        let loaded_secrets = key_vault_reference_loader
+            .load_all_secrets()
+            .await?
+            .into_iter()
+            .map(|(configuration_key, secret)| (configuration_key, secret.value));
+        settings.extend(loaded_secrets);
+        Ok(())
+    }
+
+    fn extract_secret_reference_uri(configuration: &Configuration) -> PyResult<Url> {
+        let secret_reference: KeyVaultReference = serde_json::from_str(&configuration.value)
+            .map_err(|error| {
+                PyRuntimeError::new_err(format!(
+                    "Invalid Azure Key Vault reference for Azure App Configuration key '{}': {error}",
+                    configuration.key,
+                ))
+            })?;
+
+        Url::parse(&secret_reference.uri).map_err(|error| {
+            PyRuntimeError::new_err(format!(
+                "Invalid Azure Key Vault reference URI for Azure App Configuration key '{}': {error}",
+                configuration.key,
+            ))
+        })
     }
 
     async fn add_enhanced_feature_flags(
@@ -112,6 +193,15 @@ impl AzureAppConfigurationSettingsProvider {
             feature_flag.name = convention_changer::to_snake_case(&feature_flag.name);
         }
     }
+
+    #[cfg(test)]
+    fn with_key_vault_client_options(
+        mut self,
+        key_vault_client_options: SecretClientOptions,
+    ) -> Self {
+        self.key_vault_client_options = key_vault_client_options;
+        self
+    }
 }
 
 impl SettingsProvider for AzureAppConfigurationSettingsProvider {
@@ -145,14 +235,23 @@ impl fmt::Display for AzureAppConfigurationSettingsProvider {
     }
 }
 
+#[derive(Deserialize)]
+struct KeyVaultReference {
+    uri: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::AzureAppConfigurationSettingsProvider;
     use crate::{
-        azure::app_configuration::azure_app_configuration_client::AzureAppConfigurationClient,
+        azure::app_configuration::{
+            azure_app_configuration_client::AzureAppConfigurationClient, dtos::Configuration,
+            parallel_azure_key_vault_reference_loader::ParallelAzureKeyVaultReferenceLoader,
+        },
         core::SettingsProvider,
     };
     use async_trait::async_trait;
+    use azure_core::http::Url;
     use azure_core::{
         credentials::{AccessToken, TokenCredential, TokenRequestOptions},
         error::ErrorKind,
@@ -161,6 +260,7 @@ mod tests {
             headers::Headers,
         },
     };
+    use azure_security_keyvault_secrets::SecretClientOptions;
     use pyo3::{
         Python,
         types::{PyAnyMethods, PyDictMethods},
@@ -213,8 +313,8 @@ mod tests {
                         "content_type": "application/json",
                         "status_override": "Disabled"
                     }],
-                    "allocation": {"default_when_enabled": "on"},
-                    "telemetry": {"enabled": true}
+                        "allocation": {"default_when_enabled": "on"},
+                        "telemetry": {"enabled": true}
                 }]}"#
                     .as_slice(),
                     path => panic!("Unexpected request path: {path}"),
@@ -228,31 +328,69 @@ mod tests {
         }
     }
 
+    #[derive(Debug)]
+    struct KeyVaultHttpClientMock;
+
+    #[async_trait]
+    impl HttpClient for KeyVaultHttpClientMock {
+        async fn execute_request(&self, request: &Request) -> azure_core::Result<AsyncRawResponse> {
+            let response_body = match (request.url().host_str(), request.url().path()) {
+                (Some("example.vault.azure.net"), "/secrets/Secret1/") => {
+                    br#"{"value":"secret1-value"}"#.to_vec()
+                }
+                (Some("example.vault.azure.net"), "/secrets/Secret2/version1") => {
+                    br#"{"value":"secret2-value"}"#.to_vec()
+                }
+                (Some("another.vault.azure.net"), "/secrets/Secret3/") => {
+                    br#"{"value":"secret3-value"}"#.to_vec()
+                }
+                (host, path) => panic!("Unexpected Key Vault request: {host:?}{path}"),
+            };
+
+            Ok(AsyncRawResponse::from_bytes(
+                StatusCode::Ok,
+                Headers::default(),
+                response_body,
+            ))
+        }
+    }
+
     fn create_provider(
         py: Python<'_>,
         status_code: StatusCode,
     ) -> AzureAppConfigurationSettingsProvider {
         let http_client_mock: Arc<dyn HttpClient> = Arc::new(HttpClientMock { status_code });
         let credential: Arc<dyn TokenCredential> = Arc::new(CredentialMock);
-        let client = AzureAppConfigurationClient::new("https://example.azconfig.io", credential)
-            .unwrap()
-            .with_pipeline(Pipeline::new(
-                option_env!("CARGO_PKG_NAME"),
-                option_env!("CARGO_PKG_VERSION"),
-                ClientOptions {
-                    transport: Some(Transport::new(Arc::clone(&http_client_mock))),
-                    ..Default::default()
-                },
-                Vec::new(),
-                Vec::new(),
-                None,
-            ));
+        let client = AzureAppConfigurationClient::new(
+            "https://example.azconfig.io",
+            Arc::clone(&credential),
+        )
+        .unwrap()
+        .with_pipeline(Pipeline::new(
+            option_env!("CARGO_PKG_NAME"),
+            option_env!("CARGO_PKG_VERSION"),
+            ClientOptions {
+                transport: Some(Transport::new(Arc::clone(&http_client_mock))),
+                ..Default::default()
+            },
+            Vec::new(),
+            Vec::new(),
+            None,
+        ));
 
         AzureAppConfigurationSettingsProvider::new(
             py,
             String::from("https://example.azconfig.io"),
             Arc::new(client),
+            credential,
         )
+        .with_key_vault_client_options(SecretClientOptions {
+            client_options: ClientOptions {
+                transport: Some(Transport::new(Arc::new(KeyVaultHttpClientMock))),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
     }
 
     #[tokio::test]
@@ -289,7 +427,7 @@ mod tests {
                     .unwrap()
                     .extract::<String>()
                     .unwrap(),
-                r#"{"uri":"https://example.vault.azure.net/secrets/Secret1"}"#
+                "secret1-value"
             );
             let feature_management_json = data
                 .get_item(AzureAppConfigurationSettingsProvider::FEATURE_MANAGEMENT_KEY)
@@ -328,6 +466,94 @@ mod tests {
         assert_eq!(
             provider.to_string(),
             "AzureAppConfigurationSettingsProvider {endpoint: https://example.azconfig.io}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_load_key_vault_reference_value() {
+        let configuration_name = String::from("configuration_to_key_vault_secret_2");
+        let expected_secret_value = "secret2-value";
+        let mut key_vault_reference_loader =
+            ParallelAzureKeyVaultReferenceLoader::with_client_options(
+                Arc::new(CredentialMock),
+                SecretClientOptions {
+                    client_options: ClientOptions {
+                        transport: Some(Transport::new(Arc::new(KeyVaultHttpClientMock))),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            );
+        let configuration = Configuration {
+            key: configuration_name.clone(),
+            content_type: Some(String::from(
+                "application/vnd.microsoft.appconfig.keyvaultref+json;charset=utf-8",
+            )),
+            value: String::from(
+                "{\"uri\":\"https://example.vault.azure.net/secrets/Secret2/version1\"}",
+            ),
+        };
+        let secret_reference_uri =
+            AzureAppConfigurationSettingsProvider::extract_secret_reference_uri(&configuration)
+                .unwrap();
+
+        key_vault_reference_loader.add_reference(configuration.key, secret_reference_uri);
+
+        let loaded_values = key_vault_reference_loader.load_all_secrets().await.unwrap();
+
+        assert_eq!(
+            loaded_values
+                .get(&configuration_name)
+                .and_then(|secret| secret.value.as_deref()),
+            Some(expected_secret_value)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_load_key_vault_references_from_multiple_vaults() {
+        let mut key_vault_reference_loader =
+            ParallelAzureKeyVaultReferenceLoader::with_client_options(
+                Arc::new(CredentialMock),
+                SecretClientOptions {
+                    client_options: ClientOptions {
+                        transport: Some(Transport::new(Arc::new(KeyVaultHttpClientMock))),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            );
+        key_vault_reference_loader.add_reference(
+            String::from("first_key"),
+            Url::parse("https://example.vault.azure.net/secrets/Secret1").unwrap(),
+        );
+        key_vault_reference_loader.add_reference(
+            String::from("second_key"),
+            Url::parse("https://example.vault.azure.net/secrets/Secret2/version1").unwrap(),
+        );
+        key_vault_reference_loader.add_reference(
+            String::from("third_key"),
+            Url::parse("https://another.vault.azure.net/secrets/Secret3").unwrap(),
+        );
+
+        let loaded_values = key_vault_reference_loader.load_all_secrets().await.unwrap();
+
+        assert_eq!(
+            loaded_values
+                .get("first_key")
+                .and_then(|secret| secret.value.as_deref()),
+            Some("secret1-value")
+        );
+        assert_eq!(
+            loaded_values
+                .get("second_key")
+                .and_then(|secret| secret.value.as_deref()),
+            Some("secret2-value")
+        );
+        assert_eq!(
+            loaded_values
+                .get("third_key")
+                .and_then(|secret| secret.value.as_deref()),
+            Some("secret3-value")
         );
     }
 }

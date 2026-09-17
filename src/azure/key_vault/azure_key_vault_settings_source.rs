@@ -1,4 +1,4 @@
-use super::remove_user_agent::RemoveUserAgent;
+use crate::azure::core::remove_user_agent::RemoveUserAgent;
 use crate::{
     azure::{identity::PythonAzureCredential, key_vault::AzureKeyVaultSettingsProvider},
     core::{PythonSettingsProvider, PythonSettingsSource, SettingsSource},
@@ -11,7 +11,7 @@ use std::time::Duration;
 
 #[pyclass(extends = PythonSettingsSource, frozen)]
 pub struct AzureKeyVaultSettingsSource {
-    url: String,
+    uri: String,
     secret_client: Arc<SecretClient>,
     reload_interval: Option<Duration>,
 }
@@ -19,17 +19,17 @@ pub struct AzureKeyVaultSettingsSource {
 #[pymethods]
 impl AzureKeyVaultSettingsSource {
     #[new]
-    #[pyo3(signature = (url, credential, reload_interval=None))]
+    #[pyo3(signature = (uri, credential, reload_interval=None))]
     pub fn new_python(
-        url: String,
+        uri: String,
         credential: &PythonAzureCredential,
         reload_interval: Option<Duration>,
     ) -> PyResult<PyClassInitializer<Self>> {
-        let secret_client = Self::create_secret_client(&url, credential)?;
+        let secret_client = Self::create_secret_client(&uri, credential)?;
 
         Ok(
             PyClassInitializer::from(PythonSettingsSource::new()).add_subclass(Self {
-                url,
+                uri,
                 secret_client: Arc::new(secret_client),
                 reload_interval,
             }),
@@ -43,7 +43,7 @@ impl AzureKeyVaultSettingsSource {
 
 impl AzureKeyVaultSettingsSource {
     fn create_secret_client(
-        url: &str,
+        uri: &str,
         credential: &PythonAzureCredential,
     ) -> PyResult<SecretClient> {
         let credential = credential.to_token_credential()?;
@@ -53,9 +53,9 @@ impl AzureKeyVaultSettingsSource {
             .per_call_policies
             .push(Arc::new(RemoveUserAgent));
 
-        SecretClient::new(url, credential, Some(client_options)).map_err(|error| {
+        SecretClient::new(uri, credential, Some(client_options)).map_err(|error| {
             PyRuntimeError::new_err(format!(
-                "Failed to create Azure Key Vault client for '{url}': {error}",
+                "Failed to create Azure Key Vault client for '{uri}': {error}",
             ))
         })
     }
@@ -68,7 +68,7 @@ impl SettingsSource for AzureKeyVaultSettingsSource {
             PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(
                 AzureKeyVaultSettingsProvider::new(
                     py,
-                    self.url.clone(),
+                    self.uri.clone(),
                     Arc::clone(&self.secret_client),
                     self.reload_interval,
                 )?,
@@ -96,7 +96,7 @@ mod tests {
                 client_secret: String::from("client-secret"),
             };
             let source = AzureKeyVaultSettingsSource {
-                url: String::from("https://example.vault.azure.net"),
+                uri: String::from("https://example.vault.azure.net"),
                 secret_client: Arc::new(
                     AzureKeyVaultSettingsSource::create_secret_client(
                         "https://example.vault.azure.net",

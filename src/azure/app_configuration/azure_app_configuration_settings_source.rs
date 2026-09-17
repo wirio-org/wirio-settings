@@ -8,6 +8,7 @@ use crate::{
     },
     core::{PythonSettingsProvider, PythonSettingsSource, SettingsSource},
 };
+use azure_core::credentials::TokenCredential;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::sync::Arc;
@@ -16,6 +17,7 @@ use std::sync::Arc;
 pub struct AzureAppConfigurationSettingsSource {
     endpoint: String,
     client: Arc<AzureAppConfigurationClient>,
+    credential: Arc<dyn TokenCredential>,
 }
 
 #[pymethods]
@@ -26,12 +28,13 @@ impl AzureAppConfigurationSettingsSource {
         endpoint: String,
         credential: &PythonAzureCredential,
     ) -> PyResult<PyClassInitializer<Self>> {
-        let client = Self::create_client(&endpoint, credential)?;
-
+        let credential = credential.to_token_credential()?;
+        let client = Self::create_client(&endpoint, Arc::clone(&credential))?;
         Ok(
             PyClassInitializer::from(PythonSettingsSource::new()).add_subclass(Self {
                 endpoint,
                 client: Arc::new(client),
+                credential,
             }),
         )
     }
@@ -44,15 +47,13 @@ impl AzureAppConfigurationSettingsSource {
 impl AzureAppConfigurationSettingsSource {
     fn create_client(
         endpoint: &str,
-        credential: &PythonAzureCredential,
+        credential: Arc<dyn TokenCredential>,
     ) -> PyResult<AzureAppConfigurationClient> {
-        AzureAppConfigurationClient::new(endpoint, credential.to_token_credential()?).map_err(
-            |error| {
-                PyRuntimeError::new_err(format!(
-                    "Failed to create Azure App Configuration client for '{endpoint}': {error}",
-                ))
-            },
-        )
+        AzureAppConfigurationClient::new(endpoint, credential).map_err(|error| {
+            PyRuntimeError::new_err(format!(
+                "Failed to create Azure App Configuration client for '{endpoint}': {error}",
+            ))
+        })
     }
 }
 
@@ -65,6 +66,7 @@ impl SettingsSource for AzureAppConfigurationSettingsSource {
                     py,
                     self.endpoint.clone(),
                     Arc::clone(&self.client),
+                    Arc::clone(&self.credential),
                 ),
             ),
         )
@@ -74,7 +76,7 @@ impl SettingsSource for AzureAppConfigurationSettingsSource {
 
 #[cfg(test)]
 mod tests {
-    use super::AzureAppConfigurationSettingsSource;
+    use crate::_wirio_settings::AzureAppConfigurationSettingsSource;
     use crate::azure::identity::PythonAzureCredential;
     use pyo3::Python;
     use pyo3::types::PyAnyMethods;
@@ -84,17 +86,19 @@ mod tests {
     fn test_build_provider() {
         Python::initialize();
         Python::attach(|py| {
-            let credential = PythonAzureCredential::ClientSecret {
+            let python_credential = PythonAzureCredential::ClientSecret {
                 tenant_id: String::from("tenant-id"),
                 client_id: String::from("client-id"),
                 client_secret: String::from("client-secret"),
             };
+            let credential = python_credential.to_token_credential().unwrap();
             let source = AzureAppConfigurationSettingsSource {
                 endpoint: String::from("https://example.azconfig.io"),
+                credential: Arc::clone(&credential),
                 client: Arc::new(
                     AzureAppConfigurationSettingsSource::create_client(
                         "https://example.azconfig.io",
-                        &credential,
+                        credential,
                     )
                     .unwrap(),
                 ),

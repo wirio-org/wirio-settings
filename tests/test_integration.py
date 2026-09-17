@@ -53,13 +53,13 @@ class TestIntegration:
         os.environ.get("INTEGRATION_TEST") is None, reason="Integration test"
     )
     def test_load_secrets_using_azure_key_vault(self) -> None:
-        key_vault_url = os.environ["AZURE_KEY_VAULT_URL"]
+        key_vault_uri = os.environ["AZURE_KEY_VAULT_URI"]
         expected_secret_1 = "secret-value-1"
         expected_secret_2 = "secret-value-2"
         expected_nested_secret = "Nested-value"
         settings_manager = SettingsManager(add_default_providers=False)
 
-        settings_manager.add_azure_key_vault(url=key_vault_url)
+        settings_manager.add_azure_key_vault(uri=key_vault_uri)
 
         assert settings_manager.get_value("secret_1") == expected_secret_1
         assert settings_manager.get_value("secret_2") == expected_secret_2
@@ -76,6 +76,7 @@ class TestIntegration:
         endpoint = os.environ["AZURE_APP_CONFIGURATION_ENDPOINT"]
         expected_setting = "setting-value"
         expected_nested_setting = "nested-setting-value"
+        expected_key_vault_reference = "key-vault-reference-value"
         expected_feature_flag = "enhanced_feature"
         expected_variant_name = "enabled_variant"
         settings_manager = SettingsManager(add_default_providers=False)
@@ -86,6 +87,10 @@ class TestIntegration:
         assert (
             settings_manager.get_value("parent.nested_setting")
             == expected_nested_setting
+        )
+        assert (
+            settings_manager.get_value("key_vault_reference")
+            == expected_key_vault_reference
         )
         feature_management = json.loads(
             settings_manager.get_value("feature_management")

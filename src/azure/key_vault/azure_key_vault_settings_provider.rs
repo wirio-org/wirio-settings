@@ -19,7 +19,7 @@ use crate::core::{ModelRegistry, PythonSettingsProvider, SettingLookup, Settings
 #[pyclass(extends = PythonSettingsProvider, frozen, str)]
 pub struct AzureKeyVaultSettingsProvider {
     secrets_cache: Arc<ArcSwap<SecretsCache>>,
-    url: String,
+    uri: String,
     secret_client: Arc<SecretClient>,
     reload_interval: Option<Duration>,
     schedule_reload_cancellation_token: Mutex<Option<CancellationToken>>,
@@ -56,7 +56,7 @@ impl AzureKeyVaultSettingsProvider {
 impl AzureKeyVaultSettingsProvider {
     pub fn new(
         py: Python<'_>,
-        url: String,
+        uri: String,
         secret_client: Arc<SecretClient>,
         reload_interval: Option<Duration>,
     ) -> PyResult<Self> {
@@ -73,7 +73,7 @@ impl AzureKeyVaultSettingsProvider {
                 data: PyDict::new(py).unbind(),
                 loaded_secrets: None,
             })),
-            url,
+            uri,
             secret_client,
             reload_interval,
             schedule_reload_cancellation_token: Mutex::new(None),
@@ -196,7 +196,7 @@ impl AzureKeyVaultSettingsProvider {
                 .replace(cancellation_token.clone());
             let secret_client = Arc::clone(&self.secret_client);
             let secrets_cache = Arc::clone(&self.secrets_cache);
-            let url = self.url.clone();
+            let uri = self.uri.clone();
             let model_registry = Arc::clone(&self.model_registry);
 
             runtime.spawn(async move {
@@ -210,7 +210,7 @@ impl AzureKeyVaultSettingsProvider {
                         _ = Self::reload_secrets(
                             &secret_client,
                             &secrets_cache,
-                            &url,
+                            &uri,
                             &model_registry,
                         ) => {
                             // Ignore errors during scheduled reloads
@@ -224,7 +224,7 @@ impl AzureKeyVaultSettingsProvider {
     async fn reload_secrets(
         secret_client: &SecretClient,
         secrets_cache: &ArcSwap<SecretsCache>,
-        url: &str,
+        uri: &str,
         model_registry: &OnceCell<Py<ModelRegistry>>,
     ) -> PyResult<()> {
         let mut secret_properties_pager =
@@ -232,7 +232,7 @@ impl AzureKeyVaultSettingsProvider {
                 .list_secret_properties(None)
                 .map_err(|error| {
                     PyRuntimeError::new_err(format!(
-                        "Failed to list secrets in Azure Key Vault '{url}': {error}",
+                        "Failed to list secrets in Azure Key Vault '{uri}': {error}",
                     ))
                 })?;
         let mut new_loaded_secrets: BTreeMap<String, Secret> = BTreeMap::new();
@@ -246,7 +246,7 @@ impl AzureKeyVaultSettingsProvider {
         while let Some(secret_properties) =
             secret_properties_pager.try_next().await.map_err(|error| {
                 PyRuntimeError::new_err(format!(
-                    "Failed to iterate secrets in Azure Key Vault '{url}': {error}",
+                    "Failed to iterate secrets in Azure Key Vault '{uri}': {error}",
                 ))
             })?
         {
@@ -258,7 +258,7 @@ impl AzureKeyVaultSettingsProvider {
             )?;
         }
 
-        let new_loaded_secrets_from_loader = parallel_secret_loader.load_all_secrets(url).await?;
+        let new_loaded_secrets_from_loader = parallel_secret_loader.load_all_secrets(uri).await?;
         Self::update_secrets(
             secrets_cache,
             &loaded_secrets_cache,
@@ -292,7 +292,7 @@ impl SettingsProvider for AzureKeyVaultSettingsProvider {
         Self::reload_secrets(
             &self.secret_client,
             &secrets_cache,
-            &self.url,
+            &self.uri,
             &self.model_registry,
         )
         .await
@@ -309,7 +309,7 @@ impl SettingsProvider for AzureKeyVaultSettingsProvider {
 
 impl fmt::Display for AzureKeyVaultSettingsProvider {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {{url: {}}}", self.get_type_name(), self.url)
+        write!(f, "{} {{uri: {}}}", self.get_type_name(), self.uri)
     }
 }
 
@@ -398,9 +398,9 @@ mod tests {
         Python::initialize();
 
         Python::attach(|py| {
-            let url = String::from("https://example.vault.azure.net");
-            let expected_display = format!("AzureKeyVaultSettingsProvider {{url: {url}}}");
-            let display = AzureKeyVaultSettingsProvider::new(py, url, create_secret_client(), None)
+            let uri = String::from("https://example.vault.azure.net");
+            let expected_display = format!("AzureKeyVaultSettingsProvider {{uri: {uri}}}");
+            let display = AzureKeyVaultSettingsProvider::new(py, uri, create_secret_client(), None)
                 .unwrap()
                 .to_string();
 
@@ -659,7 +659,7 @@ mod tests {
     async fn test_retrieve_secret_when_loading_uncached_secret() {
         let expected_secret_name = "missing-secret";
         let expected_secret_value = "retrieved-value";
-        let url = "https://example.vault.azure.net";
+        let uri = "https://example.vault.azure.net";
         let secret_client_options = SecretClientOptions {
             client_options: ClientOptions {
                 transport: Some(Transport::new(Arc::new(HttpClientMock {
@@ -670,12 +670,12 @@ mod tests {
             ..Default::default()
         };
         let secret_client =
-            SecretClient::new(url, Arc::new(CredentialMock), Some(secret_client_options)).unwrap();
+            SecretClient::new(uri, Arc::new(CredentialMock), Some(secret_client_options)).unwrap();
 
         let mut parallel_secret_loader = ParallelSecretLoader::new(&secret_client);
         parallel_secret_loader.add_secret_to_load(expected_secret_name.to_owned());
         let loaded_secrets_from_loader =
-            parallel_secret_loader.load_all_secrets(url).await.unwrap();
+            parallel_secret_loader.load_all_secrets(uri).await.unwrap();
 
         assert_eq!(
             loaded_secrets_from_loader
@@ -701,7 +701,7 @@ mod tests {
                 )])),
             }))
         });
-        let url = "https://example.vault.azure.net";
+        let uri = "https://example.vault.azure.net";
         let secret_client_options = SecretClientOptions {
             client_options: ClientOptions {
                 transport: Some(Transport::new(Arc::new(HttpClientMock {
@@ -712,14 +712,14 @@ mod tests {
             ..Default::default()
         };
         let secret_client = Arc::new(
-            SecretClient::new(url, Arc::new(CredentialMock), Some(secret_client_options)).unwrap(),
+            SecretClient::new(uri, Arc::new(CredentialMock), Some(secret_client_options)).unwrap(),
         );
 
         let model_registry = OnceCell::new();
         AzureKeyVaultSettingsProvider::reload_secrets(
             &secret_client,
             &secrets_cache,
-            url,
+            uri,
             &model_registry,
         )
         .await

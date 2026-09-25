@@ -76,7 +76,7 @@ impl SettingsSource for AzureAppConfigurationSettingsSource {
 
 #[cfg(test)]
 mod tests {
-    use crate::_wirio_settings::AzureAppConfigurationSettingsSource;
+    use super::AzureAppConfigurationSettingsSource;
     use crate::azure::identity::PythonAzureCredential;
     use pyo3::Python;
     use pyo3::types::PyAnyMethods;

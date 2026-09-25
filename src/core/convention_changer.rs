@@ -25,7 +25,7 @@ pub fn to_snake_case(string_to_convert: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::core::convention_changer;
+    use super::to_snake_case;
 
     #[test]
     fn test_convert_to_snake_case() {
@@ -59,7 +59,7 @@ mod tests {
         ];
 
         for (string_to_convert, expected_string) in test_cases {
-            let converted_value = convention_changer::to_snake_case(string_to_convert);
+            let converted_value = to_snake_case(string_to_convert);
 
             assert_eq!(
                 converted_value, expected_string,

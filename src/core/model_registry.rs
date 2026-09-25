@@ -194,12 +194,11 @@ impl ModelRegistry {
 
 #[cfg(test)]
 mod tests {
+    use super::{ModelRegistry, RegisteredModel};
     use pyo3::{
         prelude::*,
         types::{PyAnyMethods, PyList, PyModule, PyString, PyWeakrefReference},
     };
-
-    use crate::core::{ModelRegistry, RegisteredModel};
 
     fn create_registry(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<ModelRegistry> {
         let callback = module.getattr("callback")?;

@@ -342,23 +342,19 @@ impl From<EnhancedFeatureFlagTelemetry>
 
 #[cfg(test)]
 mod tests {
+    use super::{FeatureManagementInput, FeatureManagementInputFeatureManagementFeatureFlag};
     use std::collections::BTreeMap;
 
     use serde_json::Value;
 
-    use crate::azure::app_configuration::{
-        dtos::{
-            EnhancedFeatureFlag, EnhancedFeatureFlagAllocation,
-            EnhancedFeatureFlagAllocationGroupAllocation,
-            EnhancedFeatureFlagAllocationPercentileAllocation,
-            EnhancedFeatureFlagAllocationUserAllocation, EnhancedFeatureFlagConditions,
-            EnhancedFeatureFlagConditionsFeatureFilter,
-            EnhancedFeatureFlagConditionsRequirementType, EnhancedFeatureFlagTelemetry,
-            EnhancedFeatureFlagVariant, EnhancedFeatureFlagVariantStatusOverride,
-        },
-        feature_management_input::{
-            FeatureManagementInput, FeatureManagementInputFeatureManagementFeatureFlag,
-        },
+    use crate::azure::app_configuration::dtos::{
+        EnhancedFeatureFlag, EnhancedFeatureFlagAllocation,
+        EnhancedFeatureFlagAllocationGroupAllocation,
+        EnhancedFeatureFlagAllocationPercentileAllocation,
+        EnhancedFeatureFlagAllocationUserAllocation, EnhancedFeatureFlagConditions,
+        EnhancedFeatureFlagConditionsFeatureFilter, EnhancedFeatureFlagConditionsRequirementType,
+        EnhancedFeatureFlagTelemetry, EnhancedFeatureFlagVariant,
+        EnhancedFeatureFlagVariantStatusOverride,
     };
 
     #[test]

@@ -55,6 +55,8 @@ Here's why: our application settings, one line, done right. No more scattered `o
   - [Environment variables](#environment-variables)
   - [Azure Key Vault](#azure-key-vault)
   - [Azure App Configuration](#azure-app-configuration)
+    - [Overview](#overview-1)
+    - [Selectors](#selectors)
   - [AWS Secrets Manager](#aws-secrets-manager)
   - [GCP Secret Manager](#gcp-secret-manager)
   - [Setting per file](#setting-per-file)
@@ -507,9 +509,11 @@ To periodically refresh the loaded secrets, use the `reload_interval` parameter,
 
 ### Azure App Configuration
 
+#### Overview
+
 Read from Azure App Configuration:
 
-- Configurations (i.e., settings): Key-value pairs and Key Vault references.
+- Settings (also called `configuration`): Key-value pairs and Key Vault references.
 - Enhanced feature flags.
 
 ```python
@@ -518,12 +522,14 @@ settings_manager.add_azure_app_configuration(
 )
 ```
 
+By default, it loads all settings and enhanced feature flags without a label.
+
 > [!NOTE]
 > For authentication options, see [Azure credentials](#azure-credentials).
 >
 > **Azure permissions:** Usually, the `App Configuration Data Reader` role is used to read settings. The same identity is also used to resolve Azure Key Vault references, which generally require the `Key Vault Secrets User` role on each referenced vault.
 
-Configurations and enhanced feature flags are normalized to snake case.
+Settings and enhanced feature flags are normalized to snake case.
 
 Enhanced feature flags are loaded as a JSON string at `feature_management`, ready for use with the official [`featuremanagement`](https://pypi.org/project/featuremanagement/) Microsoft package. For example, using a key instead of a Pydantic model:
 
@@ -540,6 +546,30 @@ feature_manager = FeatureManager(
 As `feature_management` is a JSON string, it needs to be parsed before use, as shown in the example above, so don't create a `FeatureManager` singleton.
 
 To have a `FeatureManager` singleton, `wirio-settings` would have to provide a `SettingsManager.create_feature_manager()` method, which is currently not available. Technically speaking, it'd return a `FeatureManager` instance initialized with the parsed `feature_management` JSON string. It'd be parsed to a `FeatureManagerConfiguration` class (inheriting from `Mapping[str, Any]`), which would be refreshed whenever the `feature_management` JSON string is updated.
+
+#### Selectors
+
+Use selectors to control which settings and enhanced feature flags are loaded. A selector accepts a filter and an optional label. When we omit the label, it selects values without a label.
+
+We could use setting selectors to only load the settings of a service, for example our payment API, and for that we create settings in Azure App Configuration with a prefix representing the service (`payment`) followed by a separator (`.` for example).
+
+The following code would only load the settings starting with the `payment` prefix.
+
+```python
+from wirio_settings import (
+    SettingsManager,
+)
+from wirio_settings.azure.app_configuration import SettingSelector
+
+settings_manager = SettingsManager().add_azure_app_configuration(
+    "https://example.azconfig.io",
+    selectors=[
+        SettingSelector("payment.*"),
+    ],
+)
+```
+
+We can also add selectors for enhanced feature flags, also load common and specific settings, etc. More information is available in the [Microsoft official documentation](https://learn.microsoft.com/en-us/azure/azure-app-configuration/concept-key-value).
 
 ### AWS Secrets Manager
 

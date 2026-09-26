@@ -233,7 +233,7 @@ sharedSetting: Integration YAML settings
         mocker.patch.dict(
             os.environ,
             {
-                "WIRIO_ENVIRONMENT": "integration",
+                "PYTHONAPP_ENVIRONMENT": "integration",
                 "FROM_ENVIRONMENT": expected_from_environment_variables,
                 "SHARED_SETTING": shared_setting,
             },
@@ -302,7 +302,7 @@ log_level: {expected_log_level}
         expected_log_level = "DEBUG"
         expected_environment_name = "development"
         mocker.patch.dict(
-            os.environ, {"WIRIO_ENVIRONMENT": expected_environment_name}, clear=True
+            os.environ, {"PYTHONAPP_ENVIRONMENT": expected_environment_name}, clear=True
         )
         tmp_path.joinpath(f"settings.{expected_environment_name}.yaml").write_text(
             f"""

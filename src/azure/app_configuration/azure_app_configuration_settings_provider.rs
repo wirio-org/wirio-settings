@@ -1,7 +1,9 @@
 use crate::{
     azure::app_configuration::{
-        azure_app_configuration_client::AzureAppConfigurationClient, dtos::Configuration,
+        azure_app_configuration_client::AzureAppConfigurationClient,
+        dtos::Configuration,
         feature_management_input::FeatureManagementInput,
+        models::{FeatureFlagSelector, SettingSelector},
         parallel_azure_key_vault_reference_loader::ParallelAzureKeyVaultReferenceLoader,
     },
     core::{
@@ -22,12 +24,19 @@ use std::fmt;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 
-#[pyclass(extends = PythonSettingsProvider, frozen, str)]
+#[pyclass(
+    name = "_AzureAppConfigurationSettingsProvider",
+    extends = PythonSettingsProvider,
+    frozen,
+    str
+)]
 pub struct AzureAppConfigurationSettingsProvider {
     data: ArcSwap<Py<PyDict>>,
     endpoint: String,
     client: Arc<AzureAppConfigurationClient>,
     credential: Arc<dyn TokenCredential>,
+    selectors: Vec<SettingSelector>,
+    feature_flag_selectors: Vec<FeatureFlagSelector>,
     model_registry: OnceCell<Py<ModelRegistry>>,
     #[cfg(test)]
     key_vault_client_options: SecretClientOptions,
@@ -55,17 +64,22 @@ impl AzureAppConfigurationSettingsProvider {
 
 impl AzureAppConfigurationSettingsProvider {
     const FEATURE_MANAGEMENT_KEY: &str = "feature_management";
+
     pub(crate) fn new(
         py: Python<'_>,
         endpoint: String,
         client: Arc<AzureAppConfigurationClient>,
         credential: Arc<dyn TokenCredential>,
+        selectors: Vec<SettingSelector>,
+        feature_flag_selectors: Vec<FeatureFlagSelector>,
     ) -> Self {
         Self {
             data: ArcSwap::from_pointee(PyDict::new(py).unbind()),
             endpoint,
             client,
             credential,
+            selectors,
+            feature_flag_selectors,
             model_registry: OnceCell::new(),
             #[cfg(test)]
             key_vault_client_options: SecretClientOptions::default(),
@@ -76,12 +90,18 @@ impl AzureAppConfigurationSettingsProvider {
         &self,
         settings: &mut BTreeMap<String, Option<String>>,
     ) -> PyResult<()> {
-        let configurations = self.client.get_configurations().await.map_err(|error| {
-            PyRuntimeError::new_err(format!(
-                "Failed to get configurations from Azure App Configuration '{endpoint}': {error}",
-                endpoint = self.endpoint
-            ))
-        })?;
+        let mut configurations = Vec::new();
+
+        for selector in &self.selectors {
+            let selector_configurations =
+                self.client.get_configurations(selector).await.map_err(|error| {
+                    PyRuntimeError::new_err(format!(
+                        "Failed to get configurations from Azure App Configuration '{endpoint}': {error}",
+                        endpoint = self.endpoint
+                    ))
+                })?;
+            configurations.extend(selector_configurations);
+        }
         Self::add_key_value_configurations(settings, &configurations);
         self.add_key_vault_reference_configurations(settings, configurations)
             .await?;
@@ -110,15 +130,11 @@ impl AzureAppConfigurationSettingsProvider {
         settings: &mut BTreeMap<String, Option<String>>,
         configurations: Vec<Configuration>,
     ) -> PyResult<()> {
-        #[cfg(test)]
-        let mut key_vault_reference_loader =
-            ParallelAzureKeyVaultReferenceLoader::with_client_options(
-                Arc::clone(&self.credential),
-                self.key_vault_client_options.clone(),
-            );
-        #[cfg(not(test))]
         let mut key_vault_reference_loader =
             ParallelAzureKeyVaultReferenceLoader::new(Arc::clone(&self.credential));
+
+        #[cfg(test)]
+        key_vault_reference_loader.with_client_options(self.key_vault_client_options.clone());
 
         for configuration in configurations {
             let is_key_vault_reference =
@@ -165,12 +181,20 @@ impl AzureAppConfigurationSettingsProvider {
         &self,
         settings: &mut BTreeMap<String, Option<String>>,
     ) -> PyResult<()> {
-        let mut feature_flags = self.client.get_enhanced_feature_flags().await.map_err(|error| {
-            PyRuntimeError::new_err(format!(
-                "Failed to get enhanced feature flags from Azure App Configuration '{endpoint}': {error}",
-                endpoint = self.endpoint
-            ))
-        })?;
+        let mut feature_flags = Vec::new();
+        for selector in &self.feature_flag_selectors {
+            let selector_feature_flags = self
+                .client
+                .get_enhanced_feature_flags(selector)
+                .await
+                .map_err(|error| {
+                    PyRuntimeError::new_err(format!(
+                        "Failed to get enhanced feature flags from Azure App Configuration '{endpoint}': {error}",
+                        endpoint = self.endpoint
+                    ))
+                })?;
+            feature_flags.extend(selector_feature_flags);
+        }
 
         if !feature_flags.is_empty() {
             Self::normalize_enhanced_feature_flag_names(&mut feature_flags);
@@ -245,7 +269,9 @@ mod tests {
     use super::AzureAppConfigurationSettingsProvider;
     use crate::{
         azure::app_configuration::{
-            azure_app_configuration_client::AzureAppConfigurationClient, dtos::Configuration,
+            azure_app_configuration_client::AzureAppConfigurationClient,
+            dtos::Configuration,
+            models::{FeatureFlagSelector, SettingSelector},
             parallel_azure_key_vault_reference_loader::ParallelAzureKeyVaultReferenceLoader,
         },
         core::SettingsProvider,
@@ -383,6 +409,8 @@ mod tests {
             String::from("https://example.azconfig.io"),
             Arc::new(client),
             credential,
+            vec![SettingSelector::new(String::from("*"), None)],
+            vec![FeatureFlagSelector::new(String::from("*"), None)],
         )
         .with_key_vault_client_options(SecretClientOptions {
             client_options: ClientOptions {
@@ -474,16 +502,14 @@ mod tests {
         let configuration_name = String::from("configuration_to_key_vault_secret_2");
         let expected_secret_value = "secret2-value";
         let mut key_vault_reference_loader =
-            ParallelAzureKeyVaultReferenceLoader::with_client_options(
-                Arc::new(CredentialMock),
-                SecretClientOptions {
-                    client_options: ClientOptions {
-                        transport: Some(Transport::new(Arc::new(KeyVaultHttpClientMock))),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-            );
+            ParallelAzureKeyVaultReferenceLoader::new(Arc::new(CredentialMock));
+        key_vault_reference_loader.with_client_options(SecretClientOptions {
+            client_options: ClientOptions {
+                transport: Some(Transport::new(Arc::new(KeyVaultHttpClientMock))),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
         let configuration = Configuration {
             key: configuration_name.clone(),
             content_type: Some(String::from(
@@ -512,16 +538,14 @@ mod tests {
     #[tokio::test]
     async fn test_load_key_vault_references_from_multiple_vaults() {
         let mut key_vault_reference_loader =
-            ParallelAzureKeyVaultReferenceLoader::with_client_options(
-                Arc::new(CredentialMock),
-                SecretClientOptions {
-                    client_options: ClientOptions {
-                        transport: Some(Transport::new(Arc::new(KeyVaultHttpClientMock))),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-            );
+            ParallelAzureKeyVaultReferenceLoader::new(Arc::new(CredentialMock));
+        key_vault_reference_loader.with_client_options(SecretClientOptions {
+            client_options: ClientOptions {
+                transport: Some(Transport::new(Arc::new(KeyVaultHttpClientMock))),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
         key_vault_reference_loader.add_reference(
             String::from("first_key"),
             Url::parse("https://example.vault.azure.net/secrets/Secret1").unwrap(),

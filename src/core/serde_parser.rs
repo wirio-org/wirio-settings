@@ -3,7 +3,7 @@ use pyo3::exceptions::PyRuntimeError;
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 
-use crate::_wirio_settings::SettingsPath;
+use crate::core::SettingsPath;
 
 pub struct SerdeParser {
     data: BTreeMap<String, Option<String>>,

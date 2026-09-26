@@ -70,7 +70,7 @@ trusted-publishing = true
 error-on-warning = true
 
 [tool.ruff]
-extend-exclude = ["python/wirio_settings/_wirio_settings.pyi"]
+extend-exclude = ["python/wirio_settings/_wirio_settings"]
 
 [tool.pytest]
 strict = true

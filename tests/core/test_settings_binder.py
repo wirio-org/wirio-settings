@@ -4,7 +4,7 @@ from typing import final, override
 
 import pytest
 from pydantic import BaseModel, Field
-from wirio_settings._wirio_settings import (
+from wirio_settings import (
     ModelRegistry,
     SettingLookup,
     SettingsProvider,

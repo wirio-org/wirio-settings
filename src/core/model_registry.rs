@@ -7,7 +7,7 @@ use pyo3::{
 use tokio::sync::{Mutex, watch};
 
 #[derive(Debug)]
-#[pyclass(frozen)]
+#[pyclass(name = "_RegisteredModel", frozen)]
 pub struct RegisteredModel {
     #[pyo3(get)]
     model_reference: Py<PyWeakrefReference>,
@@ -49,7 +49,7 @@ impl RegisteredModel {
 }
 
 #[derive(Debug)]
-#[pyclass(frozen)]
+#[pyclass(name = "_ModelRegistry", frozen)]
 pub struct ModelRegistry {
     sender: watch::Sender<()>,
     models: Arc<Mutex<Py<PyList>>>,
@@ -102,7 +102,7 @@ impl ModelRegistry {
     }
 
     /// Returns all tracked Pydantic models. It will automatically remove models that have been garbage collected.
-    #[pyo3(signature = () -> "list[RegisteredModel]")]
+    #[pyo3(signature = () -> "list[_RegisteredModel]")]
     pub fn models(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
         py.detach(|| {
             let runtime = pyo3_async_runtimes::tokio::get_runtime();

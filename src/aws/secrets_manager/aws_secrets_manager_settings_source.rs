@@ -7,7 +7,11 @@ use aws_sdk_secretsmanager::{Client, config::Builder};
 use pyo3::prelude::*;
 use std::sync::Arc;
 
-#[pyclass(extends = PythonSettingsSource, frozen)]
+#[pyclass(
+    name = "_AwsSecretsManagerSettingsSource",
+    extends = PythonSettingsSource,
+    frozen
+)]
 pub struct AwsSecretsManagerSettingsSource {
     secret_id: String,
     secrets_manager_client: Arc<Client>,

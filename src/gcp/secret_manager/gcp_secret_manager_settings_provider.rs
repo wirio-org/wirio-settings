@@ -13,7 +13,12 @@ use std::fmt;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 
-#[pyclass(extends = PythonSettingsProvider, frozen, str)]
+#[pyclass(
+    name = "_GcpSecretManagerSettingsProvider",
+    extends = PythonSettingsProvider,
+    frozen,
+    str
+)]
 pub struct GcpSecretManagerSettingsProvider {
     data: ArcSwap<Py<PyDict>>,
     project_id: String,

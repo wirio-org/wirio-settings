@@ -3,6 +3,7 @@ use crate::{
         app_configuration::{
             AzureAppConfigurationSettingsProvider,
             azure_app_configuration_client::AzureAppConfigurationClient,
+            models::{FeatureFlagSelector, KeyFilter, SettingSelector},
         },
         identity::PythonAzureCredential,
     },
@@ -13,20 +14,28 @@ use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::sync::Arc;
 
-#[pyclass(extends = PythonSettingsSource, frozen)]
+#[pyclass(
+    name = "_AzureAppConfigurationSettingsSource",
+    extends = PythonSettingsSource,
+    frozen
+)]
 pub struct AzureAppConfigurationSettingsSource {
     endpoint: String,
     client: Arc<AzureAppConfigurationClient>,
     credential: Arc<dyn TokenCredential>,
+    selectors: Vec<SettingSelector>,
+    feature_flag_selectors: Vec<FeatureFlagSelector>,
 }
 
 #[pymethods]
 impl AzureAppConfigurationSettingsSource {
     #[new]
-    #[pyo3(signature = (endpoint, credential))]
+    #[pyo3(signature = (endpoint, credential, selectors=None, feature_flag_selectors=None))]
     pub fn new_python(
         endpoint: String,
         credential: &PythonAzureCredential,
+        selectors: Option<Vec<SettingSelector>>,
+        feature_flag_selectors: Option<Vec<FeatureFlagSelector>>,
     ) -> PyResult<PyClassInitializer<Self>> {
         let credential = credential.to_token_credential()?;
         let client = Self::create_client(&endpoint, Arc::clone(&credential))?;
@@ -35,6 +44,10 @@ impl AzureAppConfigurationSettingsSource {
                 endpoint,
                 client: Arc::new(client),
                 credential,
+                selectors: Self::get_selectors_or_default(selectors),
+                feature_flag_selectors: Self::get_feature_flag_selectors_or_default(
+                    feature_flag_selectors,
+                ),
             }),
         )
     }
@@ -55,6 +68,17 @@ impl AzureAppConfigurationSettingsSource {
             ))
         })
     }
+
+    fn get_selectors_or_default(selectors: Option<Vec<SettingSelector>>) -> Vec<SettingSelector> {
+        selectors.unwrap_or_else(|| vec![SettingSelector::new(String::from(KeyFilter::ANY), None)])
+    }
+
+    fn get_feature_flag_selectors_or_default(
+        feature_flag_selectors: Option<Vec<FeatureFlagSelector>>,
+    ) -> Vec<FeatureFlagSelector> {
+        feature_flag_selectors
+            .unwrap_or_else(|| vec![FeatureFlagSelector::new(String::from(KeyFilter::ANY), None)])
+    }
 }
 
 impl SettingsSource for AzureAppConfigurationSettingsSource {
@@ -67,6 +91,8 @@ impl SettingsSource for AzureAppConfigurationSettingsSource {
                     self.endpoint.clone(),
                     Arc::clone(&self.client),
                     Arc::clone(&self.credential),
+                    self.selectors.clone(),
+                    self.feature_flag_selectors.clone(),
                 ),
             ),
         )
@@ -77,7 +103,10 @@ impl SettingsSource for AzureAppConfigurationSettingsSource {
 #[cfg(test)]
 mod tests {
     use super::AzureAppConfigurationSettingsSource;
-    use crate::azure::identity::PythonAzureCredential;
+    use crate::azure::{
+        app_configuration::models::{KeyFilter, LabelFilter},
+        identity::PythonAzureCredential,
+    };
     use pyo3::Python;
     use pyo3::types::PyAnyMethods;
     use std::sync::Arc;
@@ -95,6 +124,8 @@ mod tests {
             let source = AzureAppConfigurationSettingsSource {
                 endpoint: String::from("https://example.azconfig.io"),
                 credential: Arc::clone(&credential),
+                selectors: Vec::new(),
+                feature_flag_selectors: Vec::new(),
                 client: Arc::new(
                     AzureAppConfigurationSettingsSource::create_client(
                         "https://example.azconfig.io",
@@ -110,5 +141,17 @@ mod tests {
                 crate::azure::app_configuration::AzureAppConfigurationSettingsProvider,
             >());
         });
+    }
+
+    #[test]
+    fn test_get_default_selectors_when_none_provided() {
+        let selectors = AzureAppConfigurationSettingsSource::get_selectors_or_default(None);
+        let feature_flag_selectors =
+            AzureAppConfigurationSettingsSource::get_feature_flag_selectors_or_default(None);
+
+        assert_eq!(selectors[0].key_filter, KeyFilter::ANY);
+        assert_eq!(selectors[0].label_filter, LabelFilter::NULL);
+        assert_eq!(feature_flag_selectors[0].name_filter, KeyFilter::ANY);
+        assert_eq!(feature_flag_selectors[0].label_filter, LabelFilter::NULL);
     }
 }

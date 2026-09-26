@@ -14,7 +14,12 @@ use crate::core::{
     SettingsProvider,
 };
 
-#[pyclass(extends = PythonSettingsProvider, frozen, str)]
+#[pyclass(
+    name = "_JsonFileSettingsProvider",
+    extends = PythonSettingsProvider,
+    frozen,
+    str
+)]
 pub struct JsonFileSettingsProvider {
     data: Arc<ArcSwap<Py<PyDict>>>,
     path_provider: PathProvider,

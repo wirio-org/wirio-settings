@@ -4,7 +4,11 @@ use crate::{
 };
 use pyo3::prelude::*;
 
-#[pyclass(extends = PythonSettingsSource, frozen)]
+#[pyclass(
+    name = "_GcpSecretManagerSettingsSource",
+    extends = PythonSettingsSource,
+    frozen
+)]
 pub struct GcpSecretManagerSettingsSource {
     project_id: String,
     credentials_json: Option<String>,

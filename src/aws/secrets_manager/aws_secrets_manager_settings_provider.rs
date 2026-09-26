@@ -13,7 +13,12 @@ use crate::core::{
     ModelRegistry, PythonSettingsProvider, SerdeParser, SettingLookup, SettingsProvider,
 };
 
-#[pyclass(extends = PythonSettingsProvider, frozen, str)]
+#[pyclass(
+    name = "_AwsSecretsManagerSettingsProvider",
+    extends = PythonSettingsProvider,
+    frozen,
+    str
+)]
 pub struct AwsSecretsManagerSettingsProvider {
     data: ArcSwap<Py<PyDict>>,
     secret_id: String,

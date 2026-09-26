@@ -8,7 +8,7 @@ use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::sync::Arc;
 
-#[pyclass(name = "AzureCredential", frozen)]
+#[pyclass(name = "_AzureCredential", frozen)]
 pub enum PythonAzureCredential {
     Default(),
     ManagedIdentity(),

@@ -3,12 +3,14 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
-from wirio_settings._wirio_settings import SettingLookup
 from wirio_settings.core.settings import Settings
 
+from . import SettingLookup
+
 if TYPE_CHECKING:
-    from wirio_settings._wirio_settings import SettingsProvider
     from wirio_settings.core.settings_section import SettingsSection
+
+    from . import SettingsProvider
 
 
 class SettingsRoot(Settings, ABC):

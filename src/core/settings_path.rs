@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 
 #[derive(Debug)]
-#[pyclass(frozen)]
+#[pyclass(name = "_SettingsPath", frozen)]
 pub struct SettingsPath;
 
 #[pymethods]

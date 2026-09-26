@@ -4,7 +4,11 @@ use crate::{
 };
 use pyo3::prelude::*;
 
-#[pyclass(extends = PythonSettingsSource, frozen)]
+#[pyclass(
+    name = "_SettingPerFileSettingsSource",
+    extends = PythonSettingsSource,
+    frozen
+)]
 pub struct SettingPerFileSettingsSource {
     path_provider: PathProvider,
     reload_enabled: bool,

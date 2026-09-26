@@ -8,7 +8,7 @@ lint:
 
 .PHONY: generate-stubs
 generate-stubs:
-	rm -rf python/wirio_settings/_wirio_settings.pyi
+	rm -rf python/wirio_settings/_wirio_settings
 	uv run -- maturin develop --generate-stubs --uv
 	uv run -- maturin generate-stubs --out python/wirio_settings
 

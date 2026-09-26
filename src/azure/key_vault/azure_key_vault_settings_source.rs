@@ -9,7 +9,11 @@ use pyo3::prelude::*;
 use std::sync::Arc;
 use std::time::Duration;
 
-#[pyclass(extends = PythonSettingsSource, frozen)]
+#[pyclass(
+    name = "_AzureKeyVaultSettingsSource",
+    extends = PythonSettingsSource,
+    frozen
+)]
 pub struct AzureKeyVaultSettingsSource {
     uri: String,
     secret_client: Arc<SecretClient>,

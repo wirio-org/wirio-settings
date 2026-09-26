@@ -1,6 +1,7 @@
 use crate::azure::app_configuration::dtos::{
     Configuration, EnhancedFeatureFlag, GetConfigurationsResponse, GetEnhancedFeatureFlagsResponse,
 };
+use crate::azure::app_configuration::models::{FeatureFlagSelector, SettingSelector};
 use azure_core::{
     credentials::TokenCredential,
     error::CheckSuccessOptions,
@@ -50,13 +51,12 @@ impl AzureAppConfigurationClient {
         })
     }
 
-    pub(crate) async fn get_configurations(&self) -> azure_core::Result<Vec<Configuration>> {
-        let mut url = self.endpoint.clone();
-        url.append_path("kv");
-        let mut query_builder = url.query_builder();
-        query_builder.set_pair("api-version", Self::KEY_VALUES_API_VERSION);
-        query_builder.build();
+    pub(crate) async fn get_configurations(
+        &self,
+        selector: &SettingSelector,
+    ) -> azure_core::Result<Vec<Configuration>> {
         let mut configurations: Vec<Configuration> = Vec::new();
+        let mut url = self.get_url_for_getting_configurations(selector);
 
         loop {
             let response = self.get_configurations_page(&url).await?;
@@ -78,13 +78,10 @@ impl AzureAppConfigurationClient {
 
     pub(crate) async fn get_enhanced_feature_flags(
         &self,
+        selector: &FeatureFlagSelector,
     ) -> azure_core::Result<Vec<EnhancedFeatureFlag>> {
-        let mut url = self.endpoint.clone();
-        url.append_path("ff");
-        let mut query_builder = url.query_builder();
-        query_builder.set_pair("api-version", Self::ENHANCED_FEATURE_FLAGS_API_VERSION);
-        query_builder.build();
         let mut feature_flags = Vec::new();
+        let mut url = self.get_url_for_getting_enhanced_feature_flags(selector);
 
         loop {
             let response = self.get_feature_flags_page(&url).await?;
@@ -98,6 +95,28 @@ impl AzureAppConfigurationClient {
         }
 
         Ok(feature_flags)
+    }
+
+    fn get_url_for_getting_configurations(&self, selector: &SettingSelector) -> Url {
+        let mut url = self.endpoint.clone();
+        url.append_path("kv");
+        let mut query_builder = url.query_builder();
+        query_builder.set_pair("api-version", Self::KEY_VALUES_API_VERSION);
+        query_builder.set_pair("key", &selector.key_filter);
+        query_builder.set_pair("label", &selector.label_filter);
+        query_builder.build();
+        url
+    }
+
+    fn get_url_for_getting_enhanced_feature_flags(&self, selector: &FeatureFlagSelector) -> Url {
+        let mut url = self.endpoint.clone();
+        url.append_path("ff");
+        let mut query_builder = url.query_builder();
+        query_builder.set_pair("api-version", Self::ENHANCED_FEATURE_FLAGS_API_VERSION);
+        query_builder.set_pair("name", &selector.name_filter);
+        query_builder.set_pair("label", &selector.label_filter);
+        query_builder.build();
+        url
     }
 
     async fn get_configurations_page(
@@ -164,6 +183,7 @@ impl AzureAppConfigurationClient {
 #[cfg(test)]
 mod tests {
     use super::AzureAppConfigurationClient;
+    use crate::azure::app_configuration::{FeatureFlagSelector, SettingSelector};
     use async_trait::async_trait;
     use azure_core::{
         credentials::{AccessToken, TokenCredential, TokenRequestOptions},
@@ -204,7 +224,7 @@ mod tests {
                 "/kv" => {
                     assert_eq!(
                         request.url().as_str(),
-                        "https://example.azconfig.io/kv?api-version=2026-04-01"
+                        "https://example.azconfig.io/kv?api-version=2026-04-01&key=*&label=%00"
                     );
                     br#"{
 						"items": [
@@ -218,7 +238,7 @@ mod tests {
                 "/ff" => {
                     assert_eq!(
                         request.url().as_str(),
-                        "https://example.azconfig.io/ff?api-version=2026-05-01-preview"
+                        "https://example.azconfig.io/ff?api-version=2026-05-01-preview&name=*&label=%00"
                     );
                     br#"{"items": [{"name": "beta", "enabled": true}]}"#.as_slice()
                 }
@@ -229,6 +249,62 @@ mod tests {
                 StatusCode::Ok,
                 Headers::default(),
                 response_body,
+            ))
+        }
+    }
+
+    #[derive(Debug)]
+    struct SelectorHttpClientMock;
+
+    #[async_trait]
+    impl HttpClient for SelectorHttpClientMock {
+        async fn execute_request(&self, request: &Request) -> azure_core::Result<AsyncRawResponse> {
+            assert_eq!(request.url().path(), "/kv");
+            assert!(
+                request
+                    .url()
+                    .query_pairs()
+                    .any(|(key, value)| key == "key" && value == "service.*")
+            );
+            assert!(
+                request
+                    .url()
+                    .query_pairs()
+                    .any(|(key, value)| key == "label" && value == "\0")
+            );
+
+            Ok(AsyncRawResponse::from_bytes(
+                StatusCode::Ok,
+                Headers::default(),
+                br#"{"items": [{"key": "service.name", "value": "wirio"}]}"#.as_slice(),
+            ))
+        }
+    }
+
+    #[derive(Debug)]
+    struct EnhancedFeatureFlagSelectorHttpClientMock;
+
+    #[async_trait]
+    impl HttpClient for EnhancedFeatureFlagSelectorHttpClientMock {
+        async fn execute_request(&self, request: &Request) -> azure_core::Result<AsyncRawResponse> {
+            assert_eq!(request.url().path(), "/ff");
+            assert!(
+                request
+                    .url()
+                    .query_pairs()
+                    .any(|(key, value)| key == "name" && value == "beta,gamma")
+            );
+            assert!(
+                request
+                    .url()
+                    .query_pairs()
+                    .any(|(key, value)| key == "label" && value == "\0")
+            );
+
+            Ok(AsyncRawResponse::from_bytes(
+                StatusCode::Ok,
+                Headers::default(),
+                br#"{"items": [{"name": "beta", "enabled": true}]}"#.as_slice(),
             ))
         }
     }
@@ -273,8 +349,9 @@ mod tests {
     #[tokio::test]
     async fn test_get_configurations_and_exclude_feature_flags() {
         let client = create_client(Arc::new(HttpClientMock));
+        let selector = SettingSelector::new(String::from("*"), None);
 
-        let configurations = client.get_configurations().await.unwrap();
+        let configurations = client.get_configurations(&selector).await.unwrap();
 
         assert_eq!(configurations.len(), 2);
         assert_eq!(configurations[0].key, "service_name");
@@ -294,8 +371,9 @@ mod tests {
         let client = create_client(Arc::new(PaginatedHttpClientMock {
             responses: Mutex::new(VecDeque::from([first_page, second_page])),
         }));
+        let selector = SettingSelector::new(String::from("*"), None);
 
-        let configurations = client.get_configurations().await.unwrap();
+        let configurations = client.get_configurations(&selector).await.unwrap();
 
         assert_eq!(configurations.len(), 2);
         assert_eq!(configurations[0].key, "first");
@@ -313,13 +391,36 @@ mod tests {
         let client = create_client(Arc::new(PaginatedHttpClientMock {
             responses: Mutex::new(VecDeque::from([first_page, second_page])),
         }));
+        let selector = FeatureFlagSelector::new(String::from("*"), None);
 
-        let feature_flags = client.get_enhanced_feature_flags().await.unwrap();
+        let feature_flags = client.get_enhanced_feature_flags(&selector).await.unwrap();
 
         assert_eq!(feature_flags.len(), 2);
         assert_eq!(feature_flags[0].name, "first");
         assert!(feature_flags[0].enabled);
         assert_eq!(feature_flags[1].name, "second");
         assert!(!feature_flags[1].enabled);
+    }
+
+    #[tokio::test]
+    async fn test_filter_configurations_using_selector() {
+        let selectors = [SettingSelector::new(String::from("service.*"), None)];
+        let client = create_client(Arc::new(SelectorHttpClientMock));
+
+        let configurations = client.get_configurations(&selectors[0]).await.unwrap();
+
+        assert_eq!(configurations.len(), 1);
+        assert_eq!(configurations[0].key, "service.name");
+    }
+
+    #[tokio::test]
+    async fn test_filter_enhanced_feature_flags_using_feature_flag_selector() {
+        let client = create_client(Arc::new(EnhancedFeatureFlagSelectorHttpClientMock));
+        let selector = FeatureFlagSelector::new(String::from("beta,gamma"), None);
+
+        let feature_flags = client.get_enhanced_feature_flags(&selector).await.unwrap();
+
+        assert_eq!(feature_flags.len(), 1);
+        assert_eq!(feature_flags[0].name, "beta");
     }
 }

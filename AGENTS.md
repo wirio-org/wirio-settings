@@ -27,7 +27,6 @@ This is a Python package backed by a Rust PyO3 extension. Rust implementations a
 - Add a period to the end of each sentence in comments.
 - If a function always needs to own, pass or clone an `Arc<T>` variable, it should take the `Arc<T>` by value instead of by reference. If not always has to do so, it can take the `Arc<T>` by reference, i.e., `&Arc<T>`. If a function just wants to read from the `T` of `Arc<T>`, just pass `&T`.
 - Don't create functions or fields as tuples. Use structs instead for better readability and maintainability.
-- In tests next to the code being tested, use `use super::something;` to refer to the code being tested. To import code from other modules, use the full path starting from the crate root.
 - All `pyclass` definitions must have define a `name` (being the first macro parameter) starting with an underscore, so it can be exported correctly in `__init__.py` files, using the same name without the underscore as an alias in the export. For example, `from .package._package import _Class as Class`.
 
 ### Testing
@@ -39,6 +38,7 @@ This is a Python package backed by a Rust PyO3 extension. Rust implementations a
 - Mock variables must end with `_mock`. For example, `configuration_mock`.
 - To create temporary files in tests, use the `tempfile` crate.
 - Asynchronous tests must be annotated using `#[tokio::test]` instead of `#[test]`.
+- In tests next to the code being tested, use `use super::something;` to refer to the code defined in the same file. To import code from other modules, use the full path starting from the crate root.
 
 ## Python
 

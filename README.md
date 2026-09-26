@@ -715,7 +715,7 @@ Use `AzureCredential` to select an authentication mechanism:
 For example, to use explicit service principal credentials:
 
 ```python
-from wirio_settings import AzureCredential
+from wirio_settings.azure.identity import AzureCredential
 
 settings_manager.add_azure_key_vault(
     "https://example.vault.azure.net",
@@ -740,7 +740,7 @@ Use `AwsCredential` to select an authentication mechanism:
 For example, to use explicit access keys:
 
 ```python
-from wirio_settings import AwsCredential
+from wirio_settings.aws.identity import AwsCredential
 
 settings_manager.add_aws_secrets_manager(
     "secret-id",

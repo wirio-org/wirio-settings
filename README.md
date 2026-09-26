@@ -742,7 +742,7 @@ Use `AwsCredential` to select an authentication mechanism:
 For example, to use explicit access keys:
 
 ```python
-from wirio_settings import AwsCredential
+from wirio_settings.aws.identity import AwsCredential
 
 settings_manager.add_aws_secrets_manager(
     "secret-id",

@@ -1,32 +1,36 @@
+import os
 from datetime import timedelta
-from os import environ
 from typing import Final, Self, cast, final, override
 from weakref import WeakMethod
 
 from pydantic import BaseModel, TypeAdapter
 
-from wirio_settings._wirio_settings import (
-    AwsCredential,
-    AwsSecretsManagerSettingsSource,
+from wirio_settings.aws.identity import AwsCredential
+from wirio_settings.aws.secrets_manager import AwsSecretsManagerSettingsSource
+from wirio_settings.azure.app_configuration import (
     AzureAppConfigurationSettingsSource,
-    AzureCredential,
-    AzureKeyVaultSettingsSource,
-    EnvironmentVariablesSettingsSource,
-    GcpSecretManagerSettingsSource,
-    JsonFileSettingsSource,
+    FeatureFlagSelector,
+    SettingSelector,
+)
+from wirio_settings.azure.identity import AzureCredential
+from wirio_settings.azure.key_vault import AzureKeyVaultSettingsSource
+from wirio_settings.core import (
     ModelRegistry,
     SettingLookup,
-    SettingPerFileSettingsSource,
     SettingsPath,
     SettingsProvider,
     SettingsSource,
-    YamlFileSettingsSource,
 )
 from wirio_settings.core._typed_type import TypedType
 from wirio_settings.core.settings import Settings
 from wirio_settings.core.settings_binder import SettingsBinder
 from wirio_settings.core.settings_root import SettingsRoot
 from wirio_settings.core.settings_section import SettingsSection
+from wirio_settings.environment_variables import EnvironmentVariablesSettingsSource
+from wirio_settings.gcp.secret_manager import GcpSecretManagerSettingsSource
+from wirio_settings.json_file import JsonFileSettingsSource
+from wirio_settings.setting_per_file import SettingPerFileSettingsSource
+from wirio_settings.yaml_file import YamlFileSettingsSource
 
 
 @final
@@ -89,7 +93,7 @@ class SettingsManager(SettingsRoot):
 
     def add_default_providers(self) -> Self:
         """Add default settings providers in the recommended order."""
-        environment_name = environ.get(self._environment_key, "local")
+        environment_name = os.getenv(self._environment_key, "local")
         return (
             self.add_yaml_file("settings.yaml", optional=True)
             .add_yaml_file(
@@ -180,18 +184,25 @@ class SettingsManager(SettingsRoot):
         self,
         endpoint: str,
         credential: AzureCredential | None = None,
+        *,
+        selectors: list[SettingSelector] | None = None,
+        feature_flag_selectors: list[FeatureFlagSelector] | None = None,
     ) -> Self:
         """Add a settings provider that reads setting values from Azure App Configuration.
 
         Args:
             endpoint: Azure App Configuration endpoint.
             credential: Azure credential. `Default` credential is used when omitted.
+            selectors: Filters that determine which settings to load.
+            feature_flag_selectors: Filters that determine which enhanced feature flags to load.
         """
         credential = AzureCredential.Default() if credential is None else credential
         self.add(
             AzureAppConfigurationSettingsSource(
                 endpoint=endpoint,
                 credential=credential,
+                selectors=selectors,
+                feature_flag_selectors=feature_flag_selectors,
             )
         )
         return self

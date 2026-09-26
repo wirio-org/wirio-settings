@@ -16,7 +16,12 @@ use tokio_util::sync::CancellationToken;
 use crate::azure::key_vault::parallel_secret_loader::ParallelSecretLoader;
 use crate::core::{ModelRegistry, PythonSettingsProvider, SettingLookup, SettingsProvider};
 
-#[pyclass(extends = PythonSettingsProvider, frozen, str)]
+#[pyclass(
+    name = "_AzureKeyVaultSettingsProvider",
+    extends = PythonSettingsProvider,
+    frozen,
+    str
+)]
 pub struct AzureKeyVaultSettingsProvider {
     secrets_cache: Arc<ArcSwap<SecretsCache>>,
     uri: String,

@@ -1,4 +1,4 @@
-use crate::{_wirio_settings::SettingsPath, core::convention_changer};
+use crate::core::{SettingsPath, convention_changer};
 use pyo3::{
     exceptions::PyRuntimeError,
     prelude::*,
@@ -10,7 +10,7 @@ use tokio::sync::OnceCell;
 use super::{ModelRegistry, SettingLookup};
 
 /// Provides setting values.
-#[pyclass(name = "SettingsProvider", subclass, frozen)]
+#[pyclass(name = "_SettingsProvider", subclass, frozen)]
 pub struct PythonSettingsProvider;
 
 #[pymethods]
@@ -148,7 +148,12 @@ mod tests {
     };
     use tokio::sync::OnceCell;
 
-    #[pyclass(extends = PythonSettingsProvider, frozen, str)]
+    #[pyclass(
+        name = "_MockSettingsProvider",
+        extends = PythonSettingsProvider,
+        frozen,
+        str
+    )]
     struct MockSettingsProvider {
         data: Py<PyDict>,
         is_loaded: AtomicBool,

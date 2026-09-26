@@ -7,7 +7,12 @@ use std::fmt;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 
-#[pyclass(extends = PythonSettingsProvider, frozen, str)]
+#[pyclass(
+    name = "_EnvironmentVariablesSettingsProvider",
+    extends = PythonSettingsProvider,
+    frozen,
+    str
+)]
 pub struct EnvironmentVariablesSettingsProvider {
     data: ArcSwap<Py<PyDict>>,
     model_registry: OnceCell<Py<ModelRegistry>>,

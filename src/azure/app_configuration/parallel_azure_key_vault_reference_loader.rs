@@ -204,13 +204,8 @@ impl ParallelAzureKeyVaultReferenceLoader {
     }
 
     #[cfg(test)]
-    pub(crate) fn with_client_options(
-        credential: Arc<dyn TokenCredential>,
-        client_options: SecretClientOptions,
-    ) -> Self {
-        let mut loader = Self::new(credential);
-        loader.client_options = client_options;
-        loader
+    pub(crate) fn with_client_options(&mut self, client_options: SecretClientOptions) {
+        self.client_options = client_options;
     }
 }
 

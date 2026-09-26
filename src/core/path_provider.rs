@@ -134,11 +134,9 @@ impl PathProvider {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
+    use super::PathProvider;
     use pyo3::Python;
-
-    use crate::core::PathProvider;
+    use std::path::PathBuf;
 
     #[test]
     fn test_return_absolute_path_ignoring_content_root_path() {

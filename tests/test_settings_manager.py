@@ -9,19 +9,23 @@ from typing import cast, final, override
 import pytest
 from pydantic import BaseModel, Field, SecretStr
 from pytest_mock import MockerFixture
-from wirio_settings._wirio_settings import (
-    AwsCredential,
-    AwsSecretsManagerSettingsSource,
+from wirio_settings.aws.identity import AwsCredential
+from wirio_settings.aws.secrets_manager import AwsSecretsManagerSettingsSource
+from wirio_settings.azure.app_configuration import (
     AzureAppConfigurationSettingsSource,
-    AzureCredential,
-    AzureKeyVaultSettingsSource,
-    GcpSecretManagerSettingsSource,
+    FeatureFlagSelector,
+    SettingSelector,
+)
+from wirio_settings.azure.identity import AzureCredential
+from wirio_settings.azure.key_vault import AzureKeyVaultSettingsSource
+from wirio_settings.core import (
     ModelRegistry,
     SettingLookup,
-    SettingPerFileSettingsSource,
     SettingsProvider,
     SettingsSource,
 )
+from wirio_settings.gcp.secret_manager import GcpSecretManagerSettingsSource
+from wirio_settings.setting_per_file import SettingPerFileSettingsSource
 from wirio_settings.settings_manager import SettingsManager
 
 
@@ -345,6 +349,40 @@ class TestSettingsManager:
         add_patch.assert_called_once()
         source = add_patch.call_args.args[0]
         assert isinstance(source, AzureAppConfigurationSettingsSource)
+
+    def test_add_azure_app_configuration_with_selectors(
+        self, mocker: MockerFixture
+    ) -> None:
+        endpoint = "https://example.azconfig.io"
+        credential = AzureCredential.ClientSecret(
+            "tenant-id", "client-id", "client-secret"
+        )
+        selectors = [SettingSelector("service.*")]
+        feature_flag_selectors = [FeatureFlagSelector("beta,gamma")]
+        settings_manager = SettingsManager(add_default_providers=False)
+        source_mock = mocker.patch(
+            f"{SettingsManager.__module__}.AzureAppConfigurationSettingsSource",
+            autospec=True,
+        )
+        mocker.patch.object(
+            settings_manager,
+            settings_manager.add.__name__,
+            autospec=True,
+        )
+
+        settings_manager.add_azure_app_configuration(
+            endpoint=endpoint,
+            credential=credential,
+            selectors=selectors,
+            feature_flag_selectors=feature_flag_selectors,
+        )
+
+        source_mock.assert_called_once_with(
+            endpoint=endpoint,
+            credential=credential,
+            selectors=selectors,
+            feature_flag_selectors=feature_flag_selectors,
+        )
 
     def test_add_aws_secrets_manager(self, mocker: MockerFixture) -> None:
         expected_secret_id = "dev/TestApp"

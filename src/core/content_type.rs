@@ -29,7 +29,7 @@ impl<'a> ContentType<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::core::content_type::ContentType;
+    use super::ContentType;
 
     #[test]
     fn test_get_media_type_without_parameters() {

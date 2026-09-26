@@ -13,7 +13,12 @@ use crate::core::{
     SettingsProvider,
 };
 
-#[pyclass(extends = PythonSettingsProvider, frozen, str)]
+#[pyclass(
+    name = "_YamlFileSettingsProvider",
+    extends = PythonSettingsProvider,
+    frozen,
+    str
+)]
 pub struct YamlFileSettingsProvider {
     data: Arc<ArcSwap<Py<PyDict>>>,
     path_provider: PathProvider,

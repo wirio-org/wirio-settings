@@ -6,7 +6,7 @@ use aws_sdk_secretsmanager::config::{Credentials, ProvideCredentials};
 use pyo3::prelude::*;
 use std::sync::Arc;
 
-#[pyclass(name = "AwsCredential", frozen)]
+#[pyclass(name = "_AwsCredential", frozen)]
 pub enum PythonAwsCredential {
     Default(),
     Key {

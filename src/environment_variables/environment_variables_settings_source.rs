@@ -4,7 +4,11 @@ use crate::{
 };
 use pyo3::prelude::*;
 
-#[pyclass(extends = PythonSettingsSource, frozen)]
+#[pyclass(
+    name = "_EnvironmentVariablesSettingsSource",
+    extends = PythonSettingsSource,
+    frozen
+)]
 pub struct EnvironmentVariablesSettingsSource;
 
 #[pymethods]

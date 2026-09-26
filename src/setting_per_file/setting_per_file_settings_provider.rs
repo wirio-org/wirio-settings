@@ -11,7 +11,12 @@ use crate::core::{
     SettingsProvider,
 };
 
-#[pyclass(extends = PythonSettingsProvider, frozen, str)]
+#[pyclass(
+    name = "_SettingPerFileSettingsProvider",
+    extends = PythonSettingsProvider,
+    frozen,
+    str
+)]
 pub struct SettingPerFileSettingsProvider {
     data: Arc<ArcSwap<Py<PyDict>>>,
     path_provider: PathProvider,

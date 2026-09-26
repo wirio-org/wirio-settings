@@ -2,9 +2,10 @@ from typing import Final, cast, final, override
 
 from pydantic import BaseModel
 
-from wirio_settings._wirio_settings import SettingsPath
 from wirio_settings.core.settings import Settings
 from wirio_settings.core.settings_root import SettingsRoot
+
+from . import SettingsPath
 
 
 @final

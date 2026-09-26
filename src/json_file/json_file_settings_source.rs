@@ -4,7 +4,11 @@ use crate::{
 };
 use pyo3::prelude::*;
 
-#[pyclass(extends = PythonSettingsSource, frozen)]
+#[pyclass(
+    name = "_JsonFileSettingsSource",
+    extends = PythonSettingsSource,
+    frozen
+)]
 pub struct JsonFileSettingsSource {
     path_provider: PathProvider,
     reload_enabled: bool,

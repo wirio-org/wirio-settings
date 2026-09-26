@@ -69,6 +69,8 @@ Here's why: our application settings, one line, done right. No more scattered `o
   - [Azure credentials](#azure-credentials)
   - [AWS credentials](#aws-credentials)
   - [GCP credentials](#gcp-credentials)
+- [Explanatory notes](#explanatory-notes)
+  - [Environment identifier](#environment-identifier)
 - [Troubleshooting](#troubleshooting)
   - [Debug settings](#debug-settings)
   - [Common errors](#common-errors)
@@ -251,15 +253,15 @@ We can also add the defaults later with `add_default_providers()`, for example t
 
 ### Environments
 
-By default, `SettingsManager` reads the `WIRIO_ENVIRONMENT` environment variable to determine the environment name, and it defaults to `local` when the variable is not set. For example, `WIRIO_ENVIRONMENT=production` loads `settings.production.yaml`, which is optional.
+By default, `SettingsManager` reads the [PYTHONAPP_ENVIRONMENT](#environment-identifier) environment variable to determine the environment name, and it defaults to `local` when the variable is not set. For example, `PYTHONAPP_ENVIRONMENT=production` loads `settings.production.yaml`, which is optional.
 
 To use an environment variable with a different name, pass `environment_key`:
 
 ```python
-settings_manager = SettingsManager(environment_key="PYTHONAPP_ENVIRONMENT")
+settings_manager = SettingsManager(environment_key="CUSTOM_ENVIRONMENT")
 ```
 
-With `PYTHONAPP_ENVIRONMENT=production`, the default providers load `settings.production.yaml`.
+With `CUSTOM_ENVIRONMENT=production`, the default providers load `settings.production.yaml`.
 
 ### Key naming and nesting
 
@@ -423,7 +425,7 @@ application_settings = SettingsManager().get_model(ApplicationSettings)
 
 But we should read non-sensitive settings from settings files (`settings.{environment}.yaml`) tracked in version control.
 
-To do that, we can add the `WIRIO_ENVIRONMENT` environment variable to the deployed application. For example, `WIRIO_ENVIRONMENT=production`, and the `settings.production.yaml` file will be loaded automatically.
+To do that, we can add the `PYTHONAPP_ENVIRONMENT` environment variable to the deployed application. For example, `PYTHONAPP_ENVIRONMENT=production`, and the `settings.production.yaml` file will be loaded automatically.
 
 > [!NOTE]
 > If we want to use another environment variable, we can pass `environment_key` to `SettingsManager`, as explained in [Environments](#environments).
@@ -432,7 +434,7 @@ Now, we have all the pieces in place, but some of the integrations should only b
 
 This might sound like an extra layer of complexity, but it's what we must do independently of the settings library we use.
 
-For example, if we use the `WIRIO_ENVIRONMENT` environment variable to detect the current environment, we can add a secret volume in this way:
+For example, if we use the `PYTHONAPP_ENVIRONMENT` environment variable to detect the current environment, we can add a secret volume in this way:
 
 ```python
 from os
@@ -443,7 +445,7 @@ from wirio_settings import SettingsManager
 
 settings_manager = SettingsManager()
 
-if os.getenv("WIRIO_ENVIRONMENT", "local") != "local":
+if os.getenv("PYTHONAPP_ENVIRONMENT", "local") != "local":
     settings_manager.add_setting_per_file("/run/secrets")
 
     # Enable telemetry, etc.
@@ -751,6 +753,12 @@ settings_manager.add_aws_secrets_manager(
 ### GCP credentials
 
 GCP uses [Application Default Credentials (ADC)](https://docs.cloud.google.com/docs/authentication/application-default-credentials) when we don't pass credentials. To use a specific authentication mechanism, pass its JSON credentials with the `credentials_json` parameter.
+
+## Explanatory notes
+
+### Environment identifier
+
+Across the ecosystem, environment selectors commonly follow the `TECHNOLOGY_ENVIRONMENT` pattern. We use `PYTHONAPP_ENVIRONMENT` because Python's official environment variables start with the `PYTHON` prefix, as documented in the [Python environment variables reference](https://docs.python.org/3/using/cmdline.html#environment-variables). The `PYTHONAPP_` prefix keeps that convention while distinguishing application configuration from Python interpreter settings.
 
 ## Troubleshooting
 

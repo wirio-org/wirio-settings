@@ -45,7 +45,7 @@ class SettingsManager(SettingsRoot):
         self,
         *,
         content_root_path: str | None = None,
-        environment_key: str = "WIRIO_ENVIRONMENT",
+        environment_key: str = "PYTHONAPP_ENVIRONMENT",
         add_default_providers: bool = True,
     ) -> None:
         """Initialize the settings manager.

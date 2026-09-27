@@ -1,6 +1,7 @@
 use crate::{
     azure::app_configuration::{
         azure_app_configuration_client::AzureAppConfigurationClient,
+        azure_app_configuration_settings_source::AzureAppConfigurationSettingsSource,
         dtos::Configuration,
         feature_management_input::FeatureManagementInput,
         models::{FeatureFlagSelector, SettingSelector},
@@ -36,7 +37,9 @@ pub struct AzureAppConfigurationSettingsProvider {
     client: Arc<AzureAppConfigurationClient>,
     credential: Arc<dyn TokenCredential>,
     selectors: Vec<SettingSelector>,
+    trim_key_prefixes: Vec<String>,
     feature_flag_selectors: Vec<FeatureFlagSelector>,
+    feature_flag_trim_name_prefixes: Vec<String>,
     model_registry: OnceCell<Py<ModelRegistry>>,
     #[cfg(test)]
     key_vault_client_options: SecretClientOptions,
@@ -65,21 +68,16 @@ impl AzureAppConfigurationSettingsProvider {
 impl AzureAppConfigurationSettingsProvider {
     const FEATURE_MANAGEMENT_KEY: &str = "feature_management";
 
-    pub(crate) fn new(
-        py: Python<'_>,
-        endpoint: String,
-        client: Arc<AzureAppConfigurationClient>,
-        credential: Arc<dyn TokenCredential>,
-        selectors: Vec<SettingSelector>,
-        feature_flag_selectors: Vec<FeatureFlagSelector>,
-    ) -> Self {
+    pub(crate) fn new(py: Python<'_>, source: &AzureAppConfigurationSettingsSource) -> Self {
         Self {
             data: ArcSwap::from_pointee(PyDict::new(py).unbind()),
-            endpoint,
-            client,
-            credential,
-            selectors,
-            feature_flag_selectors,
+            endpoint: source.endpoint.clone(),
+            client: Arc::clone(&source.client),
+            credential: Arc::clone(&source.credential),
+            selectors: source.selectors.clone(),
+            trim_key_prefixes: source.trim_key_prefixes.clone(),
+            feature_flag_selectors: source.feature_flag_selectors.clone(),
+            feature_flag_trim_name_prefixes: source.feature_flag_trim_name_prefixes.clone(),
             model_registry: OnceCell::new(),
             #[cfg(test)]
             key_vault_client_options: SecretClientOptions::default(),
@@ -105,6 +103,7 @@ impl AzureAppConfigurationSettingsProvider {
         Self::add_key_value_configurations(settings, &configurations);
         self.add_key_vault_reference_configurations(settings, configurations)
             .await?;
+        Self::trim_configuration_setting_key_prefixes(settings, &self.trim_key_prefixes);
         Self::normalize_keys(settings);
         Ok(())
     }
@@ -209,6 +208,10 @@ impl AzureAppConfigurationSettingsProvider {
 
         if !feature_flags.is_empty() {
             let mut feature_flags: Vec<_> = feature_flags.into_values().collect();
+            Self::trim_feature_flag_name_prefixes(
+                &mut feature_flags,
+                &self.feature_flag_trim_name_prefixes,
+            );
             Self::normalize_enhanced_feature_flag_names(&mut feature_flags);
             let feature_management_input = FeatureManagementInput::from(feature_flags);
             let feature_management_input_json = serde_json::to_string(&feature_management_input)
@@ -230,13 +233,44 @@ impl AzureAppConfigurationSettingsProvider {
         }
     }
 
-    #[cfg(test)]
-    fn with_key_vault_client_options(
-        mut self,
-        key_vault_client_options: SecretClientOptions,
-    ) -> Self {
-        self.key_vault_client_options = key_vault_client_options;
-        self
+    fn trim_configuration_setting_key_prefixes(
+        settings: &mut BTreeMap<String, Option<String>>,
+        prefixes: &[String],
+    ) {
+        if prefixes.is_empty() {
+            return;
+        }
+
+        let trimmed_settings = std::mem::take(settings).into_iter().map(|(key, value)| {
+            let new_key = Self::trim_prefix(key, prefixes);
+            (new_key, value)
+        });
+        settings.extend(trimmed_settings);
+    }
+
+    fn trim_feature_flag_name_prefixes(
+        feature_flags: &mut [crate::azure::app_configuration::dtos::EnhancedFeatureFlag],
+        prefixes: &[String],
+    ) {
+        if prefixes.is_empty() {
+            return;
+        }
+
+        for feature_flag in feature_flags {
+            let feature_flag_name = std::mem::take(&mut feature_flag.name);
+            let new_feature_flag_name = Self::trim_prefix(feature_flag_name, prefixes);
+            feature_flag.name = new_feature_flag_name;
+        }
+    }
+
+    fn trim_prefix(value: String, prefixes: &[String]) -> String {
+        for prefix in prefixes {
+            if let Some(trimmed_value) = value.strip_prefix(prefix) {
+                return String::from(trimmed_value);
+            }
+        }
+
+        value
     }
 }
 
@@ -288,6 +322,7 @@ mod tests {
         },
         core::SettingsProvider,
     };
+    use arc_swap::ArcSwap;
     use async_trait::async_trait;
     use azure_core::http::Url;
     use azure_core::{
@@ -301,10 +336,11 @@ mod tests {
     use azure_security_keyvault_secrets::SecretClientOptions;
     use pyo3::{
         Python,
-        types::{PyAnyMethods, PyDictMethods},
+        types::{PyAnyMethods, PyDict, PyDictMethods},
     };
     use std::collections::BTreeMap;
     use std::sync::Arc;
+    use tokio::sync::OnceCell;
 
     #[derive(Debug)]
     struct CredentialMock;
@@ -435,21 +471,24 @@ mod tests {
             None,
         ));
 
-        AzureAppConfigurationSettingsProvider::new(
-            py,
-            String::from("https://example.azconfig.io"),
-            Arc::new(client),
+        AzureAppConfigurationSettingsProvider {
+            data: ArcSwap::from_pointee(PyDict::new(py).unbind()),
+            endpoint: String::from("https://example.azconfig.io"),
+            client: Arc::new(client),
             credential,
-            vec![SettingSelector::new(String::from("*"), None)],
+            selectors: vec![SettingSelector::new(String::from("*"), None)],
+            trim_key_prefixes: Vec::new(),
             feature_flag_selectors,
-        )
-        .with_key_vault_client_options(SecretClientOptions {
-            client_options: ClientOptions {
-                transport: Some(Transport::new(Arc::new(KeyVaultHttpClientMock))),
+            feature_flag_trim_name_prefixes: Vec::new(),
+            model_registry: OnceCell::new(),
+            key_vault_client_options: SecretClientOptions {
+                client_options: ClientOptions {
+                    transport: Some(Transport::new(Arc::new(KeyVaultHttpClientMock))),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
-            ..Default::default()
-        })
+        }
     }
 
     #[tokio::test]
@@ -503,6 +542,50 @@ mod tests {
 
             assert_eq!(feature_management, expected_feature_management);
         });
+    }
+
+    #[test]
+    fn test_trim_prefixes() {
+        let expected_application_name = "wirio";
+        let expected_logging_level = "warning";
+        let mut configuration_settings = BTreeMap::from([
+            (
+                String::from("service:application_name"),
+                Some(String::from(expected_application_name)),
+            ),
+            (
+                String::from("logging.log_level"),
+                Some(String::from(expected_logging_level)),
+            ),
+        ]);
+        let mut feature_flags = vec![crate::azure::app_configuration::dtos::EnhancedFeatureFlag {
+            name: String::from("service:beta_feature"),
+            enabled: true,
+            description: None,
+            conditions: None,
+            variants: None,
+            allocation: None,
+            telemetry: None,
+        }];
+
+        AzureAppConfigurationSettingsProvider::trim_configuration_setting_key_prefixes(
+            &mut configuration_settings,
+            &[String::from("service:")],
+        );
+        AzureAppConfigurationSettingsProvider::trim_feature_flag_name_prefixes(
+            &mut feature_flags,
+            &[String::from("service:")],
+        );
+
+        assert_eq!(
+            configuration_settings.get("application_name"),
+            Some(&Some(String::from(expected_application_name)))
+        );
+        assert_eq!(
+            configuration_settings.get("logging.log_level"),
+            Some(&Some(String::from(expected_logging_level)))
+        );
+        assert_eq!(feature_flags[0].name, "beta_feature");
     }
 
     #[tokio::test]
@@ -679,5 +762,43 @@ mod tests {
             settings.get("KeyVault1").and_then(Option::as_deref),
             Some("secret2-value")
         );
+    }
+
+    #[test]
+    fn test_leave_configuration_setting_keys_unchanged_when_no_prefixes_are_provided() {
+        let configuration_key = String::from("service:application_name");
+        let mut configuration_settings =
+            BTreeMap::from([(configuration_key.clone(), Some(String::from("wirio")))]);
+
+        AzureAppConfigurationSettingsProvider::trim_configuration_setting_key_prefixes(
+            &mut configuration_settings,
+            &[],
+        );
+
+        assert_eq!(
+            configuration_settings.get(&configuration_key),
+            Some(&Some(String::from("wirio")))
+        );
+    }
+
+    #[test]
+    fn test_leave_feature_flag_names_unchanged_when_no_prefixes_are_provided() {
+        let feature_flag_name = String::from("service:beta_feature");
+        let mut feature_flags = vec![crate::azure::app_configuration::dtos::EnhancedFeatureFlag {
+            name: feature_flag_name.clone(),
+            enabled: true,
+            description: None,
+            conditions: None,
+            variants: None,
+            allocation: None,
+            telemetry: None,
+        }];
+
+        AzureAppConfigurationSettingsProvider::trim_feature_flag_name_prefixes(
+            &mut feature_flags,
+            &[],
+        );
+
+        assert_eq!(feature_flags[0].name, feature_flag_name);
     }
 }

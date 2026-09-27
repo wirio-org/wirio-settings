@@ -358,7 +358,9 @@ class TestSettingsManager:
             "tenant-id", "client-id", "client-secret"
         )
         selectors = [SettingSelector("service.*")]
+        trim_key_prefixes = ["service."]
         feature_flag_selectors = [FeatureFlagSelector("beta,gamma")]
+        feature_flag_trim_name_prefixes = ["service."]
         settings_manager = SettingsManager(add_default_providers=False)
         source_mock = mocker.patch(
             f"{SettingsManager.__module__}.AzureAppConfigurationSettingsSource",
@@ -374,14 +376,18 @@ class TestSettingsManager:
             endpoint=endpoint,
             credential=credential,
             selectors=selectors,
+            trim_key_prefixes=trim_key_prefixes,
             feature_flag_selectors=feature_flag_selectors,
+            feature_flag_trim_name_prefixes=feature_flag_trim_name_prefixes,
         )
 
         source_mock.assert_called_once_with(
             endpoint=endpoint,
             credential=credential,
             selectors=selectors,
+            trim_key_prefixes=trim_key_prefixes,
             feature_flag_selectors=feature_flag_selectors,
+            feature_flag_trim_name_prefixes=feature_flag_trim_name_prefixes,
         )
 
     def test_add_aws_secrets_manager(self, mocker: MockerFixture) -> None:

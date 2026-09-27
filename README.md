@@ -57,6 +57,7 @@ Here's why: our application settings, one line, done right. No more scattered `o
   - [Azure App Configuration](#azure-app-configuration)
     - [Overview](#overview-1)
     - [Selectors](#selectors)
+    - [Trim key prefixes](#trim-key-prefixes)
   - [AWS Secrets Manager](#aws-secrets-manager)
   - [GCP Secret Manager](#gcp-secret-manager)
   - [Setting per file](#setting-per-file)
@@ -265,7 +266,7 @@ With `CUSTOM_ENVIRONMENT=production`, the default providers load `settings.produ
 
 ### Key naming and nesting
 
-Every provider has its own naming convention, and not every store allows the same characters in a key. `wirio-settings` normalizes all of them into the same shape:
+Every provider has its own naming convention, and not every store allows the same characters in a key. For example, neither Azure Key Vault nor GCP Secret Manager allow dots in the key name. `wirio-settings` normalizes all of them into the same shape:
 
 - Keys are converted to snake case. `APP_NAME`, `appName`, `AppName`, and `app-name` all map to `app_name`.
 - Sections are separated with `.`, as in `database.host` or `logging.log_level.default`. Some providers may use different separators internally, but they are normalized to `.` in the `SettingsManager`.
@@ -568,6 +569,23 @@ settings_manager = SettingsManager().add_azure_app_configuration(
     selectors=[
         SettingSelector("payment.*"),
     ],
+)
+```
+
+#### Trim key prefixes
+
+To remove prefixes from settings, for example, to remove the `payment.` prefix from all payment-related settings (`payment.api_key` would become `api_key`), set `trim_key_prefixes`. Use `feature_flag_trim_name_prefixes` to remove prefixes from enhanced feature flag names in the same way.
+
+```python
+from wirio_settings import SettingsManager
+from wirio_settings.azure.app_configuration import FeatureFlagSelector, SettingSelector
+
+settings_manager = SettingsManager().add_azure_app_configuration(
+    "https://example.azconfig.io",
+    selectors=[SettingSelector("payment.*")],
+    trim_key_prefixes=["payment."],
+    feature_flag_selectors=[FeatureFlagSelector("payment.*")],
+    feature_flag_trim_name_prefixes=["payment."],
 )
 ```
 

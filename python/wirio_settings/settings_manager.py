@@ -186,7 +186,9 @@ class SettingsManager(SettingsRoot):
         credential: AzureCredential | None = None,
         *,
         selectors: list[SettingSelector] | None = None,
+        trim_key_prefixes: list[str] | None = None,
         feature_flag_selectors: list[FeatureFlagSelector] | None = None,
+        feature_flag_trim_name_prefixes: list[str] | None = None,
     ) -> Self:
         """Add a settings provider that reads setting values from Azure App Configuration.
 
@@ -194,7 +196,9 @@ class SettingsManager(SettingsRoot):
             endpoint: Azure App Configuration endpoint.
             credential: Azure credential. `Default` credential is used when omitted.
             selectors: Filters that determine which settings to load.
+            trim_key_prefixes: Prefixes to remove from retrieved setting keys before normalization.
             feature_flag_selectors: Filters that determine which enhanced feature flags to load.
+            feature_flag_trim_name_prefixes: Prefixes to remove from retrieved feature flag names before normalization.
         """
         credential = AzureCredential.Default() if credential is None else credential
         self.add(
@@ -202,7 +206,9 @@ class SettingsManager(SettingsRoot):
                 endpoint=endpoint,
                 credential=credential,
                 selectors=selectors,
+                trim_key_prefixes=trim_key_prefixes,
                 feature_flag_selectors=feature_flag_selectors,
+                feature_flag_trim_name_prefixes=feature_flag_trim_name_prefixes,
             )
         )
         return self

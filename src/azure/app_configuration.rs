@@ -9,3 +9,4 @@ mod parallel_azure_key_vault_reference_loader;
 pub use azure_app_configuration_settings_provider::AzureAppConfigurationSettingsProvider;
 pub use azure_app_configuration_settings_source::AzureAppConfigurationSettingsSource;
 pub use models::{FeatureFlagSelector, KeyFilter, LabelFilter, NameFilter, SettingSelector};
+pub(crate) use parallel_azure_key_vault_reference_loader::ParallelAzureKeyVaultReferenceLoader;

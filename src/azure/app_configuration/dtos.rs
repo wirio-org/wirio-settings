@@ -3,8 +3,8 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct GetConfigurationsResponse {
-    pub(crate) items: Vec<Configuration>,
+pub(crate) struct GetConfigurationSettingsResponse {
+    pub(crate) items: Vec<ConfigurationSetting>,
 
     #[serde(rename = "@nextLink")]
     pub(crate) next_link: Option<String>,
@@ -14,7 +14,7 @@ pub(crate) struct GetConfigurationsResponse {
 ///
 /// Format reference: `https://learn.microsoft.com/en-us/azure/azure-app-configuration/rest-api-key-value?pivots=v26-05-preview#syntax`.
 #[derive(Debug, Deserialize)]
-pub(crate) struct Configuration {
+pub(crate) struct ConfigurationSetting {
     pub(crate) key: String,
     pub(crate) content_type: Option<String>,
     pub(crate) value: String,

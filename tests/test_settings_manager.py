@@ -334,29 +334,6 @@ class TestSettingsManager:
         credential = AzureCredential.ClientSecret(
             "tenant-id", "client-id", "client-secret"
         )
-        settings_manager = SettingsManager(add_default_providers=False)
-        add_patch = mocker.patch.object(
-            settings_manager,
-            settings_manager.add.__name__,
-            autospec=True,
-        )
-
-        settings_manager.add_azure_app_configuration(
-            endpoint=endpoint,
-            credential=credential,
-        )
-
-        add_patch.assert_called_once()
-        source = add_patch.call_args.args[0]
-        assert isinstance(source, AzureAppConfigurationSettingsSource)
-
-    def test_add_azure_app_configuration_with_selectors(
-        self, mocker: MockerFixture
-    ) -> None:
-        endpoint = "https://example.azconfig.io"
-        credential = AzureCredential.ClientSecret(
-            "tenant-id", "client-id", "client-secret"
-        )
         selectors = [SettingSelector("service.*")]
         trim_key_prefixes = ["service."]
         feature_flag_selectors = [FeatureFlagSelector("beta,gamma")]

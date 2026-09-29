@@ -20,22 +20,26 @@ use std::sync::Arc;
     frozen
 )]
 pub struct AzureAppConfigurationSettingsSource {
-    endpoint: String,
-    client: Arc<AzureAppConfigurationClient>,
-    credential: Arc<dyn TokenCredential>,
-    selectors: Vec<SettingSelector>,
-    feature_flag_selectors: Vec<FeatureFlagSelector>,
+    pub(crate) endpoint: String,
+    pub(crate) client: Arc<AzureAppConfigurationClient>,
+    pub(crate) credential: Arc<dyn TokenCredential>,
+    pub(crate) selectors: Vec<SettingSelector>,
+    pub(crate) trim_key_prefixes: Vec<String>,
+    pub(crate) feature_flag_selectors: Vec<FeatureFlagSelector>,
+    pub(crate) feature_flag_trim_name_prefixes: Vec<String>,
 }
 
 #[pymethods]
 impl AzureAppConfigurationSettingsSource {
     #[new]
-    #[pyo3(signature = (endpoint, credential, selectors=None, feature_flag_selectors=None))]
+    #[pyo3(signature = (endpoint, credential, selectors=None, trim_key_prefixes=None, feature_flag_selectors=None, feature_flag_trim_name_prefixes=None))]
     pub fn new_python(
         endpoint: String,
         credential: &PythonAzureCredential,
         selectors: Option<Vec<SettingSelector>>,
+        trim_key_prefixes: Option<Vec<String>>,
         feature_flag_selectors: Option<Vec<FeatureFlagSelector>>,
+        feature_flag_trim_name_prefixes: Option<Vec<String>>,
     ) -> PyResult<PyClassInitializer<Self>> {
         let credential = credential.to_token_credential()?;
         let client = Self::create_client(&endpoint, Arc::clone(&credential))?;
@@ -45,9 +49,12 @@ impl AzureAppConfigurationSettingsSource {
                 client: Arc::new(client),
                 credential,
                 selectors: Self::get_selectors_or_default(selectors),
+                trim_key_prefixes: trim_key_prefixes.unwrap_or_default(),
                 feature_flag_selectors: Self::get_feature_flag_selectors_or_default(
                     feature_flag_selectors,
                 ),
+                feature_flag_trim_name_prefixes: feature_flag_trim_name_prefixes
+                    .unwrap_or_default(),
             }),
         )
     }
@@ -85,16 +92,8 @@ impl SettingsSource for AzureAppConfigurationSettingsSource {
     fn build(&self, py: Python<'_>) -> PyResult<Py<PythonSettingsProvider>> {
         Py::new(
             py,
-            PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(
-                AzureAppConfigurationSettingsProvider::new(
-                    py,
-                    self.endpoint.clone(),
-                    Arc::clone(&self.client),
-                    Arc::clone(&self.credential),
-                    self.selectors.clone(),
-                    self.feature_flag_selectors.clone(),
-                ),
-            ),
+            PyClassInitializer::from(PythonSettingsProvider::new())
+                .add_subclass(AzureAppConfigurationSettingsProvider::new(py, self)),
         )
         .map(|provider| provider.into_bound(py).into_super().unbind())
     }
@@ -125,7 +124,9 @@ mod tests {
                 endpoint: String::from("https://example.azconfig.io"),
                 credential: Arc::clone(&credential),
                 selectors: Vec::new(),
+                trim_key_prefixes: Vec::new(),
                 feature_flag_selectors: Vec::new(),
+                feature_flag_trim_name_prefixes: Vec::new(),
                 client: Arc::new(
                     AzureAppConfigurationSettingsSource::create_client(
                         "https://example.azconfig.io",

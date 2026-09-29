@@ -27,9 +27,13 @@ impl ParallelAzureKeyVaultReferenceLoader {
         }
     }
 
-    pub(crate) fn add_reference(&mut self, configuration_key: String, secret_reference_uri: Url) {
+    pub(crate) fn add_reference(
+        &mut self,
+        configuration_setting_key: String,
+        secret_reference_uri: Url,
+    ) {
         self.references.push(AzureKeyVaultReference {
-            configuration_key,
+            configuration_setting_key,
             secret_reference_uri,
         });
     }
@@ -108,7 +112,7 @@ impl ParallelAzureKeyVaultReferenceLoader {
                 })
                 .references
                 .push(AzureKeyVaultReferencesByVaultReference {
-                    configuration_key: reference.configuration_key.clone(),
+                    configuration_setting_key: reference.configuration_setting_key.clone(),
                     secret_name: secret_information.secret_name,
                     secret_version: secret_information.secret_version,
                     secret_reference_uri: reference.secret_reference_uri.clone(),
@@ -150,19 +154,19 @@ impl ParallelAzureKeyVaultReferenceLoader {
             .map_err(|error| {
                 PyRuntimeError::new_err(format!(
                     "Failed to read Azure Key Vault reference '{}' for Azure App Configuration key '{}': {error}",
-                    secret_reference.secret_reference_uri, secret_reference.configuration_key,
+                    secret_reference.secret_reference_uri, secret_reference.configuration_setting_key,
                 ))
             })?;
 
         let secret = secret_response.into_model().map_err(|error| {
             PyRuntimeError::new_err(format!(
                 "Failed to deserialize Azure Key Vault secret for Azure App Configuration key '{}': {error}",
-                secret_reference.configuration_key,
+                secret_reference.configuration_setting_key,
             ))
         })?;
 
         Ok(RetrievedSecret {
-            name: secret_reference.configuration_key,
+            name: secret_reference.configuration_setting_key,
             secret,
         })
     }
@@ -210,7 +214,7 @@ impl ParallelAzureKeyVaultReferenceLoader {
 }
 
 struct AzureKeyVaultReference {
-    configuration_key: String,
+    configuration_setting_key: String,
     secret_reference_uri: Url,
 }
 
@@ -236,7 +240,7 @@ struct AzureKeyVaultSecretLoader {
 }
 
 struct AzureKeyVaultReferencesByVaultReference {
-    configuration_key: String,
+    configuration_setting_key: String,
     secret_name: String,
     secret_version: Option<String>,
     secret_reference_uri: Url,

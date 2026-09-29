@@ -1,5 +1,6 @@
 use crate::azure::app_configuration::dtos::{
-    Configuration, EnhancedFeatureFlag, GetConfigurationsResponse, GetEnhancedFeatureFlagsResponse,
+    ConfigurationSetting, EnhancedFeatureFlag, GetConfigurationSettingsResponse,
+    GetEnhancedFeatureFlagsResponse,
 };
 use crate::azure::app_configuration::models::{FeatureFlagSelector, SettingSelector};
 use azure_core::{
@@ -51,15 +52,15 @@ impl AzureAppConfigurationClient {
         })
     }
 
-    pub(crate) async fn get_configurations(
+    pub(crate) async fn get_configuration_settings(
         &self,
         selector: &SettingSelector,
-    ) -> azure_core::Result<Vec<Configuration>> {
-        let mut configurations: Vec<Configuration> = Vec::new();
-        let mut url = self.get_url_for_getting_configurations(selector);
+    ) -> azure_core::Result<Vec<ConfigurationSetting>> {
+        let mut configurations: Vec<ConfigurationSetting> = Vec::new();
+        let mut url = self.get_url_for_getting_configuration_settings(selector);
 
         loop {
-            let response = self.get_configurations_page(&url).await?;
+            let response = self.get_configuration_settings_page(&url).await?;
             let configurations_to_add = response
                 .items
                 .into_iter()
@@ -97,7 +98,7 @@ impl AzureAppConfigurationClient {
         Ok(feature_flags)
     }
 
-    fn get_url_for_getting_configurations(&self, selector: &SettingSelector) -> Url {
+    fn get_url_for_getting_configuration_settings(&self, selector: &SettingSelector) -> Url {
         let mut url = self.endpoint.clone();
         url.append_path("kv");
         let mut query_builder = url.query_builder();
@@ -119,10 +120,10 @@ impl AzureAppConfigurationClient {
         url
     }
 
-    async fn get_configurations_page(
+    async fn get_configuration_settings_page(
         &self,
         url: &Url,
-    ) -> azure_core::Result<GetConfigurationsResponse> {
+    ) -> azure_core::Result<GetConfigurationSettingsResponse> {
         let mut request = Request::new(url.clone(), Method::Get);
         request.insert_header(
             "accept",
@@ -141,7 +142,7 @@ impl AzureAppConfigurationClient {
                 }),
             )
             .await?;
-        Response::<GetConfigurationsResponse>::from(response).into_model()
+        Response::<GetConfigurationSettingsResponse>::from(response).into_model()
     }
 
     async fn get_feature_flags_page(
@@ -169,7 +170,7 @@ impl AzureAppConfigurationClient {
         Response::<GetEnhancedFeatureFlagsResponse>::from(response).into_model()
     }
 
-    fn is_feature_flag(configuration: &Configuration) -> bool {
+    fn is_feature_flag(configuration: &ConfigurationSetting) -> bool {
         configuration.key.starts_with(Self::FEATURE_FLAG_KEY_PREFIX)
     }
 
@@ -351,7 +352,7 @@ mod tests {
         let client = create_client(Arc::new(HttpClientMock));
         let selector = SettingSelector::new(String::from("*"), None);
 
-        let configurations = client.get_configurations(&selector).await.unwrap();
+        let configurations = client.get_configuration_settings(&selector).await.unwrap();
 
         assert_eq!(configurations.len(), 2);
         assert_eq!(configurations[0].key, "service_name");
@@ -373,7 +374,7 @@ mod tests {
         }));
         let selector = SettingSelector::new(String::from("*"), None);
 
-        let configurations = client.get_configurations(&selector).await.unwrap();
+        let configurations = client.get_configuration_settings(&selector).await.unwrap();
 
         assert_eq!(configurations.len(), 2);
         assert_eq!(configurations[0].key, "first");
@@ -407,7 +408,10 @@ mod tests {
         let selectors = [SettingSelector::new(String::from("service.*"), None)];
         let client = create_client(Arc::new(SelectorHttpClientMock));
 
-        let configurations = client.get_configurations(&selectors[0]).await.unwrap();
+        let configurations = client
+            .get_configuration_settings(&selectors[0])
+            .await
+            .unwrap();
 
         assert_eq!(configurations.len(), 1);
         assert_eq!(configurations[0].key, "service.name");

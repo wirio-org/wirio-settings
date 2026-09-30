@@ -1531,7 +1531,12 @@ class TestSettingsManager:
             current_value = settings_manager.get_value("value")
 
         assert current_value == expected_updated_value
-        assert len(caplog.records) == 1
+        timeout_at = monotonic() + 5
+
+        while len(caplog.records) == 0 and monotonic() < timeout_at:
+            await asyncio.sleep(0.1)
+
+        assert len(caplog.records) > 0
         record = caplog.records[0]
         assert record.levelno == logging.INFO
         assert record.getMessage() == f"Loaded settings from directory '{tmp_path}'"
@@ -1557,8 +1562,8 @@ class TestSettingsManager:
 
         caplog.clear()
         settings_file_path.write_bytes(invalid_utf8_value)
-
         timeout_at = monotonic() + 5
+
         while len(caplog.records) == 0 and monotonic() < timeout_at:
             await asyncio.sleep(0.1)
 

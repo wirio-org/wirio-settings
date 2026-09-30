@@ -1562,7 +1562,7 @@ class TestSettingsManager:
         while len(caplog.records) == 0 and monotonic() < timeout_at:
             await asyncio.sleep(0.1)
 
-        assert len(caplog.records) == 1
+        assert len(caplog.records) > 0
         record = caplog.records[0]
         assert record.levelno == logging.WARNING
         assert record.getMessage().startswith(

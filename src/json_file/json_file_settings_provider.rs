@@ -104,8 +104,16 @@ impl JsonFileSettingsProvider {
                     let model_registry = Arc::clone(&model_registry);
 
                     async move {
-                        // Ignore errors during watched reloads
-                        let _ = Self::reload_settings(&data, &path_provider, &model_registry).await;
+                        if let Err(error) =
+                            Self::reload_settings(&data, &path_provider, &model_registry).await
+                        {
+                            Python::attach(|_| {
+                                log::warn!(
+                                    "Failed to reload settings from JSON file '{}': {error}",
+                                    path_provider.path().display()
+                                );
+                            });
+                        }
                     }
                 })
                 .map_err(|error| {
@@ -136,9 +144,13 @@ impl JsonFileSettingsProvider {
         Self::normalize_keys(&mut parsed_data);
         let new_data = Python::attach(|py| Self::create_data(py, parsed_data))?;
         data.store(Arc::new(new_data));
-        if let Some(model_registry) = model_registry.get() {
-            Python::attach(|py| model_registry.bind(py).borrow().on_provider_reload());
-        }
+        Python::attach(|py| {
+            Self::on_reload(py, model_registry);
+            log::info!(
+                "Loaded settings from JSON file '{}'",
+                path_provider.path().display()
+            );
+        });
         Ok(())
     }
 }

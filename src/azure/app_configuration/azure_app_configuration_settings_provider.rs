@@ -290,7 +290,13 @@ impl SettingsProvider for AzureAppConfigurationSettingsProvider {
         self.add_enhanced_feature_flags(&mut settings).await?;
         let data: Py<PyDict> = Python::attach(|py| Self::create_data(py, settings))?;
         self.data.store(Arc::new(data));
-        Python::attach(|py| Self::on_reload(py, self.model_registry()));
+        Python::attach(|py| {
+            Self::on_reload(py, self.model_registry());
+            log::info!(
+                "Loaded settings from Azure App Configuration endpoint '{}'",
+                self.endpoint
+            );
+        });
         Ok(())
     }
 

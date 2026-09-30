@@ -154,6 +154,7 @@ impl AzureKeyVaultSettingsProvider {
         mut new_loaded_secrets: BTreeMap<String, Secret>,
         loaded_secrets: &BTreeMap<String, Secret>,
         new_loaded_secrets_from_loader: BTreeMap<String, Secret>,
+        uri: &str,
         model_registry: &OnceCell<Py<ModelRegistry>>,
     ) -> PyResult<()> {
         let has_loaded_secrets = !new_loaded_secrets_from_loader.is_empty();
@@ -187,6 +188,10 @@ impl AzureKeyVaultSettingsProvider {
             if !is_first_load {
                 Python::attach(|py| Self::on_reload(py, model_registry));
             }
+
+            Python::attach(|_| {
+                log::info!("Loaded settings from Azure Key Vault '{uri}'");
+            });
         }
 
         Ok(())
@@ -220,13 +225,19 @@ impl AzureKeyVaultSettingsProvider {
                     };
                     tokio::select! {
                         () = cancellation_token.cancelled() => break,
-                        _ = Self::reload_secrets(
+                        reload_result = Self::reload_secrets(
                             &secret_client,
                             &secrets_cache,
                             &uri,
                             &model_registry,
                         ) => {
-                            // Ignore errors during scheduled reloads
+                            if let Err(error) = reload_result {
+                                Python::attach(|_| {
+                                    log::warn!(
+                                        "Failed to reload secrets from Azure Key Vault '{uri}': {error}"
+                                    );
+                                });
+                            }
                         }
                     };
                 }
@@ -278,6 +289,7 @@ impl AzureKeyVaultSettingsProvider {
             new_loaded_secrets,
             &loaded_secrets,
             new_loaded_secrets_from_loader,
+            uri,
             model_registry,
         )
     }
@@ -308,7 +320,8 @@ impl SettingsProvider for AzureKeyVaultSettingsProvider {
             &self.uri,
             &self.model_registry,
         )
-        .await
+        .await?;
+        Ok(())
     }
 
     fn section_separator() -> Option<&'static str> {

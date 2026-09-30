@@ -87,8 +87,16 @@ impl YamlFileSettingsProvider {
                     let model_registry = Arc::clone(&model_registry);
 
                     async move {
-                        // Ignore errors during watched reloads
-                        let _ = Self::reload_settings(&data, &path_provider, &model_registry).await;
+                        if let Err(error) =
+                            Self::reload_settings(&data, &path_provider, &model_registry).await
+                        {
+                            Python::attach(|_| {
+                                log::warn!(
+                                    "Failed to reload settings from YAML file '{}': {error}",
+                                    path_provider.path().display()
+                                );
+                            });
+                        }
                     }
                 })
                 .map_err(|error| {
@@ -119,7 +127,10 @@ impl YamlFileSettingsProvider {
         if raw_yaml.trim().is_empty() {
             let new_data = Python::attach(|py| PyDict::new(py).unbind());
             data.store(Arc::new(new_data));
-            Python::attach(|py| Self::on_reload(py, model_registry));
+            Python::attach(|py| {
+                Self::on_reload(py, model_registry);
+                log::info!("Loaded settings from YAML file '{}'", path.display());
+            });
             return Ok(());
         }
 
@@ -134,7 +145,10 @@ impl YamlFileSettingsProvider {
         if parsed_yaml.is_null() {
             let new_data = Python::attach(|py| PyDict::new(py).unbind());
             data.store(Arc::new(new_data));
-            Python::attach(|py| Self::on_reload(py, model_registry));
+            Python::attach(|py| {
+                Self::on_reload(py, model_registry);
+                log::info!("Loaded settings from YAML file '{}'", path.display());
+            });
             return Ok(());
         }
 
@@ -146,7 +160,10 @@ impl YamlFileSettingsProvider {
         Self::normalize_keys(&mut parsed_data);
         let new_data = Python::attach(|py| Self::create_data(py, parsed_data))?;
         data.store(Arc::new(new_data));
-        Python::attach(|py| Self::on_reload(py, model_registry));
+        Python::attach(|py| {
+            Self::on_reload(py, model_registry);
+            log::info!("Loaded settings from YAML file '{}'", path.display());
+        });
         Ok(())
     }
 }

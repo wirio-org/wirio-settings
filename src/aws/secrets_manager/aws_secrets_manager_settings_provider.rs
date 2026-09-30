@@ -100,7 +100,13 @@ impl SettingsProvider for AwsSecretsManagerSettingsProvider {
         Self::normalize_keys(&mut parsed_data);
         let data = Python::attach(|py| Self::create_data(py, parsed_data))?;
         self.data.store(Arc::new(data));
-        Python::attach(|py| Self::on_reload(py, self.model_registry()));
+        Python::attach(|py| {
+            Self::on_reload(py, self.model_registry());
+            log::info!(
+                "Loaded settings from AWS Secrets Manager secret '{}'",
+                self.secret_id
+            );
+        });
         Ok(())
     }
 

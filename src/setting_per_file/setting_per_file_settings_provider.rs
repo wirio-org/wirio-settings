@@ -87,8 +87,16 @@ impl SettingPerFileSettingsProvider {
                     let model_registry = Arc::clone(&model_registry);
 
                     async move {
-                        // Ignore errors during watched reloads
-                        let _ = Self::reload_settings(&data, &path_provider, &model_registry).await;
+                        if let Err(error) =
+                            Self::reload_settings(&data, &path_provider, &model_registry).await
+                        {
+                            Python::attach(|_| {
+                                log::warn!(
+                                    "Failed to reload settings from directory '{}': {error}",
+                                    path_provider.path().display()
+                                );
+                            });
+                        }
                     }
                 })
                 .map_err(|error| {
@@ -180,7 +188,13 @@ impl SettingPerFileSettingsProvider {
         Self::normalize_keys(&mut parsed_data);
         let new_data = Python::attach(|py| Self::create_data(py, parsed_data))?;
         data.store(Arc::new(new_data));
-        Python::attach(|py| Self::on_reload(py, model_registry));
+        Python::attach(|py| {
+            Self::on_reload(py, model_registry);
+            log::info!(
+                "Loaded settings from directory '{}'",
+                path_provider.path().display()
+            );
+        });
         Ok(())
     }
 }

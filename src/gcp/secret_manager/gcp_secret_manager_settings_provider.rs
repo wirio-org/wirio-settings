@@ -196,7 +196,13 @@ impl SettingsProvider for GcpSecretManagerSettingsProvider {
         Self::normalize_keys(&mut secret_values);
         let data = Python::attach(|py| Self::create_data(py, secret_values))?;
         self.data.store(Arc::new(data));
-        Python::attach(|py| Self::on_reload(py, self.model_registry()));
+        Python::attach(|py| {
+            Self::on_reload(py, self.model_registry());
+            log::info!(
+                "Loaded settings from GCP Secret Manager project '{}'",
+                self.project_id
+            );
+        });
         Ok(())
     }
 

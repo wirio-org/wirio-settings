@@ -1,5 +1,6 @@
 import asyncio
 import gc
+import logging
 import re
 from collections.abc import Sequence
 from pathlib import Path
@@ -8,6 +9,7 @@ from typing import cast, final, override
 
 import pytest
 from pydantic import BaseModel, Field, SecretStr
+from pytest import LogCaptureFixture
 from pytest_mock import MockerFixture
 from wirio_settings.aws.identity import AwsCredential
 from wirio_settings.aws.secrets_manager import AwsSecretsManagerSettingsSource
@@ -1502,3 +1504,68 @@ class TestSettingsManager:
         add_patch.assert_called_once()
         source = add_patch.call_args.args[0]
         assert isinstance(source, AzureAppConfigurationSettingsSource)
+
+    async def test_log_message_when_reload_fails(
+        self, caplog: LogCaptureFixture, tmp_path: Path
+    ) -> None:
+        expected_initial_value = "initial"
+        expected_updated_value = "updated"
+        expected_second_updated_value = "updated-again"
+        invalid_utf8_value = b"\xff"
+        settings_file_path = tmp_path / "value"
+        settings_file_path.write_text(expected_initial_value, encoding="utf-8")
+        settings_manager = SettingsManager(add_default_providers=False)
+
+        settings_manager.add_setting_per_file(
+            directory_path=str(tmp_path),
+            reload_enabled=True,
+        )
+        caplog.set_level(logging.INFO)
+        settings_file_path.write_text(expected_updated_value, encoding="utf-8")
+
+        current_value = expected_initial_value
+        timeout_at = monotonic() + 5
+
+        while current_value != expected_updated_value and monotonic() < timeout_at:
+            await asyncio.sleep(0.1)
+            current_value = settings_manager.get_value("value")
+
+        assert current_value == expected_updated_value
+        assert len(caplog.records) == 1
+        record = caplog.records[0]
+        assert record.levelno == logging.INFO
+        assert record.getMessage() == f"Loaded settings from directory '{tmp_path}'"
+
+        caplog.set_level(logging.WARNING)
+        caplog.clear()
+        settings_file_path.write_text(
+            expected_second_updated_value,
+            encoding="utf-8",
+        )
+
+        current_value = expected_updated_value
+        timeout_at = monotonic() + 5
+
+        while (
+            current_value != expected_second_updated_value and monotonic() < timeout_at
+        ):
+            await asyncio.sleep(0.1)
+            current_value = settings_manager.get_value("value")
+
+        assert current_value == expected_second_updated_value
+        assert len(caplog.records) == 0
+
+        caplog.clear()
+        settings_file_path.write_bytes(invalid_utf8_value)
+
+        timeout_at = monotonic() + 5
+        while len(caplog.records) == 0 and monotonic() < timeout_at:
+            await asyncio.sleep(0.1)
+
+        assert len(caplog.records) == 1
+        record = caplog.records[0]
+        assert record.levelno == logging.WARNING
+        assert record.getMessage().startswith(
+            f"Failed to reload settings from directory '{tmp_path}': "
+            f"RuntimeError: Failed to read entry '{settings_file_path}':"
+        )

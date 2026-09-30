@@ -28,11 +28,12 @@ This is a Python package backed by a Rust PyO3 extension. Rust implementations a
 - If a function always needs to own, pass or clone an `Arc<T>` variable, it should take the `Arc<T>` by value instead of by reference. If not always has to do so, it can take the `Arc<T>` by reference, i.e., `&Arc<T>`. If a function just wants to read from the `T` of `Arc<T>`, just pass `&T`.
 - Don't create functions or fields as tuples. Use structs instead for better readability and maintainability.
 - All `pyclass` definitions must have define a `name` (being the first macro parameter) starting with an underscore, so it can be exported correctly in `__init__.py` files, using the same name without the underscore as an alias in the export. For example, `from .package._package import _Class as Class`.
+- Before emitting a Rust log, attach to the Python interpreter.
 
 ### Testing
 
 - Test names must start with `test_`, be followed by a verb in present tense, and read as `The test should...`. The names mustn't include the word "should", and they must be descriptive and concise, avoiding the inclusion of the tested function whenever possible. Examples: `test_create_user`, `test_fail_when_creating_user_with_untrusted_email`, `test_ban_user_using_administrator_account`.
-- Append new test cases to the end of the existing ones.
+- Append new test cases to the end of the existing ones unless there is a specific reason to insert them elsewhere, like maintaining a logical order or grouping related tests together.
 - Use `unwrap` instead of `expect` in tests.
 - Instead of creating structs for testing, use the `mockall` crate for mocking.
 - Mock variables must end with `_mock`. For example, `configuration_mock`.

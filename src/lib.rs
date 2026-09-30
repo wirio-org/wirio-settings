@@ -11,7 +11,16 @@ use pyo3::prelude::*;
 
 #[pymodule]
 mod _wirio_settings {
+    use pyo3::exceptions::PyRuntimeError;
     use pyo3::prelude::*;
+
+    #[pymodule_init]
+    fn init(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        pyo3_log::Logger::new(module.py(), pyo3_log::Caching::Nothing)?
+            .install()
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(())
+    }
 
     #[pymodule]
     mod core {

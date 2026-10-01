@@ -670,9 +670,6 @@ settings_manager.add_yaml_file("settings.yaml", refresh_enabled=True)
 Azure Key Vault refreshes its secrets in the background when `refresh_enabled=True`. The provider waits for `refresh_interval` between refresh attempts, and it keeps the last successfully loaded settings if a refresh fails:
 
 ```python
-from datetime import timedelta
-
-
 settings_manager.add_azure_key_vault(
     "https://example.vault.azure.net", refresh_enabled=True
 )

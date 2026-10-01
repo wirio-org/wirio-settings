@@ -1133,7 +1133,7 @@ class TestSettingsManager:
             "missing = None (_DictionarySettingsProvider)"
         )
 
-    async def test_reload_yaml_file_when_updated(self, tmp_path: Path) -> None:
+    async def test_refresh_yaml_file_when_updated(self, tmp_path: Path) -> None:
         expected_initial_value = "initial"
         expected_updated_value = "updated"
         settings_file_path = tmp_path / "settings.yaml"
@@ -1146,7 +1146,7 @@ class TestSettingsManager:
 
         settings_manager.add_yaml_file(
             path="settings.yaml",
-            reload_enabled=True,
+            refresh_enabled=True,
         )
         initial_value = settings_manager.get_value("value")
         settings_file_path.write_text(
@@ -1163,7 +1163,7 @@ class TestSettingsManager:
         assert initial_value == expected_initial_value
         assert actual_value == expected_updated_value
 
-    async def test_reload_json_file_when_updated(self, tmp_path: Path) -> None:
+    async def test_refresh_json_file_when_updated(self, tmp_path: Path) -> None:
         expected_initial_value = "initial"
         expected_updated_value = "updated"
         settings_file_path = tmp_path / "settings.json"
@@ -1176,7 +1176,7 @@ class TestSettingsManager:
 
         settings_manager.add_json_file(
             path="settings.json",
-            reload_enabled=True,
+            refresh_enabled=True,
         )
         initial_value = settings_manager.get_value("value")
         settings_file_path.write_text(
@@ -1193,7 +1193,7 @@ class TestSettingsManager:
         assert initial_value == expected_initial_value
         assert actual_value == expected_updated_value
 
-    def test_reload_setting_per_file_when_directory_files_are_updated(
+    def test_refresh_setting_per_file_when_directory_files_are_updated(
         self, tmp_path: Path
     ) -> None:
         expected_initial_value = "initial"
@@ -1204,7 +1204,7 @@ class TestSettingsManager:
 
         settings_manager.add_setting_per_file(
             directory_path=str(tmp_path),
-            reload_enabled=True,
+            refresh_enabled=True,
         )
         initial_value = settings_manager.get_value("value")
         settings_file_path.write_text(expected_updated_value, encoding="utf-8")
@@ -1218,7 +1218,7 @@ class TestSettingsManager:
         assert initial_value == expected_initial_value
         assert actual_value == expected_updated_value
 
-    async def test_update_root_model_when_provider_data_is_reloaded(
+    async def test_update_root_model_when_provider_data_is_refreshed(
         self, tmp_path: Path
     ) -> None:
         class Settings(BaseModel):
@@ -1234,7 +1234,7 @@ class TestSettingsManager:
         settings_manager = SettingsManager(
             content_root_path=str(tmp_path), add_default_providers=False
         )
-        settings_manager.add_yaml_file("settings.yaml", reload_enabled=True)
+        settings_manager.add_yaml_file("settings.yaml", refresh_enabled=True)
         settings = settings_manager.get_model(Settings)
 
         assert settings_manager._model_registry is not None
@@ -1260,7 +1260,7 @@ class TestSettingsManager:
         assert settings.app_name == "wirio-2"
         assert settings.port == expected_updated_port
 
-    async def test_update_section_models_when_provider_data_is_reloaded(
+    async def test_update_section_models_when_provider_data_is_refreshed(
         self, tmp_path: Path
     ) -> None:
         class DatabaseSettings(BaseModel):
@@ -1279,7 +1279,7 @@ class TestSettingsManager:
         settings_manager = SettingsManager(
             content_root_path=str(tmp_path), add_default_providers=False
         )
-        settings_manager.add_yaml_file("settings.yaml", reload_enabled=True)
+        settings_manager.add_yaml_file("settings.yaml", refresh_enabled=True)
         database_settings = settings_manager.get_section("database").get_model(
             DatabaseSettings
         )
@@ -1323,11 +1323,11 @@ class TestSettingsManager:
         settings = settings_manager.get_model(Settings)
 
         values["port"] = "invalid"
-        settings_manager._reload_models()
+        settings_manager._refresh_models()
 
         assert settings.port == expected_port
 
-    async def test_remove_unreferenced_models_when_provider_reloads_data(
+    async def test_remove_unreferenced_models_when_provider_refreshes_data(
         self, tmp_path: Path
     ) -> None:
         class Settings(BaseModel):
@@ -1337,7 +1337,7 @@ class TestSettingsManager:
         settings_file_path = tmp_path / "settings.yaml"
         settings_file_path.write_text('{"port": 8080}', encoding="utf-8")
         settings_manager = SettingsManager(add_default_providers=False)
-        settings_manager.add_yaml_file(str(settings_file_path), reload_enabled=True)
+        settings_manager.add_yaml_file(str(settings_file_path), refresh_enabled=True)
         settings = settings_manager.get_model(Settings)
         assert settings.port == expected_port
         del settings
@@ -1403,7 +1403,7 @@ class TestSettingsManager:
         assert settings_manager._model_registry is not None
         assert provider._model_registry is settings_manager._model_registry
 
-    async def test_replace_pydantic_internal_state_when_reloading_models(
+    async def test_replace_pydantic_internal_state_when_refreshing_models(
         self, tmp_path: Path
     ) -> None:
         class Settings(BaseModel):
@@ -1414,7 +1414,7 @@ class TestSettingsManager:
         settings_manager = SettingsManager(
             content_root_path=None, add_default_providers=False
         )
-        settings_manager.add_yaml_file(str(settings_file_path), reload_enabled=True)
+        settings_manager.add_yaml_file(str(settings_file_path), refresh_enabled=True)
         settings = settings_manager.get_model(Settings)
         original_model_id = id(settings)
 

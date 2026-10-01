@@ -17,7 +17,7 @@ Here's why: our application settings, one line, done right. No more scattered `o
 - **Great defaults from day one:** It automatically looks for settings files and environment variables, with recommended configurations and one line of code.
 - **Rust-powered core:** Built with Rust under the hood for speed, reliability, and low runtime overhead.
 - **Secret stores:** Load secrets and certificates from Azure Key Vault, AWS Secrets Manager and GCP Secret Manager, with one line of code and safe authentication.
-- **Automatic reloads:** Keep settings up to date by automatically reloading them, with no need to restart the application or deploy a new version.
+- **Automatic refreshes:** Keep settings up to date by automatically refreshing them, with no need to restart the application or deploy a new version.
 - **Pydantic models:** Load application settings directly into models.
 - **Configuration stores:** Load settings and feature flags from pluggable configuration stores, such as Azure App Configuration.
 - **A practical replacement:** Replace `pydantic-settings` and `python-dotenv` with one centralized, provider-agnostic (no vendor lock-in) settings library.
@@ -61,10 +61,10 @@ Here's why: our application settings, one line, done right. No more scattered `o
   - [AWS Secrets Manager](#aws-secrets-manager)
   - [GCP Secret Manager](#gcp-secret-manager)
   - [Setting per file](#setting-per-file)
-- [Automatic reloads](#automatic-reloads)
-  - [Reload on file change](#reload-on-file-change)
-  - [Reload on an interval](#reload-on-an-interval)
-  - [Pydantic model reloads](#pydantic-model-reloads)
+- [Automatic refreshes](#automatic-refreshes)
+  - [Refresh on file change](#refresh-on-file-change)
+  - [Refresh on an interval](#refresh-on-an-interval)
+  - [Pydantic model refreshes](#pydantic-model-refreshes)
 - [Authentication](#authentication)
   - [Default authentication](#default-authentication)
   - [Azure credentials](#azure-credentials)
@@ -468,7 +468,7 @@ Comments are supported in YAML files. The filename may be a relative path, such 
 Options:
 
 - `optional=True` skips the file if it is missing. The file is required by default.
-- `reload_enabled=True` reloads values when the file changes.
+- `refresh_enabled=True` refreshes values when the file changes.
 
 ### JSON file
 
@@ -481,7 +481,7 @@ Comments are not supported in JSON files. The filename may be a relative path, s
 Options:
 
 - `optional=True` skips the file if it is missing. The file is required by default.
-- `reload_enabled=True` reloads values when the file changes.
+- `refresh_enabled=True` refreshes values when the file changes.
 
 ### Environment variables
 
@@ -508,7 +508,7 @@ settings_manager.add_azure_key_vault(
 
 Secret names use `--` for sections, so `Database--Host` maps to `database.host`.
 
-To periodically refresh the loaded secrets, use the `reload_interval` parameter, described in [Reload on an interval](#reload-on-an-interval).
+To periodically refresh the loaded secrets, use the `refresh_interval` parameter, described in [Refresh on an interval](#refresh-on-an-interval).
 
 ### Azure App Configuration
 
@@ -631,7 +631,7 @@ Given a directory, each file name becomes a setting key and the file content bec
 Options:
 
 - `optional=True` skips the directory if it is missing. The directory is required by default.
-- `reload_enabled=True` reloads values when directory contents change.
+- `refresh_enabled=True` refreshes values when directory contents change.
 
 This provider is useful when secrets are mounted as files by the runtime instead of exposed as environment variables. It lets us keep application code unchanged while switching the secret delivery mechanism.
 
@@ -653,36 +653,34 @@ Then the values are available as `database_password` and `openai_api_key`.
 
 This provider does not translate any separator, so the file name is used as the setting key. To read a nested key, include the `.` in the file name, as in `database.host`.
 
-## Automatic reloads
+## Automatic refreshes
 
 Long-running applications, such as web servers or background jobs, can keep their settings up to date without restarting or redeploying.
 
-### Reload on file change
+### Refresh on file change
 
-The file and directory providers watch their source when `reload_enabled=True`:
+The file and directory providers watch their source when `refresh_enabled=True`:
 
 ```python
-settings_manager.add_yaml_file("settings.yaml", reload_enabled=True)
+settings_manager.add_yaml_file("settings.yaml", refresh_enabled=True)
 ```
 
-### Reload on an interval
+### Refresh on an interval
 
-Azure Key Vault refreshes its secrets in the background when `reload_enabled=True`. The provider waits for `reload_interval` between refresh attempts, and it keeps the last successfully loaded settings if a refresh fails:
+Azure Key Vault refreshes its secrets in the background when `refresh_enabled=True`. The provider waits for `refresh_interval` between refresh attempts, and it keeps the last successfully loaded settings if a refresh fails:
 
 ```python
 from datetime import timedelta
 
 
 settings_manager.add_azure_key_vault(
-    "https://example.vault.azure.net",
-    reload_enabled=True,
-    reload_interval=timedelta(minutes=5),
+    "https://example.vault.azure.net", refresh_enabled=True
 )
 ```
 
-### Pydantic model reloads
+### Pydantic model refreshes
 
-Models returned by `get_model()` are automatically updated when a provider reloads its values, so there is no need to call `get_model()` again:
+Models returned by `get_model()` are automatically updated when a provider refreshes its values, so there is no need to call `get_model()` again:
 
 ```python
 from pydantic import BaseModel
@@ -695,7 +693,7 @@ class ApplicationSettings(BaseModel):
 
 application_settings = (
     SettingsManager()
-    .add_yaml_file("settings.yaml", reload_enabled=True)
+    .add_yaml_file("settings.yaml", refresh_enabled=True)
     .get_model(ApplicationSettings)
 )
 ```

@@ -11,7 +11,7 @@ use pyo3::prelude::*;
 )]
 pub struct SettingPerFileSettingsSource {
     path_provider: PathProvider,
-    reload_enabled: bool,
+    refresh_enabled: bool,
 }
 
 #[pymethods]
@@ -20,12 +20,12 @@ impl SettingPerFileSettingsSource {
     pub fn new_python(
         directory_path: &str,
         optional: bool,
-        reload_enabled: bool,
+        refresh_enabled: bool,
     ) -> PyResult<PyClassInitializer<Self>> {
         Ok(
             PyClassInitializer::from(PythonSettingsSource::new()).add_subclass(Self {
                 path_provider: PathProvider::from_directory(directory_path, optional)?,
-                reload_enabled,
+                refresh_enabled,
             }),
         )
     }
@@ -43,7 +43,7 @@ impl SettingsSource for SettingPerFileSettingsSource {
                 SettingPerFileSettingsProvider::new(
                     py,
                     self.path_provider.clone(),
-                    self.reload_enabled,
+                    self.refresh_enabled,
                 ),
             ),
         )
@@ -69,7 +69,7 @@ mod tests {
                     false,
                 )
                 .unwrap(),
-                reload_enabled: false,
+                refresh_enabled: false,
             };
 
             let provider = source.build(py).unwrap();

@@ -284,14 +284,14 @@ impl SettingsProvider for AzureAppConfigurationSettingsProvider {
         self.data.load().clone_ref(py)
     }
 
-    async fn reload(&self) -> PyResult<()> {
+    async fn refresh(&self) -> PyResult<()> {
         let mut settings = BTreeMap::new();
         self.add_configuration_settings(&mut settings).await?;
         self.add_enhanced_feature_flags(&mut settings).await?;
         let data: Py<PyDict> = Python::attach(|py| Self::create_data(py, settings))?;
         self.data.store(Arc::new(data));
         Python::attach(|py| {
-            Self::on_reload(py, self.model_registry());
+            Self::on_refresh(py, self.model_registry());
             log::info!(
                 "Loaded settings from Azure App Configuration endpoint '{}'",
                 self.endpoint
@@ -507,7 +507,7 @@ mod tests {
         Python::initialize();
         let provider = Python::attach(|py| create_provider(py, StatusCode::Ok));
 
-        provider.reload().await.unwrap();
+        provider.refresh().await.unwrap();
 
         Python::attach(|py| {
             let data = provider.data(py);
@@ -604,7 +604,7 @@ mod tests {
         Python::initialize();
         let provider = Python::attach(|py| create_provider(py, StatusCode::BadRequest));
 
-        let error = provider.reload().await.unwrap_err();
+        let error = provider.refresh().await.unwrap_err();
 
         assert!(error.to_string().starts_with(
             "RuntimeError: Failed to get configuration settings from Azure App Configuration 'https://example.azconfig.io':"

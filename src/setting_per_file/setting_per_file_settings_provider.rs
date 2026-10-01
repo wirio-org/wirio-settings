@@ -20,7 +20,7 @@ use crate::core::{
 pub struct SettingPerFileSettingsProvider {
     data: Arc<ArcSwap<Py<PyDict>>>,
     path_provider: PathProvider,
-    reload_enabled: bool,
+    refresh_enabled: bool,
     path_watcher: Mutex<Option<PathWatcher>>,
     model_registry: Arc<OnceCell<Py<ModelRegistry>>>,
 }
@@ -38,7 +38,7 @@ impl SettingPerFileSettingsProvider {
 
     pub fn load(&self, py: Python<'_>) -> PyResult<()> {
         SettingsProvider::load(self, py)?;
-        self.watch_directory(py, self.reload_enabled)
+        self.watch_directory(py, self.refresh_enabled)
     }
 
     fn set_model_registry(&self, model_registry: PyRef<'_, ModelRegistry>) -> PyResult<()> {
@@ -47,11 +47,11 @@ impl SettingPerFileSettingsProvider {
 }
 
 impl SettingPerFileSettingsProvider {
-    pub fn new(py: Python<'_>, path_provider: PathProvider, reload_enabled: bool) -> Self {
+    pub fn new(py: Python<'_>, path_provider: PathProvider, refresh_enabled: bool) -> Self {
         Self {
             data: Arc::new(ArcSwap::from_pointee(PyDict::new(py).unbind())),
             path_provider,
-            reload_enabled,
+            refresh_enabled,
             path_watcher: Mutex::new(None),
             model_registry: Arc::new(OnceCell::new()),
         }
@@ -69,8 +69,8 @@ impl SettingPerFileSettingsProvider {
         value
     }
 
-    fn watch_directory(&self, py: Python<'_>, reload_enabled: bool) -> PyResult<()> {
-        if !reload_enabled {
+    fn watch_directory(&self, py: Python<'_>, refresh_enabled: bool) -> PyResult<()> {
+        if !refresh_enabled {
             return Ok(());
         }
 
@@ -88,11 +88,11 @@ impl SettingPerFileSettingsProvider {
 
                     async move {
                         if let Err(error) =
-                            Self::reload_settings(&data, &path_provider, &model_registry).await
+                            Self::refresh_settings(&data, &path_provider, &model_registry).await
                         {
                             Python::attach(|_| {
                                 log::warn!(
-                                    "Failed to reload settings from directory '{}': {error}",
+                                    "Failed to refresh settings from directory '{}': {error}",
                                     path_provider.path().display()
                                 );
                             });
@@ -112,7 +112,7 @@ impl SettingPerFileSettingsProvider {
         })
     }
 
-    async fn reload_settings(
+    async fn refresh_settings(
         data: &ArcSwap<Py<PyDict>>,
         path_provider: &PathProvider,
         model_registry: &OnceCell<Py<ModelRegistry>>,
@@ -189,7 +189,7 @@ impl SettingPerFileSettingsProvider {
         let new_data = Python::attach(|py| Self::create_data(py, parsed_data))?;
         data.store(Arc::new(new_data));
         Python::attach(|py| {
-            Self::on_reload(py, model_registry);
+            Self::on_refresh(py, model_registry);
             log::info!(
                 "Loaded settings from directory '{}'",
                 path_provider.path().display()
@@ -205,8 +205,8 @@ impl SettingsProvider for SettingPerFileSettingsProvider {
         data.clone_ref(py)
     }
 
-    async fn reload(&self) -> PyResult<()> {
-        Self::reload_settings(&self.data, &self.path_provider, &self.model_registry).await
+    async fn refresh(&self) -> PyResult<()> {
+        Self::refresh_settings(&self.data, &self.path_provider, &self.model_registry).await
     }
 
     fn model_registry(&self) -> &OnceCell<Py<ModelRegistry>> {
@@ -274,7 +274,7 @@ mod tests {
             )
         });
 
-        SettingsProvider::reload(&provider).await.unwrap();
+        SettingsProvider::refresh(&provider).await.unwrap();
 
         assert_data(
             &provider,
@@ -305,7 +305,7 @@ mod tests {
             )
         });
 
-        SettingsProvider::reload(&provider).await.unwrap();
+        SettingsProvider::refresh(&provider).await.unwrap();
 
         assert_data(&provider, &BTreeMap::new());
     }
@@ -325,7 +325,7 @@ mod tests {
             )
         });
 
-        let error = SettingsProvider::reload(&provider).await.unwrap_err();
+        let error = SettingsProvider::refresh(&provider).await.unwrap_err();
 
         let error_message = error.to_string();
         assert_eq!(
@@ -352,7 +352,7 @@ mod tests {
             )
         });
 
-        let error = SettingsProvider::reload(&provider).await.unwrap_err();
+        let error = SettingsProvider::refresh(&provider).await.unwrap_err();
 
         let error_message = error.to_string();
         assert_eq!(
@@ -375,7 +375,7 @@ mod tests {
             )
         });
 
-        let error = SettingsProvider::reload(&provider).await.unwrap_err();
+        let error = SettingsProvider::refresh(&provider).await.unwrap_err();
 
         let error_message = error.to_string();
         assert!(error_message.contains("RuntimeError: Failed to inspect"));
@@ -427,7 +427,7 @@ mod tests {
     }
 
     #[test]
-    fn test_reload_values_when_directory_file_is_updated() {
+    fn test_refresh_values_when_directory_file_is_updated() {
         Python::initialize();
 
         let temporary_directory = tempdir().unwrap();
@@ -475,7 +475,7 @@ mod tests {
     }
 
     #[test]
-    fn test_not_watch_directory_when_reload_is_disabled() {
+    fn test_not_watch_directory_when_refresh_is_disabled() {
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("value");
         let runtime = pyo3_async_runtimes::tokio::get_runtime();

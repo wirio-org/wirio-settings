@@ -3,7 +3,7 @@ from weakref import ReferenceType
 
 @final
 class _ModelRegistry:
-    def __new__(cls, /, reload_models_callback: ReferenceType) -> _ModelRegistry: ...
+    def __new__(cls, /, refresh_models_callback: ReferenceType) -> _ModelRegistry: ...
     def add_model(self, /, model: Any, section_path: str |None = None) -> None:
         """
         Adds a Pydantic model to the registry.

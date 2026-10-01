@@ -11,7 +11,7 @@ use pyo3::prelude::*;
 )]
 pub struct YamlFileSettingsSource {
     path_provider: PathProvider,
-    reload_enabled: bool,
+    refresh_enabled: bool,
 }
 
 #[pymethods]
@@ -21,12 +21,12 @@ impl YamlFileSettingsSource {
         content_root_path: Option<&str>,
         path: &str,
         optional: bool,
-        reload_enabled: bool,
+        refresh_enabled: bool,
     ) -> PyResult<PyClassInitializer<Self>> {
         Ok(
             PyClassInitializer::from(PythonSettingsSource::new()).add_subclass(Self {
                 path_provider: PathProvider::from_file(content_root_path, path, optional)?,
-                reload_enabled,
+                refresh_enabled,
             }),
         )
     }
@@ -41,7 +41,7 @@ impl SettingsSource for YamlFileSettingsSource {
         Py::new(
             py,
             PyClassInitializer::from(PythonSettingsProvider::new()).add_subclass(
-                YamlFileSettingsProvider::new(py, self.path_provider.clone(), self.reload_enabled),
+                YamlFileSettingsProvider::new(py, self.path_provider.clone(), self.refresh_enabled),
             ),
         )
         .map(|provider| provider.into_bound(py).into_super().unbind())
@@ -62,7 +62,7 @@ mod tests {
         Python::attach(|py| {
             let source = YamlFileSettingsSource {
                 path_provider: PathProvider::from_file(None, "settings.yaml", false).unwrap(),
-                reload_enabled: false,
+                refresh_enabled: false,
             };
 
             let provider = source.build(py).unwrap();

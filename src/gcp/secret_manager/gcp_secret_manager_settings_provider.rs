@@ -187,7 +187,7 @@ impl SettingsProvider for GcpSecretManagerSettingsProvider {
         data.clone_ref(py)
     }
 
-    async fn reload(&self) -> PyResult<()> {
+    async fn refresh(&self) -> PyResult<()> {
         let secret_manager_client = self.create_secret_manager_client().await?;
         let secret_names = self.get_secret_names(&secret_manager_client).await?;
         let mut secret_values = self
@@ -197,7 +197,7 @@ impl SettingsProvider for GcpSecretManagerSettingsProvider {
         let data = Python::attach(|py| Self::create_data(py, secret_values))?;
         self.data.store(Arc::new(data));
         Python::attach(|py| {
-            Self::on_reload(py, self.model_registry());
+            Self::on_refresh(py, self.model_registry());
             log::info!(
                 "Loaded settings from GCP Secret Manager project '{}'",
                 self.project_id

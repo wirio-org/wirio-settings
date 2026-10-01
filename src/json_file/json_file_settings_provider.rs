@@ -23,7 +23,7 @@ use crate::core::{
 pub struct JsonFileSettingsProvider {
     data: Arc<ArcSwap<Py<PyDict>>>,
     path_provider: PathProvider,
-    reload_enabled: bool,
+    refresh_enabled: bool,
     path_watcher: Mutex<Option<PathWatcher>>,
     model_registry: Arc<OnceCell<Py<ModelRegistry>>>,
 }
@@ -41,7 +41,7 @@ impl JsonFileSettingsProvider {
 
     pub fn load(&self, py: Python<'_>) -> PyResult<()> {
         SettingsProvider::load(self, py)?;
-        self.watch_file(py, self.reload_enabled)
+        self.watch_file(py, self.refresh_enabled)
     }
 
     fn set_model_registry(&self, model_registry: PyRef<'_, ModelRegistry>) -> PyResult<()> {
@@ -50,11 +50,11 @@ impl JsonFileSettingsProvider {
 }
 
 impl JsonFileSettingsProvider {
-    pub fn new(py: Python<'_>, path_provider: PathProvider, reload_enabled: bool) -> Self {
+    pub fn new(py: Python<'_>, path_provider: PathProvider, refresh_enabled: bool) -> Self {
         Self {
             data: Arc::new(ArcSwap::from_pointee(PyDict::new(py).unbind())),
             path_provider,
-            reload_enabled,
+            refresh_enabled,
             path_watcher: Mutex::new(None),
             model_registry: Arc::new(OnceCell::new()),
         }
@@ -86,8 +86,8 @@ impl JsonFileSettingsProvider {
         SerdeParser::new().parse(json_object)
     }
 
-    fn watch_file(&self, py: Python<'_>, reload_enabled: bool) -> PyResult<()> {
-        if !reload_enabled {
+    fn watch_file(&self, py: Python<'_>, refresh_enabled: bool) -> PyResult<()> {
+        if !refresh_enabled {
             return Ok(());
         }
 
@@ -105,11 +105,11 @@ impl JsonFileSettingsProvider {
 
                     async move {
                         if let Err(error) =
-                            Self::reload_settings(&data, &path_provider, &model_registry).await
+                            Self::refresh_settings(&data, &path_provider, &model_registry).await
                         {
                             Python::attach(|_| {
                                 log::warn!(
-                                    "Failed to reload settings from JSON file '{}': {error}",
+                                    "Failed to refresh settings from JSON file '{}': {error}",
                                     path_provider.path().display()
                                 );
                             });
@@ -129,7 +129,7 @@ impl JsonFileSettingsProvider {
         })
     }
 
-    async fn reload_settings(
+    async fn refresh_settings(
         data: &ArcSwap<Py<PyDict>>,
         path_provider: &PathProvider,
         model_registry: &OnceCell<Py<ModelRegistry>>,
@@ -145,7 +145,7 @@ impl JsonFileSettingsProvider {
         let new_data = Python::attach(|py| Self::create_data(py, parsed_data))?;
         data.store(Arc::new(new_data));
         Python::attach(|py| {
-            Self::on_reload(py, model_registry);
+            Self::on_refresh(py, model_registry);
             log::info!(
                 "Loaded settings from JSON file '{}'",
                 path_provider.path().display()
@@ -161,8 +161,8 @@ impl SettingsProvider for JsonFileSettingsProvider {
         data.clone_ref(py)
     }
 
-    async fn reload(&self) -> PyResult<()> {
-        Self::reload_settings(&self.data, &self.path_provider, &self.model_registry).await
+    async fn refresh(&self) -> PyResult<()> {
+        Self::refresh_settings(&self.data, &self.path_provider, &self.model_registry).await
     }
 
     fn model_registry(&self) -> &OnceCell<Py<ModelRegistry>> {
@@ -232,7 +232,7 @@ mod tests {
             )
         });
 
-        SettingsProvider::reload(&provider).await.unwrap();
+        SettingsProvider::refresh(&provider).await.unwrap();
 
         assert_data(&provider, &expected_parsed_json);
     }
@@ -270,7 +270,7 @@ mod tests {
             )
         });
 
-        SettingsProvider::reload(&provider).await.unwrap();
+        SettingsProvider::refresh(&provider).await.unwrap();
 
         assert_data(&provider, &expected_parsed_json);
     }
@@ -302,7 +302,7 @@ mod tests {
             )
         });
 
-        SettingsProvider::reload(&provider).await.unwrap();
+        SettingsProvider::refresh(&provider).await.unwrap();
 
         assert_data(&provider, &expected_parsed_json);
     }
@@ -320,7 +320,7 @@ mod tests {
             )
         });
 
-        let error = SettingsProvider::reload(&provider).await.unwrap_err();
+        let error = SettingsProvider::refresh(&provider).await.unwrap_err();
         let error_message = error.to_string();
 
         assert!(error_message.contains("RuntimeError: Failed to inspect"));
@@ -343,7 +343,7 @@ mod tests {
     }
 
     #[test]
-    fn test_reload_values_when_json_file_is_updated() {
+    fn test_refresh_values_when_json_file_is_updated() {
         Python::initialize();
 
         let temporary_directory = tempdir().unwrap();
@@ -392,7 +392,7 @@ mod tests {
     }
 
     #[test]
-    fn test_not_watch_json_file_when_reload_is_disabled() {
+    fn test_not_watch_json_file_when_refresh_is_disabled() {
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.json");
         let runtime = pyo3_async_runtimes::tokio::get_runtime();

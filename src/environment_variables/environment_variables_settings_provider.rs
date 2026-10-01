@@ -64,13 +64,13 @@ impl SettingsProvider for EnvironmentVariablesSettingsProvider {
         data.clone_ref(py)
     }
 
-    async fn reload(&self) -> PyResult<()> {
+    async fn refresh(&self) -> PyResult<()> {
         let mut environment_variables = Self::get_environment_variables();
         Self::normalize_keys(&mut environment_variables);
         let data = Python::attach(|py| Self::create_data(py, environment_variables))?;
         self.data.store(Arc::new(data));
         Python::attach(|py| {
-            Self::on_reload(py, self.model_registry());
+            Self::on_refresh(py, self.model_registry());
             log::info!("Loaded settings from environment variables");
         });
         Ok(())

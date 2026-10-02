@@ -17,19 +17,19 @@ use std::time::Duration;
 pub struct AzureKeyVaultSettingsSource {
     uri: String,
     secret_client: Arc<SecretClient>,
-    reload_enabled: bool,
-    reload_interval: Option<Duration>,
+    refresh_enabled: bool,
+    refresh_interval: Option<Duration>,
 }
 
 #[pymethods]
 impl AzureKeyVaultSettingsSource {
     #[new]
-    #[pyo3(signature = (uri, credential, reload_enabled=false, reload_interval=None))]
+    #[pyo3(signature = (uri, credential, refresh_enabled=false, refresh_interval=None))]
     pub fn new_python(
         uri: String,
         credential: &PythonAzureCredential,
-        reload_enabled: bool,
-        reload_interval: Option<Duration>,
+        refresh_enabled: bool,
+        refresh_interval: Option<Duration>,
     ) -> PyResult<PyClassInitializer<Self>> {
         let secret_client = Self::create_secret_client(&uri, credential)?;
 
@@ -37,8 +37,8 @@ impl AzureKeyVaultSettingsSource {
             PyClassInitializer::from(PythonSettingsSource::new()).add_subclass(Self {
                 uri,
                 secret_client: Arc::new(secret_client),
-                reload_enabled,
-                reload_interval,
+                refresh_enabled,
+                refresh_interval,
             }),
         )
     }
@@ -77,8 +77,8 @@ impl SettingsSource for AzureKeyVaultSettingsSource {
                     py,
                     self.uri.clone(),
                     Arc::clone(&self.secret_client),
-                    self.reload_enabled,
-                    self.reload_interval,
+                    self.refresh_enabled,
+                    self.refresh_interval,
                 )?,
             ),
         )
@@ -111,8 +111,8 @@ mod tests {
                     )
                     .unwrap(),
                 ),
-                reload_enabled: false,
-                reload_interval: None,
+                refresh_enabled: false,
+                refresh_interval: None,
             };
 
             let provider = source.build(py).unwrap();

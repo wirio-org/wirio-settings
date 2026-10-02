@@ -58,7 +58,7 @@ pub struct ModelRegistry {
 #[pymethods]
 impl ModelRegistry {
     #[new]
-    pub fn new(py: Python<'_>, reload_models_callback: Py<PyWeakrefReference>) -> Self {
+    pub fn new(py: Python<'_>, refresh_models_callback: Py<PyWeakrefReference>) -> Self {
         let (sender, mut receiver) = watch::channel(());
 
         py.detach(|| {
@@ -66,7 +66,7 @@ impl ModelRegistry {
 
             runtime.spawn(async move {
                 while receiver.changed().await.is_ok() {
-                    Python::attach(|py| Self::invoke_callback(py, &reload_models_callback));
+                    Python::attach(|py| Self::invoke_callback(py, &refresh_models_callback));
                 }
             });
         });
@@ -120,8 +120,8 @@ impl ModelRegistry {
 }
 
 impl ModelRegistry {
-    /// Called when the settings provider is reloaded. This will notify all models in the registry to reload their values.
-    pub fn on_provider_reload(&self) {
+    /// Called when the settings provider is refreshed. This will notify all models in the registry to refresh their values.
+    pub fn on_provider_refresh(&self) {
         let _ = self.sender.send(());
     }
 
@@ -382,7 +382,7 @@ mod tests {
     }
 
     #[test]
-    fn test_invoke_callback_when_provider_reloads() {
+    fn test_invoke_callback_when_provider_refreshes() {
         Python::initialize();
 
         Python::attach(|py| -> PyResult<()> {
@@ -395,7 +395,7 @@ mod tests {
             let registry = create_registry(py, &module)?;
             let mut receiver = registry.sender.subscribe();
 
-            registry.on_provider_reload();
+            registry.on_provider_refresh();
 
             let is_notified = py.detach(|| {
                 let runtime = pyo3_async_runtimes::tokio::get_runtime();

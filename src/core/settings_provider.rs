@@ -70,16 +70,16 @@ pub trait SettingsProvider: Sync + fmt::Display {
         }
     }
 
-    /// Reloads the provider's settings data, or loads it for the first time if it hasn't been loaded yet.
-    async fn reload(&self) -> PyResult<()>;
+    /// Refreshes the provider's settings data, or loads it for the first time if it hasn't been loaded yet.
+    async fn refresh(&self) -> PyResult<()>;
 
     /// Loads the provider's settings data for the first time and waits for completion.
     ///
-    /// This uses [`Self::reload`], so the same loading implementation is shared.
+    /// This uses [`Self::refresh`], so the same loading implementation is shared.
     fn load(&self, py: Python<'_>) -> PyResult<()> {
         py.detach(|| {
             let runtime = pyo3_async_runtimes::tokio::get_runtime();
-            runtime.block_on(self.reload())
+            runtime.block_on(self.refresh())
         })
     }
 
@@ -128,9 +128,9 @@ pub trait SettingsProvider: Sync + fmt::Display {
         })
     }
 
-    fn on_reload(py: Python<'_>, model_registry: &OnceCell<Py<ModelRegistry>>) {
+    fn on_refresh(py: Python<'_>, model_registry: &OnceCell<Py<ModelRegistry>>) {
         if let Some(model_registry) = model_registry.get() {
-            model_registry.bind(py).borrow().on_provider_reload();
+            model_registry.bind(py).borrow().on_provider_refresh();
         }
     }
 }
@@ -176,7 +176,7 @@ mod tests {
             self.data.clone_ref(py)
         }
 
-        async fn reload(&self) -> PyResult<()> {
+        async fn refresh(&self) -> PyResult<()> {
             tokio::task::spawn_blocking(|| {
                 Python::attach(|py| {
                     let _ = PyDict::new(py);

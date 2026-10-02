@@ -109,7 +109,7 @@ class SettingsManager(SettingsRoot):
         return self
 
     def add_yaml_file(
-        self, path: str, *, optional: bool = False, reload_enabled: bool = False
+        self, path: str, *, optional: bool = False, refresh_enabled: bool = False
     ) -> Self:
         """Add a settings provider that reads setting values from a YAML file."""
         self.add(
@@ -117,13 +117,13 @@ class SettingsManager(SettingsRoot):
                 content_root_path=self._content_root_path,
                 path=path,
                 optional=optional,
-                reload_enabled=reload_enabled,
+                refresh_enabled=refresh_enabled,
             )
         )
         return self
 
     def add_json_file(
-        self, path: str, *, optional: bool = False, reload_enabled: bool = False
+        self, path: str, *, optional: bool = False, refresh_enabled: bool = False
     ) -> Self:
         """Add a settings provider that reads setting values from a JSON file."""
         self.add(
@@ -131,7 +131,7 @@ class SettingsManager(SettingsRoot):
                 content_root_path=self._content_root_path,
                 path=path,
                 optional=optional,
-                reload_enabled=reload_enabled,
+                refresh_enabled=refresh_enabled,
             )
         )
         return self
@@ -141,14 +141,14 @@ class SettingsManager(SettingsRoot):
         directory_path: str,
         *,
         optional: bool = False,
-        reload_enabled: bool = False,
+        refresh_enabled: bool = False,
     ) -> Self:
         """Add settings using files from a directory. File names are used as the key, file contents are used as the value."""
         self.add(
             SettingPerFileSettingsSource(
                 directory_path=directory_path,
                 optional=optional,
-                reload_enabled=reload_enabled,
+                refresh_enabled=refresh_enabled,
             )
         )
         return self
@@ -158,24 +158,24 @@ class SettingsManager(SettingsRoot):
         uri: str,
         credential: AzureCredential | None = None,
         *,
-        reload_enabled: bool = False,
-        reload_interval: timedelta = timedelta(hours=1),
+        refresh_enabled: bool = False,
+        refresh_interval: timedelta = timedelta(hours=1),
     ) -> Self:
         """Add a settings provider that reads setting values from Azure Key Vault.
 
         Args:
             uri: Azure Key Vault URI.
             credential: Azure credential. `Default` credential is used when omitted.
-            reload_enabled: Whether to refresh settings in the background.
-            reload_interval: Time between background refresh attempts.
+            refresh_enabled: Whether to refresh settings in the background.
+            refresh_interval: Time between background refresh attempts.
         """
         credential = AzureCredential.Default() if credential is None else credential
         self.add(
             AzureKeyVaultSettingsSource(
                 uri=uri,
                 credential=credential,
-                reload_enabled=reload_enabled,
-                reload_interval=reload_interval,
+                refresh_enabled=refresh_enabled,
+                refresh_interval=refresh_interval,
             )
         )
         return self
@@ -391,7 +391,7 @@ class SettingsManager(SettingsRoot):
 
         return any(not child.key.isdigit() for child in children)
 
-    def _reload_models(self) -> None:
+    def _refresh_models(self) -> None:
         model_registry = self._model_registry
 
         if model_registry is None:
@@ -426,7 +426,7 @@ class SettingsManager(SettingsRoot):
         if model_registry is not None:
             return model_registry
 
-        model_registry = ModelRegistry(WeakMethod(self._reload_models))
+        model_registry = ModelRegistry(WeakMethod(self._refresh_models))
         self._model_registry = model_registry
 
         for provider in self._providers:

@@ -37,7 +37,7 @@ class _NameFilter:
 
 @final
 class _SettingSelector:
-    def __new__(cls, /, key_filter: str, label_filter: str |None = None) -> _SettingSelector:
+    def __new__(cls, /, key_filter: str |None = None, label_filter: str |None = None, snapshot_name: str |None = None) -> _SettingSelector:
         """
-        Creates a setting selector. When `label_filter` is not specified, it loads values without a label.
+        Creates a setting selector. When `label_filter` is not specified, it loads values without a label. `snapshot_name` cannot be combined with filters.
         """

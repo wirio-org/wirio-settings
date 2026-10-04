@@ -34,6 +34,9 @@ Changelog = "https://github.com/wirio-org/wirio/releases-settings"
 
 [dependency-groups]
 dev = [
+    "aiohttp>=3.14.3",
+    "azure-appconfiguration>=1.9.0",
+    "azure-identity>=1.25.3",
     "coverage>=7.15.2",
     "featuremanagement>=2.2.0",
     "maturin>=1.14.1",

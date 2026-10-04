@@ -21,6 +21,16 @@ pub(crate) struct ConfigurationSetting {
 }
 
 #[derive(Debug, Deserialize)]
+pub(crate) struct KeyVaultReference {
+    pub(crate) uri: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct SnapshotReference {
+    pub(crate) snapshot_name: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub(crate) struct GetEnhancedFeatureFlagsResponse {
     pub(crate) items: Vec<EnhancedFeatureFlag>,
 

@@ -3,7 +3,7 @@ use crate::{
         ParallelAzureKeyVaultReferenceLoader,
         azure_app_configuration_client::AzureAppConfigurationClient,
         azure_app_configuration_settings_source::AzureAppConfigurationSettingsSource,
-        dtos::{ConfigurationSetting, EnhancedFeatureFlag},
+        dtos::{ConfigurationSetting, EnhancedFeatureFlag, KeyVaultReference, SnapshotReference},
         feature_management_input::FeatureManagementInput,
         models::{FeatureFlagSelector, SettingSelector},
     },
@@ -19,7 +19,6 @@ use azure_security_keyvault_secrets::SecretClientOptions;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
@@ -98,6 +97,9 @@ impl AzureAppConfigurationSettingsProvider {
                         endpoint = self.endpoint
                     ))
                 })?;
+            let selector_configurations = self
+                .resolve_snapshot_references(selector_configurations)
+                .await?;
             configuration_settings.extend(selector_configurations);
         }
         Self::add_key_value_configuration_settings(settings, &configuration_settings);
@@ -106,6 +108,48 @@ impl AzureAppConfigurationSettingsProvider {
         Self::trim_configuration_setting_key_prefixes(settings, &self.trim_key_prefixes);
         Self::normalize_keys(settings);
         Ok(())
+    }
+
+    async fn resolve_snapshot_references(
+        &self,
+        configuration_settings: Vec<ConfigurationSetting>,
+    ) -> PyResult<Vec<ConfigurationSetting>> {
+        let mut resolved_configuration_settings = Vec::new();
+
+        for configuration_setting in configuration_settings {
+            let is_snapshot_reference = configuration_setting
+                .content_type
+                .as_deref()
+                .is_some_and(|content_type| ContentType::new(content_type).is_snapshot_reference());
+
+            if !is_snapshot_reference {
+                resolved_configuration_settings.push(configuration_setting);
+                continue;
+            }
+
+            let snapshot_reference: SnapshotReference =
+                serde_json::from_str(&configuration_setting.value).map_err(|error| {
+                    PyRuntimeError::new_err(format!(
+                        "Invalid Azure App Configuration snapshot reference for key '{}': {error}",
+                        configuration_setting.key,
+                    ))
+                })?;
+            let selector = SettingSelector::new(None, None, Some(snapshot_reference.snapshot_name))
+                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+            let snapshot_configuration_settings = self
+                .client
+                .get_configuration_settings(&selector)
+                .await
+                .map_err(|error| {
+                    PyRuntimeError::new_err(format!(
+                        "Failed to get snapshot reference from Azure App Configuration '{endpoint}': {error}",
+                        endpoint = self.endpoint,
+                    ))
+                })?;
+            resolved_configuration_settings.extend(snapshot_configuration_settings);
+        }
+
+        Ok(resolved_configuration_settings)
     }
 
     fn add_key_value_configuration_settings(
@@ -316,11 +360,6 @@ impl fmt::Display for AzureAppConfigurationSettingsProvider {
     }
 }
 
-#[derive(Deserialize)]
-struct KeyVaultReference {
-    uri: String,
-}
-
 #[cfg(test)]
 mod tests {
     use super::AzureAppConfigurationSettingsProvider;
@@ -378,8 +417,14 @@ mod tests {
     #[async_trait]
     impl HttpClient for HttpClientMock {
         async fn execute_request(&self, request: &Request) -> azure_core::Result<AsyncRawResponse> {
-            let response_body = match request.url().path() {
-                "/kv" => br#"{"items": [
+            let response_body = match (request.url().path(), request.url().query()) {
+                ("/snapshots/production", _) => br#"{"name":"production"}"#.as_slice(),
+                ("/kv", Some(query)) if query.contains("snapshot=production") => br#"{"items": [
+                    {"key": "ApplicationName", "value": "wirio"},
+                    {"key": "Logging.LogLevel", "value": "warning"}
+                ]}"#
+                .as_slice(),
+                ("/kv", _) => br#"{"items": [
                     {"key": "ApplicationName", "value": "wirio"},
                     {"key": "Logging.LogLevel", "value": "warning"},
                     {
@@ -389,13 +434,13 @@ mod tests {
                     }
                 ]}"#
                 .as_slice(),
-                "/ff" if request
+                ("/ff", _) if request
                     .url()
                     .query()
                     .is_some_and(|query| query.contains("label=Production")) => {
                     br#"{"items": [{"name": "Beta", "enabled": false}]}"#.as_slice()
                 }
-                "/ff" => br#"{"items": [{
+                ("/ff", _) => br#"{"items": [{
                     "name": "Beta",
                     "enabled": true,
                     "conditions": {"requirement_type": "All", "filters": []},
@@ -409,7 +454,7 @@ mod tests {
                         "telemetry": {"enabled": true}
                 }]}"#
                     .as_slice(),
-                    path => panic!("Unexpected request path: {path}"),
+                (path, _) => panic!("Unexpected request path: {path}"),
             };
 
             Ok(AsyncRawResponse::from_bytes(
@@ -487,7 +532,7 @@ mod tests {
             endpoint: String::from("https://example.azconfig.io"),
             client: Arc::new(client),
             credential,
-            selectors: vec![SettingSelector::new(String::from("*"), None)],
+            selectors: vec![SettingSelector::new(Some(String::from("*")), None, None).unwrap()],
             trim_key_prefixes: Vec::new(),
             feature_flag_selectors,
             feature_flag_trim_name_prefixes: Vec::new(),
@@ -815,5 +860,41 @@ mod tests {
         );
 
         assert_eq!(feature_flags[0].name, feature_flag_name);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_snapshot_references() {
+        Python::initialize();
+        let provider = Python::attach(|py| create_provider(py, StatusCode::Ok));
+        let configurations = vec![
+            ConfigurationSetting {
+                key: String::from("before"),
+                content_type: None,
+                value: String::from("first"),
+            },
+            ConfigurationSetting {
+                key: String::from("snapshot"),
+                content_type: Some(String::from(
+                    "application/json; profile=\"https://azconfig.io/mime-profiles/snapshot-ref\"; charset=utf-8",
+                )),
+                value: String::from("{\"snapshot_name\":\"production\"}"),
+            },
+            ConfigurationSetting {
+                key: String::from("after"),
+                content_type: None,
+                value: String::from("last"),
+            },
+        ];
+
+        let resolved_configurations = provider
+            .resolve_snapshot_references(configurations)
+            .await
+            .unwrap();
+
+        assert_eq!(resolved_configurations.len(), 4);
+        assert_eq!(resolved_configurations[0].key, "before");
+        assert_eq!(resolved_configurations[1].key, "ApplicationName");
+        assert_eq!(resolved_configurations[2].key, "Logging.LogLevel");
+        assert_eq!(resolved_configurations[3].key, "after");
     }
 }

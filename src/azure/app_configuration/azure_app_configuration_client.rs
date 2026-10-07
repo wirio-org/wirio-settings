@@ -302,6 +302,7 @@ mod tests {
             headers::Headers,
         },
     };
+    use pyo3::Python;
     use std::{
         collections::VecDeque,
         sync::{Arc, Mutex},
@@ -458,6 +459,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_configurations_and_exclude_feature_flags() {
+        Python::initialize();
         let client = create_client(Arc::new(HttpClientMock));
         let selector = SettingSelector::new(Some(String::from("*")), None, None).unwrap();
 
@@ -472,6 +474,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_configurations_and_follow_next_link() {
+        Python::initialize();
         let first_page = br#"{
             "items": [{"key": "first", "value": "one"}],
             "@nextLink": "/kv?api-version=2026-04-01&after=next-reference"
@@ -492,6 +495,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_enhanced_feature_flags_and_follow_next_link() {
+        Python::initialize();
         let first_page = br#"{
             "items": [{"name": "first", "enabled": true}],
             "@nextLink": "/ff?api-version=2026-05-01-preview&after=next-reference"
@@ -529,6 +533,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_filter_enhanced_feature_flags_using_feature_flag_selector() {
+        Python::initialize();
         let client = create_client(Arc::new(EnhancedFeatureFlagSelectorHttpClientMock));
         let selector = FeatureFlagSelector::new(String::from("beta,gamma"), None);
 
@@ -575,6 +580,7 @@ mod tests {
             }
         }
 
+        Python::initialize();
         let client = create_client(Arc::new(SnapshotHttpClientMock));
         let selector =
             SettingSelector::new(None, None, Some(String::from("payment-2026-10-15"))).unwrap();
@@ -645,6 +651,7 @@ mod tests {
             }
         }
 
+        Python::initialize();
         let client = create_client(Arc::new(ProvisioningSnapshotHttpClientMock));
         let selector =
             SettingSelector::new(None, None, Some(String::from("payment-2026-10-15"))).unwrap();

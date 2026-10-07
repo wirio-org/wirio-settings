@@ -1,17 +1,19 @@
 use crate::azure::app_configuration::dtos::{
-    ConfigurationSetting, EnhancedFeatureFlag, GetConfigurationSettingsResponse,
+    ConfigurationSetting, ConfigurationSnapshot, ConfigurationSnapshotCompositionType,
+    ConfigurationSnapshotStatus, EnhancedFeatureFlag, GetConfigurationSettingsResponse,
     GetEnhancedFeatureFlagsResponse,
 };
 use crate::azure::app_configuration::models::{FeatureFlagSelector, SettingSelector};
 use azure_core::{
     credentials::TokenCredential,
-    error::CheckSuccessOptions,
+    error::{CheckSuccessOptions, ErrorKind},
     http::{
         ClientOptions, Context, Method, Pipeline, PipelineSendOptions, Request, Response, Url,
         UrlExt,
         policies::{Policy, auth::BearerTokenAuthorizationPolicy},
     },
 };
+use pyo3::Python;
 use std::sync::Arc;
 
 pub(crate) struct AzureAppConfigurationClient {
@@ -105,7 +107,7 @@ impl AzureAppConfigurationClient {
         selector: &SettingSelector,
     ) -> azure_core::Result<Url> {
         if let Some(snapshot_name) = &selector.snapshot_name {
-            self.ensure_configuration_snapshot_exists(snapshot_name)
+            self.ensure_configuration_snapshot_is_supported(snapshot_name)
                 .await?;
             return Ok(self.get_url_for_getting_configuration_snapshot_settings(snapshot_name));
         }
@@ -154,7 +156,7 @@ impl AzureAppConfigurationClient {
         url
     }
 
-    async fn ensure_configuration_snapshot_exists(
+    async fn ensure_configuration_snapshot_is_supported(
         &self,
         snapshot_name: &str,
     ) -> azure_core::Result<()> {
@@ -164,7 +166,8 @@ impl AzureAppConfigurationClient {
             "accept",
             "application/vnd.microsoft.appconfig.snapshot+json; charset=utf-8",
         );
-        self.pipeline
+        let response = self
+            .pipeline
             .send(
                 &Context::default(),
                 &mut request,
@@ -176,6 +179,42 @@ impl AzureAppConfigurationClient {
                 }),
             )
             .await?;
+        let snapshot: ConfigurationSnapshot = Response::from(response).into_model()?;
+
+        if snapshot.status == ConfigurationSnapshotStatus::Archived {
+            Python::attach(|_| {
+                log::warn!("Azure App Configuration snapshot '{snapshot_name}' is archived");
+            });
+        }
+
+        if !matches!(
+            snapshot.status,
+            ConfigurationSnapshotStatus::Ready | ConfigurationSnapshotStatus::Archived
+        ) {
+            let status = serde_json::to_string(&snapshot.status).map_err(|error| {
+                azure_core::Error::with_message(
+                    ErrorKind::Other,
+                    format!("Failed to serialize Azure App Configuration snapshot status: {error}"),
+                )
+            })?;
+
+            return Err(azure_core::Error::with_message(
+                ErrorKind::Other,
+                format!(
+                    "Azure App Configuration snapshot '{snapshot_name}' has status {status}. Only 'ready' or 'archived' are supported.",
+                ),
+            ));
+        }
+
+        if snapshot.composition_type == ConfigurationSnapshotCompositionType::KeyLabel {
+            return Err(azure_core::Error::with_message(
+                ErrorKind::Other,
+                format!(
+                    "Azure App Configuration snapshot '{snapshot_name}' uses unsupported 'key_label' composition"
+                ),
+            ));
+        }
+
         Ok(())
     }
 
@@ -516,14 +555,14 @@ mod tests {
                             request.url().as_str(),
                             "https://example.azconfig.io/snapshots/payment-2026-10-15?api-version=2026-04-01"
                         );
-                        br#"{"name": "payment-2026-10-15"}"#.as_slice()
+                        br#"{"name": "payment-2026-10-15", "composition_type": "key", "status": "archived"}"#.as_slice()
                     }
                     "/kv" => {
                         assert_eq!(
                             request.url().as_str(),
                             "https://example.azconfig.io/kv?api-version=2026-04-01&snapshot=payment-2026-10-15"
                         );
-                        br#"{"items": [{"key": "service.name", "value": "wirio"}]}"#.as_slice()
+                        br#"{"items": [{"key": "service.name", "label": "Production", "value": "wirio"}]}"#.as_slice()
                     }
                     path => panic!("Unexpected request path: {path}"),
                 };
@@ -544,5 +583,80 @@ mod tests {
 
         assert_eq!(configurations.len(), 1);
         assert_eq!(configurations[0].key, "service.name");
+    }
+
+    #[tokio::test]
+    async fn test_fail_getting_configurations_using_key_label_snapshot_selector() {
+        #[derive(Debug)]
+        struct KeySnapshotHttpClientMock;
+
+        #[async_trait]
+        impl HttpClient for KeySnapshotHttpClientMock {
+            async fn execute_request(
+                &self,
+                request: &Request,
+            ) -> azure_core::Result<AsyncRawResponse> {
+                assert_eq!(request.url().path(), "/snapshots/payment-2026-10-15");
+
+                Ok(AsyncRawResponse::from_bytes(
+                    StatusCode::Ok,
+                    Headers::default(),
+                    br#"{"name": "payment-2026-10-15", "composition_type": "key_label", "status": "ready"}"#
+                        .as_slice(),
+                ))
+            }
+        }
+
+        let client = create_client(Arc::new(KeySnapshotHttpClientMock));
+        let selector =
+            SettingSelector::new(None, None, Some(String::from("payment-2026-10-15"))).unwrap();
+
+        let error = client
+            .get_configuration_settings(&selector)
+            .await
+            .unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "Azure App Configuration snapshot 'payment-2026-10-15' uses unsupported 'key_label' composition"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_fail_getting_configuration_settings_using_snapshot_that_is_not_ready_or_archived()
+    {
+        #[derive(Debug)]
+        struct ProvisioningSnapshotHttpClientMock;
+
+        #[async_trait]
+        impl HttpClient for ProvisioningSnapshotHttpClientMock {
+            async fn execute_request(
+                &self,
+                request: &Request,
+            ) -> azure_core::Result<AsyncRawResponse> {
+                assert_eq!(request.url().path(), "/snapshots/payment-2026-10-15");
+
+                Ok(AsyncRawResponse::from_bytes(
+                    StatusCode::Ok,
+                    Headers::default(),
+                    br#"{"name": "payment-2026-10-15", "composition_type": "key", "status": "provisioning"}"#
+                        .as_slice(),
+                ))
+            }
+        }
+
+        let client = create_client(Arc::new(ProvisioningSnapshotHttpClientMock));
+        let selector =
+            SettingSelector::new(None, None, Some(String::from("payment-2026-10-15"))).unwrap();
+
+        let error = client
+            .get_configuration_settings(&selector)
+            .await
+            .unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "Azure App Configuration snapshot 'payment-2026-10-15' has status \"provisioning\". Only 'ready' or 'archived' are supported."
+        );
     }
 }

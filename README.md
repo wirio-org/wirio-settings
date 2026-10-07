@@ -599,6 +599,8 @@ We can also add selectors for enhanced feature flags, also load common and speci
 
 Load a snapshot by name with a `SettingSelector`. Changing the selected snapshot name requires a code change and redeployment.
 
+Only snapshots with `key` composition are supported. This composition retains one value per key, and when multiple labels match, it retains the value from the last applicable filter. Snapshots with `key_label` composition are rejected because they can retain multiple values for one key.
+
 ```python
 from wirio_settings import SettingsManager
 from wirio_settings.azure.app_configuration import SettingSelector

@@ -108,10 +108,14 @@ impl Default for FeatureFlagSelector {
 
 #[cfg(test)]
 mod tests {
+    use pyo3::Python;
+
     use super::{KeyFilter, LabelFilter, SettingSelector};
 
     #[test]
     fn test_reject_snapshot_name_with_filters() {
+        Python::initialize();
+
         let error = SettingSelector::new(
             Some(String::from("service.*")),
             None,
@@ -127,6 +131,8 @@ mod tests {
 
     #[test]
     fn test_require_key_filter_without_snapshot_name() {
+        Python::initialize();
+
         let error = SettingSelector::new(None, None, None).unwrap_err();
 
         assert_eq!(
@@ -137,6 +143,8 @@ mod tests {
 
     #[test]
     fn test_create_default_selector() {
+        Python::initialize();
+
         let selector = SettingSelector::default();
 
         assert_eq!(selector.key_filter.as_deref(), Some(KeyFilter::ANY));

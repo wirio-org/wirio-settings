@@ -87,7 +87,8 @@ impl AzureAppConfigurationSettingsProvider {
         &self,
         settings: &mut BTreeMap<String, Option<String>>,
     ) -> PyResult<()> {
-        let mut configuration_settings: Vec<ConfigurationSetting> = Vec::new();
+        let mut configuration_settings_by_key: BTreeMap<String, ConfigurationSetting> =
+            BTreeMap::new();
 
         for selector in &self.selectors {
             let selector_configurations =
@@ -97,17 +98,32 @@ impl AzureAppConfigurationSettingsProvider {
                         endpoint = self.endpoint
                     ))
                 })?;
-            let selector_configurations = self
+            let selector_configurations_with_snapshot_references_resolved = self
                 .resolve_snapshot_references(selector_configurations)
                 .await?;
-            configuration_settings.extend(selector_configurations);
+            Self::keep_last_configuration_settings(
+                &mut configuration_settings_by_key,
+                selector_configurations_with_snapshot_references_resolved,
+            );
         }
+
+        let configuration_settings: Vec<_> = configuration_settings_by_key.into_values().collect();
         Self::add_key_value_configuration_settings(settings, &configuration_settings);
         self.add_key_vault_reference_configuration_settings(settings, configuration_settings)
             .await?;
         Self::trim_configuration_setting_key_prefixes(settings, &self.trim_key_prefixes);
         Self::normalize_keys(settings);
         Ok(())
+    }
+
+    fn keep_last_configuration_settings(
+        configuration_settings_by_key: &mut BTreeMap<String, ConfigurationSetting>,
+        configuration_settings: Vec<ConfigurationSetting>,
+    ) {
+        for configuration_setting in configuration_settings {
+            configuration_settings_by_key
+                .insert(configuration_setting.key.clone(), configuration_setting);
+        }
     }
 
     async fn resolve_snapshot_references(
@@ -412,16 +428,25 @@ mod tests {
     #[derive(Debug)]
     struct HttpClientMock {
         status_code: StatusCode,
+        return_key_vault_plain_value_for_production_label: bool,
     }
 
     #[async_trait]
     impl HttpClient for HttpClientMock {
         async fn execute_request(&self, request: &Request) -> azure_core::Result<AsyncRawResponse> {
             let response_body = match (request.url().path(), request.url().query()) {
-                ("/snapshots/production", _) => br#"{"name":"production"}"#.as_slice(),
+                ("/snapshots/production", _) => {
+                    br#"{"name":"production","composition_type":"key","status":"ready"}"#.as_slice()
+                }
                 ("/kv", Some(query)) if query.contains("snapshot=production") => br#"{"items": [
                     {"key": "ApplicationName", "value": "wirio"},
                     {"key": "Logging.LogLevel", "value": "warning"}
+                ]}"#
+                .as_slice(),
+                ("/kv", Some(query))
+                    if self.return_key_vault_plain_value_for_production_label
+                        && query.contains("label=Production") => br#"{"items": [
+                    {"key": "KeyVault1", "value": "plain-value"}
                 ]}"#
                 .as_slice(),
                 ("/kv", _) => br#"{"items": [
@@ -500,6 +525,7 @@ mod tests {
             py,
             status_code,
             vec![FeatureFlagSelector::new(String::from("*"), None)],
+            false,
         )
     }
 
@@ -507,8 +533,12 @@ mod tests {
         py: Python<'_>,
         status_code: StatusCode,
         feature_flag_selectors: Vec<FeatureFlagSelector>,
+        return_key_vault_plain_value_for_production_label: bool,
     ) -> AzureAppConfigurationSettingsProvider {
-        let http_client_mock: Arc<dyn HttpClient> = Arc::new(HttpClientMock { status_code });
+        let http_client_mock: Arc<dyn HttpClient> = Arc::new(HttpClientMock {
+            status_code,
+            return_key_vault_plain_value_for_production_label,
+        });
         let credential: Arc<dyn TokenCredential> = Arc::new(CredentialMock);
         let client = AzureAppConfigurationClient::new(
             "https://example.azconfig.io",
@@ -667,6 +697,7 @@ mod tests {
                     FeatureFlagSelector::new(String::from("*"), None),
                     FeatureFlagSelector::new(String::from("*"), Some(String::from("Production"))),
                 ],
+                false,
             )
         });
         let mut settings = BTreeMap::new();
@@ -819,6 +850,38 @@ mod tests {
         assert_eq!(
             settings.get("KeyVault1").and_then(Option::as_deref),
             Some("secret2-value")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_use_key_value_from_later_selector_after_key_vault_reference() {
+        Python::initialize();
+        let mut provider = Python::attach(|py| {
+            create_provider_with_feature_flag_selectors(
+                py,
+                StatusCode::Ok,
+                vec![FeatureFlagSelector::new(String::from("*"), None)],
+                true,
+            )
+        });
+        provider.selectors = vec![
+            SettingSelector::new(Some(String::from("*")), None, None).unwrap(),
+            SettingSelector::new(
+                Some(String::from("*")),
+                Some(String::from("Production")),
+                None,
+            )
+            .unwrap(),
+        ];
+        let mut settings = BTreeMap::new();
+        provider
+            .add_configuration_settings(&mut settings)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            settings.get("key_vault_1").and_then(Option::as_deref),
+            Some("plain-value")
         );
     }
 

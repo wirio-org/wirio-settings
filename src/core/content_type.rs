@@ -8,7 +8,7 @@ impl<'a> ContentType<'a> {
     const KEY_VAULT_REFERENCE_MEDIA_TYPE: &'static str =
         "application/vnd.microsoft.appconfig.keyvaultref+json";
     const SNAPSHOT_REFERENCE_PROFILE: &'static str =
-        "profile=\"https://azconfig.io/mime-profiles/snapshot-ref\"";
+        "\"https://azconfig.io/mime-profiles/snapshot-ref\"";
 
     pub(crate) fn new(value: &'a str) -> Self {
         Self { value }
@@ -30,11 +30,12 @@ impl<'a> ContentType<'a> {
 
     pub(crate) fn is_snapshot_reference(&self) -> bool {
         self.media_type() == Self::APPLICATION_JSON_MEDIA_TYPE
-            && self
-                .value
-                .split(';')
-                .map(str::trim)
-                .any(|parameter| parameter == Self::SNAPSHOT_REFERENCE_PROFILE)
+            && self.value.split(';').map(str::trim).any(|parameter| {
+                parameter.split_once('=').is_some_and(|(name, value)| {
+                    name.eq_ignore_ascii_case("profile")
+                        && value == Self::SNAPSHOT_REFERENCE_PROFILE
+                })
+            })
     }
 }
 

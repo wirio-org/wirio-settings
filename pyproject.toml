@@ -38,6 +38,7 @@ dev = [
     "azure-appconfiguration>=1.9.0",
     "azure-identity>=1.25.3",
     "coverage>=7.15.2",
+    "cryptography==46.0.3",
     "featuremanagement>=2.2.0",
     "maturin>=1.14.1",
     "pytest>=9.1.1",

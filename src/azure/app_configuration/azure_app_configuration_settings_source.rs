@@ -3,7 +3,7 @@ use crate::{
         app_configuration::{
             AzureAppConfigurationSettingsProvider,
             azure_app_configuration_client::AzureAppConfigurationClient,
-            models::{FeatureFlagSelector, KeyFilter, SettingSelector},
+            models::{FeatureFlagSelector, SettingSelector},
         },
         identity::PythonAzureCredential,
     },
@@ -77,14 +77,13 @@ impl AzureAppConfigurationSettingsSource {
     }
 
     fn get_selectors_or_default(selectors: Option<Vec<SettingSelector>>) -> Vec<SettingSelector> {
-        selectors.unwrap_or_else(|| vec![SettingSelector::new(String::from(KeyFilter::ANY), None)])
+        selectors.unwrap_or_else(|| vec![SettingSelector::default()])
     }
 
     fn get_feature_flag_selectors_or_default(
         feature_flag_selectors: Option<Vec<FeatureFlagSelector>>,
     ) -> Vec<FeatureFlagSelector> {
-        feature_flag_selectors
-            .unwrap_or_else(|| vec![FeatureFlagSelector::new(String::from(KeyFilter::ANY), None)])
+        feature_flag_selectors.unwrap_or_else(|| vec![FeatureFlagSelector::default()])
     }
 }
 
@@ -103,7 +102,7 @@ impl SettingsSource for AzureAppConfigurationSettingsSource {
 mod tests {
     use super::AzureAppConfigurationSettingsSource;
     use crate::azure::{
-        app_configuration::models::{KeyFilter, LabelFilter},
+        app_configuration::models::{FeatureFlagSelector, SettingSelector},
         identity::PythonAzureCredential,
     };
     use pyo3::Python;
@@ -150,9 +149,7 @@ mod tests {
         let feature_flag_selectors =
             AzureAppConfigurationSettingsSource::get_feature_flag_selectors_or_default(None);
 
-        assert_eq!(selectors[0].key_filter, KeyFilter::ANY);
-        assert_eq!(selectors[0].label_filter, LabelFilter::NULL);
-        assert_eq!(feature_flag_selectors[0].name_filter, KeyFilter::ANY);
-        assert_eq!(feature_flag_selectors[0].label_filter, LabelFilter::NULL);
+        assert_eq!(selectors, vec![SettingSelector::default()]);
+        assert_eq!(feature_flag_selectors, vec![FeatureFlagSelector::default()]);
     }
 }

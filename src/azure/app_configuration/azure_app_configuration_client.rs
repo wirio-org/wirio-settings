@@ -1,17 +1,19 @@
 use crate::azure::app_configuration::dtos::{
-    ConfigurationSetting, EnhancedFeatureFlag, GetConfigurationSettingsResponse,
+    ConfigurationSetting, ConfigurationSnapshot, ConfigurationSnapshotCompositionType,
+    ConfigurationSnapshotStatus, EnhancedFeatureFlag, GetConfigurationSettingsResponse,
     GetEnhancedFeatureFlagsResponse,
 };
 use crate::azure::app_configuration::models::{FeatureFlagSelector, SettingSelector};
 use azure_core::{
     credentials::TokenCredential,
-    error::CheckSuccessOptions,
+    error::{CheckSuccessOptions, ErrorKind},
     http::{
         ClientOptions, Context, Method, Pipeline, PipelineSendOptions, Request, Response, Url,
         UrlExt,
         policies::{Policy, auth::BearerTokenAuthorizationPolicy},
     },
 };
+use pyo3::Python;
 use std::sync::Arc;
 
 pub(crate) struct AzureAppConfigurationClient {
@@ -57,7 +59,9 @@ impl AzureAppConfigurationClient {
         selector: &SettingSelector,
     ) -> azure_core::Result<Vec<ConfigurationSetting>> {
         let mut configurations: Vec<ConfigurationSetting> = Vec::new();
-        let mut url = self.get_url_for_getting_configuration_settings(selector);
+        let mut url = self
+            .get_url_for_getting_configuration_settings(selector)
+            .await?;
 
         loop {
             let response = self.get_configuration_settings_page(&url).await?;
@@ -98,15 +102,120 @@ impl AzureAppConfigurationClient {
         Ok(feature_flags)
     }
 
-    fn get_url_for_getting_configuration_settings(&self, selector: &SettingSelector) -> Url {
+    async fn get_url_for_getting_configuration_settings(
+        &self,
+        selector: &SettingSelector,
+    ) -> azure_core::Result<Url> {
+        if let Some(snapshot_name) = &selector.snapshot_name {
+            self.ensure_configuration_snapshot_is_supported(snapshot_name)
+                .await?;
+            return Ok(self.get_url_for_getting_configuration_snapshot_settings(snapshot_name));
+        }
+
+        Ok(self.get_url_for_getting_key_value_configuration_settings(selector))
+    }
+
+    fn get_url_for_getting_key_value_configuration_settings(
+        &self,
+        selector: &SettingSelector,
+    ) -> Url {
         let mut url = self.endpoint.clone();
         url.append_path("kv");
         let mut query_builder = url.query_builder();
         query_builder.set_pair("api-version", Self::KEY_VALUES_API_VERSION);
-        query_builder.set_pair("key", &selector.key_filter);
-        query_builder.set_pair("label", &selector.label_filter);
+
+        if let Some(key_filter) = &selector.key_filter {
+            query_builder.set_pair("key", key_filter);
+        }
+
+        if let Some(label_filter) = &selector.label_filter {
+            query_builder.set_pair("label", label_filter);
+        }
+
         query_builder.build();
         url
+    }
+
+    fn get_url_for_getting_configuration_snapshot(&self, snapshot_name: &str) -> Url {
+        let mut url = self.endpoint.clone();
+        url.append_path("snapshots");
+        url.append_path(snapshot_name);
+        let mut query_builder = url.query_builder();
+        query_builder.set_pair("api-version", Self::KEY_VALUES_API_VERSION);
+        query_builder.build();
+        url
+    }
+
+    fn get_url_for_getting_configuration_snapshot_settings(&self, snapshot_name: &str) -> Url {
+        let mut url = self.endpoint.clone();
+        url.append_path("kv");
+        let mut query_builder = url.query_builder();
+        query_builder.set_pair("api-version", Self::KEY_VALUES_API_VERSION);
+        query_builder.set_pair("snapshot", snapshot_name);
+        query_builder.build();
+        url
+    }
+
+    async fn ensure_configuration_snapshot_is_supported(
+        &self,
+        snapshot_name: &str,
+    ) -> azure_core::Result<()> {
+        let url = self.get_url_for_getting_configuration_snapshot(snapshot_name);
+        let mut request = Request::new(url, Method::Get);
+        request.insert_header(
+            "accept",
+            "application/vnd.microsoft.appconfig.snapshot+json; charset=utf-8",
+        );
+        let response = self
+            .pipeline
+            .send(
+                &Context::default(),
+                &mut request,
+                Some(PipelineSendOptions {
+                    check_success: CheckSuccessOptions {
+                        success_codes: &[200],
+                    },
+                    ..Default::default()
+                }),
+            )
+            .await?;
+        let snapshot: ConfigurationSnapshot = Response::from(response).into_model()?;
+
+        if snapshot.status == ConfigurationSnapshotStatus::Archived {
+            Python::attach(|_| {
+                log::warn!("Azure App Configuration snapshot '{snapshot_name}' is archived");
+            });
+        }
+
+        if !matches!(
+            snapshot.status,
+            ConfigurationSnapshotStatus::Ready | ConfigurationSnapshotStatus::Archived
+        ) {
+            let status = serde_json::to_string(&snapshot.status).map_err(|error| {
+                azure_core::Error::with_message(
+                    ErrorKind::Other,
+                    format!("Failed to serialize Azure App Configuration snapshot status: {error}"),
+                )
+            })?;
+
+            return Err(azure_core::Error::with_message(
+                ErrorKind::Other,
+                format!(
+                    "Azure App Configuration snapshot '{snapshot_name}' has status {status}. Only 'ready' or 'archived' are supported.",
+                ),
+            ));
+        }
+
+        if snapshot.composition_type == ConfigurationSnapshotCompositionType::KeyLabel {
+            return Err(azure_core::Error::with_message(
+                ErrorKind::Other,
+                format!(
+                    "Azure App Configuration snapshot '{snapshot_name}' uses unsupported 'key_label' composition"
+                ),
+            ));
+        }
+
+        Ok(())
     }
 
     fn get_url_for_getting_enhanced_feature_flags(&self, selector: &FeatureFlagSelector) -> Url {
@@ -193,6 +302,7 @@ mod tests {
             headers::Headers,
         },
     };
+    use pyo3::Python;
     use std::{
         collections::VecDeque,
         sync::{Arc, Mutex},
@@ -349,8 +459,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_configurations_and_exclude_feature_flags() {
+        Python::initialize();
         let client = create_client(Arc::new(HttpClientMock));
-        let selector = SettingSelector::new(String::from("*"), None);
+        let selector = SettingSelector::new(Some(String::from("*")), None, None).unwrap();
 
         let configurations = client.get_configuration_settings(&selector).await.unwrap();
 
@@ -363,6 +474,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_configurations_and_follow_next_link() {
+        Python::initialize();
         let first_page = br#"{
             "items": [{"key": "first", "value": "one"}],
             "@nextLink": "/kv?api-version=2026-04-01&after=next-reference"
@@ -372,7 +484,7 @@ mod tests {
         let client = create_client(Arc::new(PaginatedHttpClientMock {
             responses: Mutex::new(VecDeque::from([first_page, second_page])),
         }));
-        let selector = SettingSelector::new(String::from("*"), None);
+        let selector = SettingSelector::new(Some(String::from("*")), None, None).unwrap();
 
         let configurations = client.get_configuration_settings(&selector).await.unwrap();
 
@@ -383,6 +495,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_enhanced_feature_flags_and_follow_next_link() {
+        Python::initialize();
         let first_page = br#"{
             "items": [{"name": "first", "enabled": true}],
             "@nextLink": "/ff?api-version=2026-05-01-preview&after=next-reference"
@@ -405,7 +518,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_filter_configurations_using_selector() {
-        let selectors = [SettingSelector::new(String::from("service.*"), None)];
+        let selectors =
+            [SettingSelector::new(Some(String::from("service.*")), None, None).unwrap()];
         let client = create_client(Arc::new(SelectorHttpClientMock));
 
         let configurations = client
@@ -419,6 +533,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_filter_enhanced_feature_flags_using_feature_flag_selector() {
+        Python::initialize();
         let client = create_client(Arc::new(EnhancedFeatureFlagSelectorHttpClientMock));
         let selector = FeatureFlagSelector::new(String::from("beta,gamma"), None);
 
@@ -426,5 +541,129 @@ mod tests {
 
         assert_eq!(feature_flags.len(), 1);
         assert_eq!(feature_flags[0].name, "beta");
+    }
+
+    #[tokio::test]
+    async fn test_get_configurations_using_snapshot_selector() {
+        #[derive(Debug)]
+        struct SnapshotHttpClientMock;
+
+        #[async_trait]
+        impl HttpClient for SnapshotHttpClientMock {
+            async fn execute_request(
+                &self,
+                request: &Request,
+            ) -> azure_core::Result<AsyncRawResponse> {
+                let response_body = match request.url().path() {
+                    "/snapshots/payment-2026-10-15" => {
+                        assert_eq!(
+                            request.url().as_str(),
+                            "https://example.azconfig.io/snapshots/payment-2026-10-15?api-version=2026-04-01"
+                        );
+                        br#"{"name": "payment-2026-10-15", "composition_type": "key", "status": "archived"}"#.as_slice()
+                    }
+                    "/kv" => {
+                        assert_eq!(
+                            request.url().as_str(),
+                            "https://example.azconfig.io/kv?api-version=2026-04-01&snapshot=payment-2026-10-15"
+                        );
+                        br#"{"items": [{"key": "service.name", "label": "Production", "value": "wirio"}]}"#.as_slice()
+                    }
+                    path => panic!("Unexpected request path: {path}"),
+                };
+
+                Ok(AsyncRawResponse::from_bytes(
+                    StatusCode::Ok,
+                    Headers::default(),
+                    response_body,
+                ))
+            }
+        }
+
+        Python::initialize();
+        let client = create_client(Arc::new(SnapshotHttpClientMock));
+        let selector =
+            SettingSelector::new(None, None, Some(String::from("payment-2026-10-15"))).unwrap();
+
+        let configurations = client.get_configuration_settings(&selector).await.unwrap();
+
+        assert_eq!(configurations.len(), 1);
+        assert_eq!(configurations[0].key, "service.name");
+    }
+
+    #[tokio::test]
+    async fn test_fail_getting_configurations_using_key_label_snapshot_selector() {
+        #[derive(Debug)]
+        struct KeySnapshotHttpClientMock;
+
+        #[async_trait]
+        impl HttpClient for KeySnapshotHttpClientMock {
+            async fn execute_request(
+                &self,
+                request: &Request,
+            ) -> azure_core::Result<AsyncRawResponse> {
+                assert_eq!(request.url().path(), "/snapshots/payment-2026-10-15");
+
+                Ok(AsyncRawResponse::from_bytes(
+                    StatusCode::Ok,
+                    Headers::default(),
+                    br#"{"name": "payment-2026-10-15", "composition_type": "key_label", "status": "ready"}"#
+                        .as_slice(),
+                ))
+            }
+        }
+
+        let client = create_client(Arc::new(KeySnapshotHttpClientMock));
+        let selector =
+            SettingSelector::new(None, None, Some(String::from("payment-2026-10-15"))).unwrap();
+
+        let error = client
+            .get_configuration_settings(&selector)
+            .await
+            .unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "Azure App Configuration snapshot 'payment-2026-10-15' uses unsupported 'key_label' composition"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_fail_getting_configuration_settings_using_snapshot_that_is_not_ready_or_archived()
+    {
+        #[derive(Debug)]
+        struct ProvisioningSnapshotHttpClientMock;
+
+        #[async_trait]
+        impl HttpClient for ProvisioningSnapshotHttpClientMock {
+            async fn execute_request(
+                &self,
+                request: &Request,
+            ) -> azure_core::Result<AsyncRawResponse> {
+                assert_eq!(request.url().path(), "/snapshots/payment-2026-10-15");
+
+                Ok(AsyncRawResponse::from_bytes(
+                    StatusCode::Ok,
+                    Headers::default(),
+                    br#"{"name": "payment-2026-10-15", "composition_type": "key", "status": "provisioning"}"#
+                        .as_slice(),
+                ))
+            }
+        }
+
+        Python::initialize();
+        let client = create_client(Arc::new(ProvisioningSnapshotHttpClientMock));
+        let selector =
+            SettingSelector::new(None, None, Some(String::from("payment-2026-10-15"))).unwrap();
+
+        let error = client
+            .get_configuration_settings(&selector)
+            .await
+            .unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "Azure App Configuration snapshot 'payment-2026-10-15' has status \"provisioning\". Only 'ready' or 'archived' are supported."
+        );
     }
 }

@@ -58,6 +58,8 @@ Here's why: our application settings, one line, done right. No more scattered `o
     - [Overview](#overview-1)
     - [Selectors](#selectors)
     - [Trim key prefixes](#trim-key-prefixes)
+    - [Snapshots](#snapshots)
+    - [Snapshot references](#snapshot-references)
   - [AWS Secrets Manager](#aws-secrets-manager)
   - [GCP Secret Manager](#gcp-secret-manager)
   - [Setting per file](#setting-per-file)
@@ -516,7 +518,7 @@ To periodically refresh the loaded secrets, use the `refresh_interval` parameter
 
 Read from Azure App Configuration:
 
-- Settings (also called `configuration`): Key-value pairs and Key Vault references.
+- Settings (also called `configuration`): Key-value pairs, Key Vault references and snapshot references.
 - Enhanced feature flags.
 
 ```python
@@ -590,6 +592,31 @@ settings_manager = SettingsManager().add_azure_app_configuration(
 ```
 
 We can also add selectors for enhanced feature flags, also load common and specific settings, etc. More information is available in the [Microsoft official documentation](https://learn.microsoft.com/en-us/azure/azure-app-configuration/concept-key-value).
+
+#### Snapshots
+
+[Snapshots](https://learn.microsoft.com/en-us/azure/azure-app-configuration/concept-snapshots#deploy-safely-with-snapshots) are immutable sets of settings selected when the snapshot is created. They replace most per-application selector logic, make the resulting configuration easier to inspect, and support controlled rollouts and rollback to a Last Known-Good (LKG) configuration.
+
+Load a snapshot by name with a `SettingSelector`. Changing the selected snapshot name requires a code change and redeployment.
+
+Only snapshots with `key` composition are supported. This composition retains one value per key, and when multiple labels match, it retains the value from the last applicable filter. Snapshots with `key_label` composition are rejected because they can retain multiple values for one key.
+
+```python
+from wirio_settings import SettingsManager
+from wirio_settings.azure.app_configuration import SettingSelector
+
+
+settings_manager = SettingsManager().add_azure_app_configuration(
+    "https://example.azconfig.io",
+    selectors=[SettingSelector(snapshot_name="payment-api-2026-10-15")],
+)
+```
+
+#### Snapshot references
+
+[Snapshot references](https://learn.microsoft.com/en-us/azure/azure-app-configuration/concept-snapshot-references#why-use-snapshot-references) are regular settings that point to snapshots. `wirio-settings` resolves them automatically. Updating a reference to point at another immutable snapshot changes the configuration on the next refresh without changing application code or redeploying it.
+
+The referenced snapshot's settings are merged at the reference's position in the selected results, so later settings can override them. References inside a referenced snapshot are not resolved.
 
 ### AWS Secrets Manager
 

@@ -40,6 +40,7 @@ This is a Python package backed by a Rust PyO3 extension. Rust implementations a
 - To create temporary files in tests, use the `tempfile` crate.
 - Asynchronous tests must be annotated using `#[tokio::test]` instead of `#[test]`.
 - In tests next to the code being tested, use `use super::something;` to refer to the code defined in the same file. To import code from other modules, use the full path starting from the crate root.
+- When using any `pyclass` struct, always start by initializing the Python interpreter with `Python::initialize()`.
 
 ## Python
 

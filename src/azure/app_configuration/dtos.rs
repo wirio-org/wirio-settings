@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
@@ -18,6 +18,38 @@ pub(crate) struct ConfigurationSetting {
     pub(crate) key: String,
     pub(crate) content_type: Option<String>,
     pub(crate) value: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct KeyVaultReference {
+    pub(crate) uri: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct SnapshotReference {
+    pub(crate) snapshot_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct ConfigurationSnapshot {
+    pub(crate) status: ConfigurationSnapshotStatus,
+    pub(crate) composition_type: ConfigurationSnapshotCompositionType,
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ConfigurationSnapshotStatus {
+    Provisioning,
+    Ready,
+    Archived,
+    Failed,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ConfigurationSnapshotCompositionType {
+    Key,
+    KeyLabel,
 }
 
 #[derive(Debug, Deserialize)]

@@ -1,8 +1,16 @@
 import json
 import os
+import time
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
+from azure.appconfiguration import (
+    ConfigurationSetting,
+    ConfigurationSettingsFilter,
+)
+from azure.appconfiguration.aio import AzureAppConfigurationClient
+from azure.identity.aio import DefaultAzureCredential
 from featuremanagement import FeatureManager
 from pytest_mock import MockerFixture
 from wirio_settings import SettingsManager
@@ -108,7 +116,7 @@ class TestIntegration:
     @pytest.mark.skipif(
         os.environ.get("INTEGRATION_TEST") is None, reason="Integration test"
     )
-    def test_load_configuration_settings_and_enhanced_feature_flags_using_selectors(
+    def test_load_azure_app_configuration_settings_and_enhanced_feature_flags_using_selectors(
         self,
     ) -> None:
         endpoint = os.environ["AZURE_APP_CONFIGURATION_ENDPOINT"]
@@ -134,6 +142,143 @@ class TestIntegration:
         feature_manager = FeatureManager(feature_management)
 
         assert feature_manager.list_feature_flag_names() == [expected_feature_flag]
+
+    @pytest.mark.skipif(
+        os.environ.get("INTEGRATION_TEST") is None, reason="Integration test"
+    )
+    async def test_load_azure_app_configuration_settings_using_snapshot(self) -> None:
+        endpoint = os.environ["AZURE_APP_CONFIGURATION_ENDPOINT"]
+        snapshot_name = f"Snapshot-{int(time.time())}"
+        snapshot_setting_key = "SnapshotSetting"
+        expected_snapshot_setting = "snapshot-setting-value"
+        settings_manager = SettingsManager(add_default_providers=False)
+
+        async with (
+            DefaultAzureCredential() as credential,
+            AzureAppConfigurationClient(
+                endpoint,
+                credential,
+            ) as app_configuration_client,
+        ):
+
+            async def cleanup() -> None:
+                try:
+                    await app_configuration_client.delete_configuration_setting(
+                        snapshot_setting_key
+                    )
+                except Exception as error:  # noqa: BLE001
+                    print(error)
+
+                try:
+                    await app_configuration_client.archive_snapshot(snapshot_name)
+                except Exception as error:  # noqa: BLE001
+                    print(error)
+
+            await cleanup()
+
+            try:
+                await app_configuration_client.set_configuration_setting(
+                    configuration_setting=ConfigurationSetting(
+                        key=snapshot_setting_key,
+                        value=expected_snapshot_setting,
+                    )
+                )
+                snapshot_poller = await app_configuration_client.begin_create_snapshot(
+                    snapshot_name,
+                    [ConfigurationSettingsFilter(key=snapshot_setting_key)],
+                    retention_period=timedelta(hours=1).seconds,
+                )
+                await snapshot_poller.result()
+
+                settings_manager.add_azure_app_configuration(
+                    endpoint=endpoint,
+                    selectors=[SettingSelector(snapshot_name=snapshot_name)],
+                )
+
+                assert (
+                    settings_manager.get_value("snapshot_setting")
+                    == expected_snapshot_setting
+                )
+            finally:
+                await cleanup()
+
+    @pytest.mark.skipif(
+        os.environ.get("INTEGRATION_TEST") is None, reason="Integration test"
+    )
+    async def test_load_azure_app_configuration_settings_using_snapshot_reference(
+        self,
+    ) -> None:
+        endpoint = os.environ["AZURE_APP_CONFIGURATION_ENDPOINT"]
+        snapshot_name = f"SnapshotForSnapshotReference-{int(time.time())}"
+        snapshot_reference_key = "SnapshotReference"
+        snapshot_reference_setting_key = "SettingForSnapshot"
+        expected_snapshot_reference_setting = "snapshot-reference-setting-value"
+        settings_manager = SettingsManager(add_default_providers=False)
+
+        async with (
+            DefaultAzureCredential() as credential,
+            AzureAppConfigurationClient(
+                endpoint,
+                credential,
+            ) as app_configuration_client,
+        ):
+
+            async def cleanup() -> None:
+                try:
+                    await app_configuration_client.delete_configuration_setting(
+                        snapshot_reference_key
+                    )
+                except Exception as error:  # noqa: BLE001
+                    print(error)
+
+                try:
+                    await app_configuration_client.delete_configuration_setting(
+                        snapshot_reference_setting_key
+                    )
+                except Exception as error:  # noqa: BLE001
+                    print(error)
+
+                try:
+                    await app_configuration_client.archive_snapshot(snapshot_name)
+                except Exception as error:  # noqa: BLE001
+                    print(error)
+
+            await cleanup()
+
+            try:
+                await app_configuration_client.set_configuration_setting(
+                    configuration_setting=ConfigurationSetting(
+                        key=snapshot_reference_setting_key,
+                        value=expected_snapshot_reference_setting,
+                    )
+                )
+                snapshot_poller = await app_configuration_client.begin_create_snapshot(
+                    snapshot_name,
+                    [ConfigurationSettingsFilter(key=snapshot_reference_setting_key)],
+                    retention_period=timedelta(hours=1).seconds,
+                )
+                await snapshot_poller.result()
+                await app_configuration_client.set_configuration_setting(
+                    configuration_setting=ConfigurationSetting(
+                        key=snapshot_reference_key,
+                        value=json.dumps({"snapshot_name": snapshot_name}),
+                        content_type=(
+                            """application/json; profile="https://azconfig.io/mime-profiles/snapshot-ref"; charset=utf-8"""
+                        ),
+                    )
+                )
+
+                settings_manager.add_azure_app_configuration(
+                    endpoint=endpoint,
+                    selectors=[SettingSelector(snapshot_reference_key)],
+                )
+
+                assert (
+                    settings_manager.get_value("setting_for_snapshot")
+                    == expected_snapshot_reference_setting
+                )
+            finally:
+                await cleanup()
 
     @pytest.mark.skipif(
         os.environ.get("INTEGRATION_TEST") is None, reason="Integration test"

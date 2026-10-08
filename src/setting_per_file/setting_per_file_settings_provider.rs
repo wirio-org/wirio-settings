@@ -247,6 +247,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_load_values_from_directory_files() {
+        Python::initialize();
+
         let temporary_directory = tempdir().unwrap();
         tokio::fs::write(temporary_directory.path().join("app_name"), "wirio")
             .await
@@ -294,6 +296,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_return_empty_data_when_optional_directory_is_missing() {
+        Python::initialize();
+
         let temporary_directory = tempdir().unwrap();
         let missing_directory_path = temporary_directory.path().join("missing");
         let provider = Python::attach(|py| {
@@ -476,6 +480,8 @@ mod tests {
 
     #[test]
     fn test_not_watch_directory_when_refresh_is_disabled() {
+        Python::initialize();
+
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("value");
         let runtime = pyo3_async_runtimes::tokio::get_runtime();

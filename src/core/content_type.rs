@@ -8,7 +8,7 @@ impl<'a> ContentType<'a> {
     const KEY_VAULT_REFERENCE_MEDIA_TYPE: &'static str =
         "application/vnd.microsoft.appconfig.keyvaultref+json";
     const SNAPSHOT_REFERENCE_PROFILE: &'static str =
-        "\"https://azconfig.io/mime-profiles/snapshot-ref\"";
+        "https://azconfig.io/mime-profiles/snapshot-ref";
 
     pub(crate) fn new(value: &'a str) -> Self {
         Self { value }
@@ -33,7 +33,7 @@ impl<'a> ContentType<'a> {
             && self.value.split(';').map(str::trim).any(|parameter| {
                 parameter.split_once('=').is_some_and(|(name, value)| {
                     name.eq_ignore_ascii_case("profile")
-                        && value == Self::SNAPSHOT_REFERENCE_PROFILE
+                        && value.trim_matches('"') == Self::SNAPSHOT_REFERENCE_PROFILE
                 })
             })
     }
@@ -94,5 +94,16 @@ mod tests {
             "application/json; profile=\"https://azconfig.io/mime-profiles/snapshot-ref\"; charset=utf-8"
         )
         .is_snapshot_reference());
+    }
+
+    #[test]
+    fn get_media_type_for_ai_setting() {
+        assert_eq!(
+            ContentType::new(
+                "application/json; profile=\"https://azconfig.io/mime-profiles/ai/chat-completion\""
+            )
+            .media_type(),
+            "application/json"
+        );
     }
 }

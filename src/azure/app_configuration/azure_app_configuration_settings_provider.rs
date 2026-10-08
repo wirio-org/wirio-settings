@@ -8,7 +8,7 @@ use crate::{
         models::{FeatureFlagSelector, SettingSelector},
     },
     core::{
-        ModelRegistry, PythonSettingsProvider, SettingLookup, SettingsProvider,
+        ModelRegistry, PythonSettingsProvider, SerdeParser, SettingLookup, SettingsProvider,
         content_type::ContentType, convention_changer,
     },
 };
@@ -108,7 +108,7 @@ impl AzureAppConfigurationSettingsProvider {
         }
 
         let configuration_settings: Vec<_> = configuration_settings_by_key.into_values().collect();
-        Self::add_key_value_configuration_settings(settings, &configuration_settings);
+        Self::add_key_value_configuration_settings(settings, &configuration_settings)?;
         self.add_key_vault_reference_configuration_settings(settings, configuration_settings)
             .await?;
         Self::trim_configuration_setting_key_prefixes(settings, &self.trim_key_prefixes);
@@ -171,20 +171,64 @@ impl AzureAppConfigurationSettingsProvider {
     fn add_key_value_configuration_settings(
         settings: &mut BTreeMap<String, Option<String>>,
         configuration_settings: &[ConfigurationSetting],
-    ) {
+    ) -> PyResult<()> {
         for configuration_setting in configuration_settings {
-            let is_key_value = configuration_setting
-                .content_type
-                .as_deref()
-                .is_none_or(str::is_empty);
+            let is_key_vault_reference =
+                configuration_setting
+                    .content_type
+                    .as_deref()
+                    .is_some_and(|content_type| {
+                        ContentType::new(content_type).is_key_vault_reference()
+                    });
 
-            if is_key_value {
-                settings.insert(
-                    configuration_setting.key.clone(),
-                    Some(configuration_setting.value.clone()),
-                );
+            if is_key_vault_reference {
+                continue;
             }
+
+            if Self::add_json_key_value_configuration_setting(settings, configuration_setting)? {
+                continue;
+            }
+
+            Self::add_raw_key_value_configuration_setting(settings, configuration_setting);
         }
+
+        Ok(())
+    }
+
+    fn add_raw_key_value_configuration_setting(
+        settings: &mut BTreeMap<String, Option<String>>,
+        configuration_setting: &ConfigurationSetting,
+    ) {
+        settings.insert(
+            configuration_setting.key.clone(),
+            Some(configuration_setting.value.clone()),
+        );
+    }
+
+    fn add_json_key_value_configuration_setting(
+        settings: &mut BTreeMap<String, Option<String>>,
+        configuration_setting: &ConfigurationSetting,
+    ) -> PyResult<bool> {
+        let is_application_json = configuration_setting
+            .content_type
+            .as_deref()
+            .is_some_and(|content_type| ContentType::new(content_type).is_application_json());
+
+        if !is_application_json {
+            return Ok(false);
+        }
+
+        let parsed_json = serde_json::from_str(&configuration_setting.value).map_err(|error| {
+            PyRuntimeError::new_err(format!(
+                "Invalid JSON for Azure App Configuration key '{}': {error}",
+                configuration_setting.key,
+            ))
+        })?;
+        let json_object =
+            serde_json::Map::from_iter([(configuration_setting.key.clone(), parsed_json)]);
+        let parsed_settings = SerdeParser::new().parse(&json_object)?;
+        settings.extend(parsed_settings);
+        Ok(true)
     }
 
     async fn add_key_vault_reference_configuration_settings(
@@ -959,5 +1003,81 @@ mod tests {
         assert_eq!(resolved_configurations[1].key, "ApplicationName");
         assert_eq!(resolved_configurations[2].key, "Logging.LogLevel");
         assert_eq!(resolved_configurations[3].key, "after");
+    }
+
+    #[test]
+    fn test_parse_json_configuration_setting() {
+        let configuration_settings = vec![ConfigurationSetting {
+            key: String::from("service"),
+            content_type: Some(String::from("application/json; charset=utf-8")),
+            value: String::from(
+                r#"{"logging":{"log_level":"WARNING"},"allowed_hosts":["localhost"]}"#,
+            ),
+        }];
+        let mut settings = BTreeMap::new();
+
+        AzureAppConfigurationSettingsProvider::add_key_value_configuration_settings(
+            &mut settings,
+            &configuration_settings,
+        )
+        .unwrap();
+
+        assert_eq!(
+            settings,
+            BTreeMap::from([
+                (
+                    String::from("service.logging.log_level"),
+                    Some(String::from("WARNING")),
+                ),
+                (
+                    String::from("service.allowed_hosts.0"),
+                    Some(String::from("localhost")),
+                )
+            ])
+        );
+    }
+
+    #[test]
+    fn test_fail_parsing_invalid_json_configuration_setting() {
+        Python::initialize();
+        let configuration_settings = vec![ConfigurationSetting {
+            key: String::from("service"),
+            content_type: Some(String::from("application/json")),
+            value: String::from("{invalid-json"),
+        }];
+        let mut settings = BTreeMap::new();
+
+        let error = AzureAppConfigurationSettingsProvider::add_key_value_configuration_settings(
+            &mut settings,
+            &configuration_settings,
+        )
+        .unwrap_err();
+
+        assert!(
+            error.to_string().starts_with(
+                "RuntimeError: Invalid JSON for Azure App Configuration key 'service':"
+            )
+        );
+    }
+
+    #[test]
+    fn test_add_configuration_setting_with_unrecognized_content_type_as_a_raw_value() {
+        let configuration_settings = vec![ConfigurationSetting {
+            key: String::from("service"),
+            content_type: Some(String::from("text/plain")),
+            value: String::from("wirio"),
+        }];
+        let mut settings = BTreeMap::new();
+
+        AzureAppConfigurationSettingsProvider::add_key_value_configuration_settings(
+            &mut settings,
+            &configuration_settings,
+        )
+        .unwrap();
+
+        assert_eq!(
+            settings,
+            BTreeMap::from([(String::from("service"), Some(String::from("wirio")))])
+        );
     }
 }

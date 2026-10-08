@@ -23,9 +23,12 @@ impl SettingsPath {
 #[cfg(test)]
 mod tests {
     use super::SettingsPath;
+    use pyo3::Python;
 
     #[test]
     fn test_get_last_section_when_path_has_multiple_sections() {
+        Python::initialize();
+
         let key = SettingsPath::get_section_key("logging.log_level.default");
 
         assert_eq!(key, "default");
@@ -33,6 +36,8 @@ mod tests {
 
     #[test]
     fn test_return_original_path_when_key_has_no_delimiter() {
+        Python::initialize();
+
         let key = SettingsPath::get_section_key("log_level");
 
         assert_eq!(key, "log_level");
@@ -40,6 +45,8 @@ mod tests {
 
     #[test]
     fn test_return_empty_key_when_path_ends_with_delimiter() {
+        Python::initialize();
+
         let key = SettingsPath::get_section_key("logging.");
 
         assert_eq!(key, "");

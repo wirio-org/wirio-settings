@@ -217,6 +217,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_load_values_from_yaml_file() {
+        Python::initialize();
+
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.yaml");
         tokio::fs::write(
@@ -278,6 +280,8 @@ logging:
 
     #[tokio::test]
     async fn test_ignore_comments() {
+        Python::initialize();
+
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.yaml");
         tokio::fs::write(
@@ -311,6 +315,8 @@ port: 8080
 
     #[tokio::test]
     async fn test_return_empty_data_when_yaml_file_is_empty() {
+        Python::initialize();
+
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.yaml");
         tokio::fs::write(&file_path, "").await.unwrap();
@@ -329,6 +335,8 @@ port: 8080
 
     #[tokio::test]
     async fn test_return_empty_data_when_yaml_file_has_only_comments() {
+        Python::initialize();
+
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.yaml");
         tokio::fs::write(
@@ -354,6 +362,8 @@ port: 8080
 
     #[tokio::test]
     async fn test_return_empty_data_when_optional_file_is_missing() {
+        Python::initialize();
+
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("missing.yaml");
 
@@ -508,6 +518,8 @@ port: 8080
 
     #[tokio::test]
     async fn test_set_none_and_empty_for_empty_structures() {
+        Python::initialize();
+
         let expected_parsed_yaml = BTreeMap::from([
             (String::from("section"), None),
             (String::from("nested_section.section"), None),

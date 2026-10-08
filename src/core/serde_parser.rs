@@ -5,6 +5,10 @@ use std::collections::BTreeMap;
 
 use crate::core::SettingsPath;
 
+/// Converts structured serde values into the internal settings representation.
+///
+/// Nested values become dot-delimited paths. Scalar values become optional
+/// strings. Empty objects become `None`, and empty arrays become `Some("")`.
 pub struct SerdeParser {
     data: BTreeMap<String, Option<String>>,
     paths: Vec<String>,
@@ -18,6 +22,22 @@ impl SerdeParser {
         }
     }
 
+    /// Parses an object into a map of settings and setting paths.
+    ///
+    /// - Strings, booleans, and numbers are stored as strings. An empty string
+    ///   is stored as `Some("")`.
+    /// - JSON `null` is stored as `None`, representing the absence of a value.
+    /// - Empty objects are stored as `None`, representing the absence of a
+    ///   value.
+    /// - Empty arrays are stored as `Some("")`, so they are indistinguishable
+    ///   from explicit empty-string values in the parsed output.
+    /// - An empty root object produces no settings.
+    /// - Nested objects append their names to the path with `.`. For example,
+    ///   `{"database": {"host": "localhost"}}` produces `database.host`.
+    /// - Array elements append their zero-based index. For example,
+    ///   `{"ports": [8080, 8081]}` produces `ports.0` and `ports.1`.
+    /// - Objects within arrays extend the indexed path. For example,
+    ///   `{"servers": [{"name": "api"}]}` produces `servers.0.name`.
     pub fn parse(
         mut self,
         json_object: &Map<String, Value>,

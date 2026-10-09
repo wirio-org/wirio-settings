@@ -249,6 +249,8 @@ mod tests {
 
     #[test]
     fn test_return_loaded_data() {
+        Python::initialize();
+
         Python::attach(|py| -> PyResult<()> {
             let data = PyDict::new(py);
             data.set_item("setting", "value")?;
@@ -271,6 +273,8 @@ mod tests {
 
     #[test]
     fn test_return_type_name() {
+        Python::initialize();
+
         let settings_provider_mock =
             Python::attach(|py| MockSettingsProvider::new(py, PyDict::new(py).unbind()));
 
@@ -292,6 +296,8 @@ mod tests {
 
     #[test]
     fn test_return_found_value_when_key_exists() {
+        Python::initialize();
+
         let key = "setting_key";
         let expected_value = "setting_value";
         Python::attach(|py| -> PyResult<()> {
@@ -314,6 +320,8 @@ mod tests {
 
     #[test]
     fn test_return_missing_value_when_key_does_not_exist() {
+        Python::initialize();
+
         Python::attach(|py| -> PyResult<()> {
             let settings_provider = MockSettingsProvider::new(py, PyDict::new(py).unbind());
 

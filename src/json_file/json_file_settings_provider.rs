@@ -205,6 +205,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_parse_scalar_values() {
+        Python::initialize();
+
         let expected_parsed_json = BTreeMap::from([
             (String::from("name"), Some(String::from("wirio"))),
             (String::from("port"), Some(String::from("8080"))),
@@ -239,6 +241,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_parse_nested_objects_and_arrays() {
+        Python::initialize();
+
         let expected_parsed_json = BTreeMap::from([
             (
                 String::from("logging.log_level.default"),
@@ -277,6 +281,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_set_none_and_empty_for_empty_structures() {
+        Python::initialize();
+
         let expected_parsed_json = BTreeMap::from([
             (String::from("section"), None),
             (String::from("nested_section.section"), None),
@@ -393,6 +399,8 @@ mod tests {
 
     #[test]
     fn test_not_watch_json_file_when_refresh_is_disabled() {
+        Python::initialize();
+
         let temporary_directory = tempdir().unwrap();
         let file_path = temporary_directory.path().join("settings.json");
         let runtime = pyo3_async_runtimes::tokio::get_runtime();

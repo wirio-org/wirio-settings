@@ -8,33 +8,41 @@ impl<'a> ContentType<'a> {
     const KEY_VAULT_REFERENCE_MEDIA_TYPE: &'static str =
         "application/vnd.microsoft.appconfig.keyvaultref+json";
     const SNAPSHOT_REFERENCE_PROFILE: &'static str =
-        "\"https://azconfig.io/mime-profiles/snapshot-ref\"";
+        "https://azconfig.io/mime-profiles/snapshot-ref";
 
     pub(crate) fn new(value: &'a str) -> Self {
         Self { value }
     }
 
-    pub(crate) fn media_type(&self) -> &str {
+    pub(crate) fn is_key_vault_reference(&self) -> bool {
+        self.media_type()
+            .eq_ignore_ascii_case(Self::KEY_VAULT_REFERENCE_MEDIA_TYPE)
+    }
+
+    pub(crate) fn is_application_json(&self) -> bool {
+        self.media_type()
+            .eq_ignore_ascii_case(Self::APPLICATION_JSON_MEDIA_TYPE)
+    }
+
+    pub(crate) fn is_snapshot_reference(&self) -> bool {
+        self.is_application_json()
+            && self.has_parameter("profile", Self::SNAPSHOT_REFERENCE_PROFILE)
+    }
+
+    fn media_type(&self) -> &str {
         self.value
             .split_once(';')
             .map_or(self.value, |(value, _)| value)
     }
 
-    pub(crate) fn is_key_vault_reference(&self) -> bool {
-        self.media_type() == Self::KEY_VAULT_REFERENCE_MEDIA_TYPE
-    }
-
-    pub(crate) fn is_application_json(&self) -> bool {
-        self.media_type() == Self::APPLICATION_JSON_MEDIA_TYPE
-    }
-
-    pub(crate) fn is_snapshot_reference(&self) -> bool {
-        self.media_type() == Self::APPLICATION_JSON_MEDIA_TYPE
-            && self.value.split(';').map(str::trim).any(|parameter| {
-                parameter.split_once('=').is_some_and(|(name, value)| {
-                    name.eq_ignore_ascii_case("profile")
-                        && value == Self::SNAPSHOT_REFERENCE_PROFILE
-                })
+    fn has_parameter(&self, name: &str, value: &str) -> bool {
+        self.value
+            .split(';')
+            .map(str::trim)
+            .filter_map(|parameter| parameter.split_once('='))
+            .any(|(parameter_name, parameter_value)| {
+                parameter_name.eq_ignore_ascii_case(name)
+                    && parameter_value.trim_matches('"') == value
             })
     }
 }
@@ -94,5 +102,31 @@ mod tests {
             "application/json; profile=\"https://azconfig.io/mime-profiles/snapshot-ref\"; charset=utf-8"
         )
         .is_snapshot_reference());
+    }
+
+    #[test]
+    fn test_identify_media_types_ignoring_case() {
+        assert!(ContentType::new("Application/Json").is_application_json());
+        assert!(
+            ContentType::new("Application/Vnd.Microsoft.AppConfig.KeyVaultRef+Json")
+                .is_key_vault_reference()
+        );
+        assert!(
+            ContentType::new(
+                "Application/Json; profile=\"https://azconfig.io/mime-profiles/snapshot-ref\""
+            )
+            .is_snapshot_reference()
+        );
+    }
+
+    #[test]
+    fn test_get_media_type_for_ai_setting() {
+        assert_eq!(
+            ContentType::new(
+                "application/json; profile=\"https://azconfig.io/mime-profiles/ai/chat-completion\""
+            )
+            .media_type(),
+            "application/json"
+        );
     }
 }

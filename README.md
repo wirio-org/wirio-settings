@@ -60,6 +60,7 @@ Here's why: our application settings, one line, done right. No more scattered `o
     - [Trim key prefixes](#trim-key-prefixes)
     - [Snapshots](#snapshots)
     - [Snapshot references](#snapshot-references)
+    - [AI settings](#ai-settings)
   - [AWS Secrets Manager](#aws-secrets-manager)
   - [GCP Secret Manager](#gcp-secret-manager)
   - [Setting per file](#setting-per-file)
@@ -518,7 +519,7 @@ To periodically refresh the loaded secrets, use the `refresh_interval` parameter
 
 Read from Azure App Configuration:
 
-- Settings (also called `configuration`): Key-value pairs, Key Vault references and snapshot references.
+- Settings (also called `configuration`): Key-value pairs (raw and JSON values), Key Vault references and snapshot references.
 - Enhanced feature flags.
 
 ```python
@@ -535,6 +536,8 @@ By default, it loads all settings and enhanced feature flags without a label.
 > **Azure permissions:** Usually, the `App Configuration Data Reader` role is used to read settings. The same identity is also used to resolve Azure Key Vault references, which generally require the `Key Vault Secrets User` role on each referenced vault.
 
 Settings and enhanced feature flags are normalized to snake case.
+
+JSON settings with the `application/json` content type are parsed into nested settings under the setting key. For example, a `service` setting with `{"logging":{"level":"information"}}` becomes `service.logging.level`.
 
 Enhanced feature flags are loaded as a JSON string at `feature_management`, ready for use with the official [`featuremanagement`](https://pypi.org/project/featuremanagement/) Microsoft package. For example, using a key instead of a Pydantic model:
 
@@ -617,6 +620,10 @@ settings_manager = SettingsManager().add_azure_app_configuration(
 [Snapshot references](https://learn.microsoft.com/en-us/azure/azure-app-configuration/concept-snapshot-references#why-use-snapshot-references) are regular settings that point to snapshots. `wirio-settings` resolves them automatically. Updating a reference to point at another immutable snapshot changes the configuration on the next refresh without changing application code or redeploying it.
 
 The referenced snapshot's settings are merged at the reference's position in the selected results, so later settings can override them. References inside a referenced snapshot are not resolved.
+
+#### AI settings
+
+[AI settings](https://learn.microsoft.com/en-us/azure/azure-app-configuration/concept-ai-configuration) are JSON values, so `wirio-settings` parses them like every other JSON setting in Azure App Configuration.
 
 ### AWS Secrets Manager
 

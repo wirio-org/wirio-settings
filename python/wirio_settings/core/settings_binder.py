@@ -25,7 +25,22 @@ class SettingsBinder:
         settings: "Settings",
         model_type: type[TModel],
     ) -> TModel:
-        """Binds setting values to Pydantic models."""
+        """Binds flattened setting values to a Pydantic model.
+
+        - Scalar fields read the key matching their field name. Pydantic
+            converts the stored string to the field type.
+        - A stored `None`, produced by JSON `null` or an empty object, is
+            treated as a missing field. The model uses its default, `None` for an
+            optional field, or raises `KeyError` for a required field.
+        - An empty array is stored as an empty string and binds to an empty
+            sequence.
+        - Sequence fields read consecutive zero-based keys, such as `ports.0`
+            and `ports.1`. Reading stops at the first missing index.
+        - Nested models read child keys. For example, `database.host` binds to
+            the `host` field of a `database` model.
+        - Sequence items that are models read child keys such as
+            `servers.0.name`.
+        """
         return cls._bind_instance(
             model_type=model_type,
             settings=settings,

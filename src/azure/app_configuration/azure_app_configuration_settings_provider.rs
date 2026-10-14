@@ -398,7 +398,6 @@ impl SettingsProvider for AzureAppConfigurationSettingsProvider {
         let mut settings = BTreeMap::new();
         self.add_configuration_settings(&mut settings).await?;
         self.add_enhanced_feature_flags(&mut settings).await?;
-
         let data: Py<PyDict> = Python::attach(|py| Self::create_data(py, settings))?;
         self.data.store(Arc::new(data));
         Python::attach(|py| {

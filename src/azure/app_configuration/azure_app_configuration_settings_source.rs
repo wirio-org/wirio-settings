@@ -25,6 +25,7 @@ pub struct AzureAppConfigurationSettingsSource {
     pub(crate) credential: Arc<dyn TokenCredential>,
     pub(crate) selectors: Vec<SettingSelector>,
     pub(crate) trim_key_prefixes: Vec<String>,
+    pub(crate) feature_flag_enabled: bool,
     pub(crate) feature_flag_selectors: Vec<FeatureFlagSelector>,
     pub(crate) feature_flag_trim_name_prefixes: Vec<String>,
 }
@@ -32,12 +33,13 @@ pub struct AzureAppConfigurationSettingsSource {
 #[pymethods]
 impl AzureAppConfigurationSettingsSource {
     #[new]
-    #[pyo3(signature = (endpoint, credential, selectors=None, trim_key_prefixes=None, feature_flag_selectors=None, feature_flag_trim_name_prefixes=None))]
+    #[pyo3(signature = (endpoint, credential, selectors=None, trim_key_prefixes=None, feature_flag_enabled=false, feature_flag_selectors=None, feature_flag_trim_name_prefixes=None))]
     pub fn new_python(
         endpoint: String,
         credential: &PythonAzureCredential,
         selectors: Option<Vec<SettingSelector>>,
         trim_key_prefixes: Option<Vec<String>>,
+        feature_flag_enabled: bool,
         feature_flag_selectors: Option<Vec<FeatureFlagSelector>>,
         feature_flag_trim_name_prefixes: Option<Vec<String>>,
     ) -> PyResult<PyClassInitializer<Self>> {
@@ -50,6 +52,7 @@ impl AzureAppConfigurationSettingsSource {
                 credential,
                 selectors: Self::get_selectors_or_default(selectors),
                 trim_key_prefixes: trim_key_prefixes.unwrap_or_default(),
+                feature_flag_enabled,
                 feature_flag_selectors: Self::get_feature_flag_selectors_or_default(
                     feature_flag_selectors,
                 ),
@@ -124,6 +127,7 @@ mod tests {
                 credential: Arc::clone(&credential),
                 selectors: Vec::new(),
                 trim_key_prefixes: Vec::new(),
+                feature_flag_enabled: false,
                 feature_flag_selectors: Vec::new(),
                 feature_flag_trim_name_prefixes: Vec::new(),
                 client: Arc::new(

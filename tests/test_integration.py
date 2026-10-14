@@ -90,7 +90,10 @@ class TestIntegration:
         expected_variant_name = "enabled_variant"
         settings_manager = SettingsManager(add_default_providers=False)
 
-        settings_manager.add_azure_app_configuration(endpoint=endpoint)
+        settings_manager.add_azure_app_configuration(
+            endpoint=endpoint,
+            feature_flag_enabled=True,
+        )
 
         assert settings_manager.get_value("setting") == expected_setting
         assert (
@@ -116,6 +119,21 @@ class TestIntegration:
     @pytest.mark.skipif(
         os.environ.get("INTEGRATION_TEST") is None, reason="Integration test"
     )
+    def test_not_load_enhanced_feature_flags_using_azure_app_configuration_by_default(
+        self,
+    ) -> None:
+        endpoint = os.environ["AZURE_APP_CONFIGURATION_ENDPOINT"]
+        expected_setting = "setting-value"
+        settings_manager = SettingsManager(add_default_providers=False)
+
+        settings_manager.add_azure_app_configuration(endpoint=endpoint)
+
+        assert settings_manager.get_value("setting") == expected_setting
+        assert settings_manager.try_get_value("feature_management") is None
+
+    @pytest.mark.skipif(
+        os.environ.get("INTEGRATION_TEST") is None, reason="Integration test"
+    )
     def test_load_azure_app_configuration_settings_and_enhanced_feature_flags_using_selectors(
         self,
     ) -> None:
@@ -128,6 +146,7 @@ class TestIntegration:
         settings_manager.add_azure_app_configuration(
             endpoint=endpoint,
             selectors=[SettingSelector("Setting"), SettingSelector("Parent.*")],
+            feature_flag_enabled=True,
             feature_flag_selectors=[FeatureFlagSelector("EnhancedFeature")],
         )
 

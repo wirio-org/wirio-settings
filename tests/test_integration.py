@@ -119,7 +119,7 @@ class TestIntegration:
     @pytest.mark.skipif(
         os.environ.get("INTEGRATION_TEST") is None, reason="Integration test"
     )
-    def test_not_load_enhanced_feature_flags_using_azure_app_configuration_by_default(
+    def test_not_load_enhanced_feature_flags_by_default_using_azure_app_configuration(
         self,
     ) -> None:
         endpoint = os.environ["AZURE_APP_CONFIGURATION_ENDPOINT"]

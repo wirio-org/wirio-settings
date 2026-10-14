@@ -37,6 +37,7 @@ pub struct AzureAppConfigurationSettingsProvider {
     credential: Arc<dyn TokenCredential>,
     selectors: Vec<SettingSelector>,
     trim_key_prefixes: Vec<String>,
+    feature_flag_enabled: bool,
     feature_flag_selectors: Vec<FeatureFlagSelector>,
     feature_flag_trim_name_prefixes: Vec<String>,
     model_registry: OnceCell<Py<ModelRegistry>>,
@@ -75,6 +76,7 @@ impl AzureAppConfigurationSettingsProvider {
             credential: Arc::clone(&source.credential),
             selectors: source.selectors.clone(),
             trim_key_prefixes: source.trim_key_prefixes.clone(),
+            feature_flag_enabled: source.feature_flag_enabled,
             feature_flag_selectors: source.feature_flag_selectors.clone(),
             feature_flag_trim_name_prefixes: source.feature_flag_trim_name_prefixes.clone(),
             model_registry: OnceCell::new(),
@@ -297,6 +299,10 @@ impl AzureAppConfigurationSettingsProvider {
         &self,
         settings: &mut BTreeMap<String, Option<String>>,
     ) -> PyResult<()> {
+        if !self.feature_flag_enabled {
+            return Ok(());
+        }
+
         let mut feature_flags = BTreeMap::new();
 
         for selector in &self.feature_flag_selectors {
@@ -608,6 +614,7 @@ mod tests {
             credential,
             selectors: vec![SettingSelector::new(Some(String::from("*")), None, None).unwrap()],
             trim_key_prefixes: Vec::new(),
+            feature_flag_enabled: true,
             feature_flag_selectors,
             feature_flag_trim_name_prefixes: Vec::new(),
             model_registry: OnceCell::new(),
@@ -728,6 +735,26 @@ mod tests {
         assert!(error.to_string().starts_with(
             "RuntimeError: Failed to get configuration settings from Azure App Configuration 'https://example.azconfig.io':"
         ));
+    }
+
+    #[tokio::test]
+    async fn test_skip_loading_enhanced_feature_flags_when_disabled() {
+        Python::initialize();
+        let mut provider = Python::attach(|py| create_provider(py, StatusCode::Ok));
+        provider.feature_flag_enabled = false;
+
+        provider.refresh().await.unwrap();
+
+        Python::attach(|py| {
+            assert!(
+                provider
+                    .data(py)
+                    .bind(py)
+                    .get_item(AzureAppConfigurationSettingsProvider::FEATURE_MANAGEMENT_KEY)
+                    .unwrap()
+                    .is_none()
+            );
+        });
     }
 
     #[tokio::test]

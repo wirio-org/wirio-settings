@@ -354,6 +354,7 @@ class TestSettingsManager:
             credential=credential,
             selectors=selectors,
             trim_key_prefixes=trim_key_prefixes,
+            feature_flag_enabled=True,
             feature_flag_selectors=feature_flag_selectors,
             feature_flag_trim_name_prefixes=feature_flag_trim_name_prefixes,
         )
@@ -363,6 +364,7 @@ class TestSettingsManager:
             credential=credential,
             selectors=selectors,
             trim_key_prefixes=trim_key_prefixes,
+            feature_flag_enabled=True,
             feature_flag_selectors=feature_flag_selectors,
             feature_flag_trim_name_prefixes=feature_flag_trim_name_prefixes,
         )

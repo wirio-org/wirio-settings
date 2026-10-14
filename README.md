@@ -520,6 +520,7 @@ To periodically refresh the loaded secrets, use the `refresh_interval` parameter
 Read from Azure App Configuration:
 
 - Settings (also called `configuration`): Key-value pairs (raw and JSON values), Key Vault references and snapshot references.
+- Snapshots.
 - Enhanced feature flags.
 
 ```python
@@ -528,7 +529,9 @@ settings_manager.add_azure_app_configuration(
 )
 ```
 
-By default, it loads all settings and enhanced feature flags without a label.
+By default, it loads all settings without a label.
+
+To load enhanced feature flags, set `feature_flag_enabled=True`. By default, it'll load enhanced feature flags without a label.
 
 > [!NOTE]
 > For authentication options, see [Azure credentials](#azure-credentials).
